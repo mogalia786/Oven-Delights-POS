@@ -1,6 +1,6 @@
 Imports System.Configuration
 Imports System.Data
-Imports Microsoft.Data.SqlClient
+Imports System.Data.SqlClient
 
 Public Class POSDataService
     Private ReadOnly _connectionString As String
@@ -8,8 +8,9 @@ Public Class POSDataService
     Private ReadOnly _useDemoTables As Boolean
 
     Public Sub New()
-        _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString")?.ConnectionString
-        _useDemoTables = Boolean.Parse(ConfigurationManager.AppSettings("UseDemoTables") ?? "true")
+        _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
+        Dim useDemoSetting = If(ConfigurationManager.AppSettings("UseDemoTables"), "true")
+        _useDemoTables = Boolean.Parse(useDemoSetting)
         _tablePrefix = If(_useDemoTables, "Demo_", "")
     End Sub
 

@@ -6,8 +6,11 @@ Partial Class IdleScreen
     <System.Diagnostics.DebuggerNonUserCode()>
     Protected Overrides Sub Dispose(ByVal disposing As Boolean)
         Try
-            If disposing AndAlso components IsNot Nothing Then
-                components.Dispose()
+            If disposing Then
+                CleanupTimer()
+                If components IsNot Nothing Then
+                    components.Dispose()
+                End If
             End If
         Finally
             MyBase.Dispose(disposing)
@@ -22,7 +25,17 @@ Partial Class IdleScreen
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
-        components = New System.ComponentModel.Container()
+        Me.components = New System.ComponentModel.Container()
+        Me.SuspendLayout()
+        '
+        'IdleScreen
+        '
+        Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 16.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
+        Me.BackColor = System.Drawing.Color.FromArgb(CType(CType(210, Byte), Integer), CType(CType(105, Byte), Integer), CType(CType(30, Byte), Integer))
+        Me.Name = "IdleScreen"
+        Me.Size = New System.Drawing.Size(1920, 1080)
+        Me.ResumeLayout(False)
+
     End Sub
 End Class

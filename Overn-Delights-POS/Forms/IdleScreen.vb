@@ -19,8 +19,8 @@ Public Class IdleScreen
     End Sub
 
     Private Sub LoadColors()
-        Dim primaryHex = ConfigurationManager.AppSettings("PrimaryColor") ?? "#D2691E"
-        Dim accentHex = ConfigurationManager.AppSettings("AccentColor") ?? "#FFD700"
+        Dim primaryHex = If(ConfigurationManager.AppSettings("PrimaryColor"), "#D2691E")
+        Dim accentHex = If(ConfigurationManager.AppSettings("AccentColor"), "#FFD700")
         _primaryColor = ColorTranslator.FromHtml(primaryHex)
         _accentColor = ColorTranslator.FromHtml(accentHex)
     End Sub
@@ -32,7 +32,7 @@ Public Class IdleScreen
         ' Welcome message
         Dim lblWelcome As New Label With {
             .Text = "Welcome to",
-            .Font = New Font("Segoe UI", 36, FontStyle.Light),
+            .Font = New Font("Segoe UI", 36, FontStyle.Regular),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
             .Dock = DockStyle.Top,
@@ -42,7 +42,7 @@ Public Class IdleScreen
 
         ' Company name
         Dim lblCompany As New Label With {
-            .Text = ConfigurationManager.AppSettings("CompanyName") ?? "Oven Delights",
+            .Text = If(ConfigurationManager.AppSettings("CompanyName"), "Oven Delights"),
             .Font = New Font("Segoe UI", 72, FontStyle.Bold),
             .ForeColor = _accentColor,
             .TextAlign = ContentAlignment.MiddleCenter,
@@ -120,11 +120,11 @@ Public Class IdleScreen
         End If
     End Sub
 
-    Protected Overrides Sub Dispose(disposing As Boolean)
-        If disposing Then
-            _timer?.Stop()
-            _timer?.Dispose()
+    Private Sub CleanupTimer()
+        If _timer IsNot Nothing Then
+            _timer.Stop()
+            _timer.Dispose()
+            _timer = Nothing
         End If
-        MyBase.Dispose(disposing)
     End Sub
 End Class

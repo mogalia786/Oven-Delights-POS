@@ -3,13 +3,16 @@ Imports System.Data.SqlClient
 Imports System.Drawing
 Imports System.Windows.Forms
 
-Public Class POSMainForm
+Public Class POSMainForm_REDESIGN
+    Inherits Form
+
     ' Core properties
     Private _connectionString As String
     Private _cashierID As Integer
     Private _cashierName As String
     Private _branchID As Integer
     Private _cartItems As New DataTable()
+    Private _allProducts As New DataTable() ' Cache all products
 
     ' UI Controls
     Private pnlTop As Panel
@@ -33,7 +36,7 @@ Public Class POSMainForm
     Private _messageTimer As Timer
     Private _currentMessageIndex As Integer = 0
     Private _lblRotatingMessage As Label
-    Private Const IDLE_TIMEOUT_MS As Integer = 5000 ' 5 seconds for testing
+    Private Const IDLE_TIMEOUT_MS As Integer = 5000
 
     ' Modern Color Palette
     Private _darkBlue As Color = ColorTranslator.FromHtml("#2C3E50")
@@ -47,7 +50,7 @@ Public Class POSMainForm
     Private _darkGray As Color = ColorTranslator.FromHtml("#7F8C8D")
 
     Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer)
-        InitializeComponent()
+        MyBase.New()
 
         _cashierID = cashierID
         _cashierName = cashierName
@@ -58,17 +61,18 @@ Public Class POSMainForm
         SetupModernUI()
         InitializeCart()
         SetupIdleScreen()
+
+        ' Handle resize for different screen sizes
+        AddHandler Me.Resize, Sub() RepositionControls()
     End Sub
 
     Private Sub SetupModernUI()
-        ' Clear any designer-created controls
-        Me.SuspendLayout()
-        Me.Controls.Clear()
-
-        Me.Text = "Oven Delights POS - MODERN VERSION"
+        Me.Text = "Oven Delights POS"
         Me.WindowState = FormWindowState.Maximized
         Me.BackColor = _lightGray
         Me.FormBorderStyle = FormBorderStyle.None
+        Me.StartPosition = FormStartPosition.Manual
+        Me.Bounds = Screen.PrimaryScreen.Bounds
 
         ' TOP BAR - Modern gradient effect
         pnlTop = New Panel With {
@@ -112,22 +116,22 @@ Public Class POSMainForm
             .Text = $"👤 {_cashierName}",
             .Font = New Font("Segoe UI", 12),
             .ForeColor = Color.White,
-            .AutoSize = True
+            .AutoSize = True,
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right
         }
-        lblCashier.Location = New Point(Me.Width - lblCashier.Width - 150, 25)
-        lblCashier.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        lblCashier.Location = New Point(Screen.PrimaryScreen.Bounds.Width - 250, 25)
 
         Dim btnLogout As New Button With {
-            .Text = "🚪 Logout",
+            .Text = "🚪 EXIT",
             .Font = New Font("Segoe UI", 11, FontStyle.Bold),
-            .Size = New Size(100, 40),
+            .Size = New Size(120, 40),
             .BackColor = _red,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
-            .Cursor = Cursors.Hand
+            .Cursor = Cursors.Hand,
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Right
         }
-        btnLogout.Location = New Point(Me.Width - 120, 15)
-        btnLogout.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnLogout.Location = New Point(Screen.PrimaryScreen.Bounds.Width - 130, 15)
         btnLogout.FlatAppearance.BorderSize = 0
         AddHandler btnLogout.Click, Sub() Me.Close()
 
@@ -186,10 +190,8 @@ Public Class POSMainForm
                                         If String.IsNullOrWhiteSpace(txtSearch.Text) Then
                                             txtSearch.Text = "🔍 Search products..."
                                             txtSearch.ForeColor = _darkGray
-                                            ShowWelcomeMessage()
                                         End If
                                     End Sub
-        AddHandler txtSearch.TextChanged, AddressOf txtSearch_TextChanged
 
         flpProducts = New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -290,15 +292,8 @@ Public Class POSMainForm
 
         CreateShortcutButtons()
 
-        ' Add all panels to form - ORDER MATTERS!
-        Me.Controls.Add(pnlTop)
-        Me.Controls.Add(pnlShortcuts)
-        Me.Controls.Add(pnlCategoriesContainer)
-        Me.Controls.Add(pnlCart)
-        Me.Controls.Add(pnlProducts) ' Fill goes last
-
-        Me.ResumeLayout(True)
-        Me.PerformLayout()
+        ' Add all panels to form
+        Me.Controls.AddRange({pnlProducts, pnlCart, pnlCategoriesContainer, pnlShortcuts, pnlTop})
     End Sub
 
     Private Sub InitializeCart()
@@ -312,7 +307,7 @@ Public Class POSMainForm
         dgvCart.AutoGenerateColumns = True
         dgvCart.DataSource = _cartItems
 
-        ' Configure columns after first row is added
+        ' Configure columns after binding
         AddHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
     End Sub
 
@@ -321,27 +316,26 @@ Public Class POSMainForm
         RemoveHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
 
         If dgvCart.Columns.Count > 0 Then
-            For Each col As DataGridViewColumn In dgvCart.Columns
-                Select Case col.Name
-                    Case "ProductID"
-                        col.Visible = False
-                    Case "ItemCode"
-                        col.Width = 70
-                        col.HeaderText = "Code"
-                    Case "Product"
-                        col.HeaderText = "Item"
-                    Case "Qty"
-                        col.Width = 50
-                        col.ReadOnly = False
-                        col.HeaderText = "Qty"
-                    Case "Price"
-                        col.DefaultCellStyle.Format = "C2"
-                        col.Width = 80
-                    Case "Total"
-                        col.DefaultCellStyle.Format = "C2"
-                        col.Width = 90
-                End Select
-            Next
+            If dgvCart.Columns.Contains("ProductID") Then dgvCart.Columns("ProductID").Visible = False
+            If dgvCart.Columns.Contains("ItemCode") Then
+                dgvCart.Columns("ItemCode").Width = 70
+                dgvCart.Columns("ItemCode").HeaderText = "Code"
+            End If
+            If dgvCart.Columns.Contains("Product") Then
+                dgvCart.Columns("Product").HeaderText = "Item"
+            End If
+            If dgvCart.Columns.Contains("Qty") Then
+                dgvCart.Columns("Qty").Width = 50
+                dgvCart.Columns("Qty").ReadOnly = False
+            End If
+            If dgvCart.Columns.Contains("Price") Then
+                dgvCart.Columns("Price").DefaultCellStyle.Format = "C2"
+                dgvCart.Columns("Price").Width = 80
+            End If
+            If dgvCart.Columns.Contains("Total") Then
+                dgvCart.Columns("Total").DefaultCellStyle.Format = "C2"
+                dgvCart.Columns("Total").Width = 90
+            End If
         End If
     End Sub
 
@@ -349,12 +343,86 @@ Public Class POSMainForm
         MyBase.OnLoad(e)
 
         Try
+            ' Reposition controls now that form is loaded
+            RepositionControls()
             LoadCategories()
-            ' Show idle screen immediately on startup
+            LoadAllProductsToCache() ' Load products once
             ShowIdleScreen()
         Catch ex As Exception
             MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
+    End Sub
+
+    Private Sub LoadAllProductsToCache()
+        Try
+            _allProducts.Clear()
+            _allProducts.Columns.Clear()
+            _allProducts.Columns.Add("ProductID", GetType(Integer))
+            _allProducts.Columns.Add("ItemCode", GetType(String))
+            _allProducts.Columns.Add("ProductName", GetType(String))
+            _allProducts.Columns.Add("SellingPrice", GetType(Decimal))
+            _allProducts.Columns.Add("QtyOnHand", GetType(Decimal))
+            _allProducts.Columns.Add("Category", GetType(String))
+
+            ' SIMPLE: Query the view that has everything mapped correctly
+            Dim sql = "
+                SELECT 
+                    ProductID,
+                    ItemCode,
+                    ProductName,
+                    ISNULL(SellingPrice, 0) AS SellingPrice,
+                    ISNULL(QtyOnHand, 0) AS QtyOnHand,
+                    Category
+                FROM vw_POS_Products
+                WHERE BranchID = @BranchID
+                ORDER BY ProductName"
+
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    Using adapter As New SqlDataAdapter(cmd)
+                        adapter.Fill(_allProducts)
+                    End Using
+                End Using
+            End Using
+        Catch ex As Exception
+            MessageBox.Show($"Error caching products: {ex.Message}{vbCrLf}{vbCrLf}Make sure to run the SQL script: Create_POS_ProductView.sql", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub RepositionControls()
+        ' Fix top bar controls
+        For Each ctrl As Control In pnlTop.Controls
+            If TypeOf ctrl Is Label AndAlso ctrl.Text.Contains("👤") Then
+                ctrl.Location = New Point(Me.Width - 250, 25)
+            ElseIf TypeOf ctrl Is Button AndAlso ctrl.Text.Contains("EXIT") Then
+                ctrl.Location = New Point(Me.Width - 130, 15)
+            End If
+        Next
+
+        ' Fix idle screen labels to use actual form size
+        If _idleOverlay IsNot Nothing Then
+            For Each ctrl As Control In _idleOverlay.Controls
+                If TypeOf ctrl Is Label Then
+                    Dim lbl = CType(ctrl, Label)
+                    lbl.Width = Me.Width
+
+                    ' Reposition vertically centered
+                    If lbl.Text.Contains("🍰") Then
+                        lbl.Location = New Point(0, (Me.Height \ 2) - 300)
+                    ElseIf lbl.Text = "OVEN DELIGHTS" Then
+                        lbl.Location = New Point(0, (Me.Height \ 2) - 80)
+                    ElseIf lbl.Text.Contains("Freshly Baked") Then
+                        lbl.Location = New Point(0, (Me.Height \ 2) + 40)
+                    ElseIf lbl.Text.Contains("🍞") Or lbl.Text.Contains("🎂") Or lbl.Text.Contains("🥐") Then
+                        lbl.Location = New Point(0, (Me.Height \ 2) + 120)
+                    ElseIf lbl.Text.Contains("Touch screen") Then
+                        lbl.Location = New Point(0, (Me.Height \ 2) + 220)
+                    End If
+                End If
+            Next
+        End If
     End Sub
 
     Private Sub ShowWelcomeMessage()
@@ -392,14 +460,7 @@ Public Class POSMainForm
         pnlCategories.Controls.Add(btnAll)
 
         Try
-            ' Load categories that actually have products in Demo_Retail_Product
-            Dim sql = "
-                SELECT DISTINCT drp.Category
-                FROM Demo_Retail_Product drp
-                WHERE drp.IsActive = 1 
-                  AND drp.Category IS NOT NULL
-                  AND drp.Category <> ''
-                ORDER BY drp.Category"
+            Dim sql = "SELECT CategoryID, CategoryCode, CategoryName FROM ProductCategories WHERE IsActive = 1 ORDER BY CategoryName"
 
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
@@ -409,8 +470,9 @@ Public Class POSMainForm
                         Dim colors() As Color = {_lightBlue, _green, _orange, _purple, _red, _yellow}
 
                         While reader.Read()
-                            Dim categoryName = reader.GetString(0)
-                            Dim icon = GetCategoryIcon(categoryName)
+                            Dim categoryCode = reader.GetString(1)
+                            Dim categoryName = reader.GetString(2)
+                            Dim icon = GetCategoryIcon(categoryCode)
                             Dim btnColor = colors(colorIndex Mod colors.Length)
 
                             Dim btn As New Button With {
@@ -466,173 +528,63 @@ Public Class POSMainForm
         End Select
     End Function
 
-    Private Sub txtSearch_TextChanged(sender As Object, e As EventArgs)
-        If txtSearch.ForeColor = _darkGray Then Return ' Ignore placeholder text
-
-        Dim searchText = txtSearch.Text.Trim()
-        If String.IsNullOrWhiteSpace(searchText) Then
-            ShowWelcomeMessage()
-            Return
-        End If
-
-        ' Search products
-        SearchProducts(searchText)
-    End Sub
-
-    Private Sub SearchProducts(searchText As String)
-        ' Show loading indicator
-        flpProducts.Controls.Clear()
-        Dim lblSearching As New Label With {
-            .Text = $"🔍 Searching for '{searchText}'...",
-            .Font = New Font("Segoe UI", 14),
-            .ForeColor = _lightBlue,
-            .AutoSize = True,
-            .Location = New Point(50, 100)
-        }
-        flpProducts.Controls.Add(lblSearching)
-        Application.DoEvents()
-
-        flpProducts.SuspendLayout()
-        flpProducts.Controls.Clear()
-
-        Try
-            Dim sql = "
-                SELECT DISTINCT
-                    drp.ProductID,
-                    drp.SKU AS ItemCode,
-                    drp.Name AS ProductName,
-                    ISNULL(price.SellingPrice, 0) AS SellingPrice,
-                    ISNULL(stock.QtyOnHand, 0) AS QtyOnHand,
-                    drp.Category AS CategoryName
-                FROM Demo_Retail_Product drp
-                LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
-                LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
-                LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
-                WHERE drp.IsActive = 1
-                  AND ISNULL(stock.QtyOnHand, 0) > 0
-                  AND ISNULL(price.SellingPrice, 0) > 0
-                  AND (drp.SKU LIKE @Search + '%' OR drp.Name LIKE '%' + @Search + '%')
-                ORDER BY drp.SKU"
-
-            Using conn As New SqlConnection(_connectionString)
-                conn.Open()
-                Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
-                    cmd.Parameters.AddWithValue("@Search", searchText)
-
-                    Using reader = cmd.ExecuteReader()
-                        Dim productCount = 0
-                        While reader.Read()
-                            Dim card = CreateProductCard(
-                                reader.GetInt32(0),
-                                reader.GetString(1),
-                                reader.GetString(2),
-                                reader.GetDecimal(3),
-                                reader.GetDecimal(4)
-                            )
-                            flpProducts.Controls.Add(card)
-                            productCount += 1
-                        End While
-
-                        If productCount = 0 Then
-                            Dim lblNoResults As New Label With {
-                                .Text = $"No products found matching '{searchText}'",
-                                .Font = New Font("Segoe UI", 14),
-                                .ForeColor = _darkGray,
-                                .AutoSize = True,
-                                .Location = New Point(50, 100)
-                            }
-                            flpProducts.Controls.Add(lblNoResults)
-                        End If
-                    End Using
-                End Using
-            End Using
-        Catch ex As Exception
-            MessageBox.Show($"Search error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        Finally
-            flpProducts.ResumeLayout()
-        End Try
-    End Sub
-
     Private Sub LoadProducts(Optional category As String = Nothing)
-        ' Show loading indicator
-        flpProducts.Controls.Clear()
-        Dim lblLoading As New Label With {
-            .Text = "⏳ Loading products...",
-            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
-            .ForeColor = _lightBlue,
-            .AutoSize = True,
-            .Location = New Point(50, 100)
-        }
-        flpProducts.Controls.Add(lblLoading)
-        Application.DoEvents()
-
         flpProducts.SuspendLayout()
         flpProducts.Controls.Clear()
 
         Try
-            ' First check what categories exist in products
-            Dim debugSql = "SELECT DISTINCT Category FROM Demo_Retail_Product WHERE IsActive = 1 AND Category IS NOT NULL"
+            ' DEBUG: Show what we have
+            Dim totalProducts = _allProducts.Rows.Count
 
-            Dim sql = "
-                SELECT DISTINCT
-                    drp.ProductID,
-                    drp.SKU AS ItemCode,
-                    drp.Name AS ProductName,
-                    ISNULL(price.SellingPrice, 0) AS SellingPrice,
-                    ISNULL(stock.QtyOnHand, 0) AS QtyOnHand,
-                    drp.Category AS CategoryName
-                FROM Demo_Retail_Product drp
-                LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
-                LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
-                LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
-                WHERE drp.IsActive = 1"
+            ' Filter cached products in memory - INSTANT!
+            Dim filteredRows As DataRow()
 
-            ' Remove stock and price filters temporarily to see all products
-            If Not String.IsNullOrEmpty(category) Then
-                sql &= " AND drp.Category = @Category"
+            If String.IsNullOrEmpty(category) Then
+                filteredRows = _allProducts.Select()
+            Else
+                ' Try exact match first, then LIKE
+                filteredRows = _allProducts.Select($"Category = '{category}'")
+                If filteredRows.Length = 0 Then
+                    ' Try LIKE if exact match fails
+                    filteredRows = _allProducts.Select($"Category LIKE '%{category}%'")
+                End If
             End If
 
-            sql &= " ORDER BY drp.SKU"
+            Dim productCount = 0
+            For Each row As DataRow In filteredRows
+                Dim price = If(IsDBNull(row("SellingPrice")), 0D, CDec(row("SellingPrice")))
+                ' Show all products
+                Dim card = CreateProductCard(
+                    CInt(row("ProductID")),
+                    row("ItemCode").ToString(),
+                    row("ProductName").ToString(),
+                    price,
+                    If(IsDBNull(row("QtyOnHand")), 0D, CDec(row("QtyOnHand")))
+                )
+                flpProducts.Controls.Add(card)
+                productCount += 1
+            Next
 
-            Using conn As New SqlConnection(_connectionString)
-                conn.Open()
-                Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
-                    If Not String.IsNullOrEmpty(category) Then
-                        cmd.Parameters.AddWithValue("@Category", category)
+            If productCount = 0 Then
+                ' DEBUG: Show what categories exist
+                Dim uniqueCategories As New HashSet(Of String)
+                For Each row As DataRow In _allProducts.Rows
+                    If Not IsDBNull(row("Category")) Then
+                        uniqueCategories.Add(row("Category").ToString())
                     End If
+                Next
 
-                    Using reader = cmd.ExecuteReader()
-                        Dim productCount = 0
-                        While reader.Read()
-                            Dim card = CreateProductCard(
-                                reader.GetInt32(0),
-                                reader.GetString(1),
-                                reader.GetString(2),
-                                reader.GetDecimal(3),
-                                reader.GetDecimal(4)
-                            )
-                            flpProducts.Controls.Add(card)
-                            productCount += 1
-                        End While
-
-                        ' Show message if no products found
-                        If productCount = 0 Then
-                            Dim lblNoProducts As New Label With {
-                                .Text = "No products found in this category",
-                                .Font = New Font("Segoe UI", 14),
-                                .ForeColor = _darkGray,
-                                .AutoSize = True,
-                                .Location = New Point(50, 100)
-                            }
-                            flpProducts.Controls.Add(lblNoProducts)
-                        End If
-                    End Using
-                End Using
-            End Using
+                Dim lblNoProducts As New Label With {
+                    .Text = $"No products in '{category}'{vbCrLf}Total cached: {totalProducts}{vbCrLf}Categories: {String.Join(", ", uniqueCategories)}",
+                    .Font = New Font("Segoe UI", 12),
+                    .ForeColor = _darkGray,
+                    .AutoSize = True,
+                    .Location = New Point(50, 100)
+                }
+                flpProducts.Controls.Add(lblNoProducts)
+            End If
         Catch ex As Exception
-            MessageBox.Show($"Error loading products: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Error loading products: {ex.Message}{vbCrLf}{ex.StackTrace}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
             flpProducts.ResumeLayout()
         End Try
@@ -734,16 +686,17 @@ Public Class POSMainForm
         }
 
         Dim visibleCount = If(_shortcutsExpanded, shortcuts.Count, 8)
-        Dim availableWidth = pnlShortcuts.Width - 140 ' Leave space for More button
-        Dim buttonWidth = (availableWidth \ visibleCount) - 8 ' 8px spacing between buttons
-        Dim startX = 10
+        Dim screenWidth = Screen.PrimaryScreen.Bounds.Width
+        Dim availableWidth = screenWidth - 140
+        Dim spacing = 5
+        Dim buttonWidth = (availableWidth \ visibleCount) - spacing
 
         For i = 0 To visibleCount - 1
             Dim shortcut = shortcuts(i)
             Dim btn As New Button With {
                 .Text = $"{shortcut.Item1}{vbCrLf}{shortcut.Item2}",
                 .Size = New Size(buttonWidth, 70),
-                .Location = New Point(startX + (i * (buttonWidth + 8)), 10),
+                .Location = New Point(10 + (i * (buttonWidth + spacing)), 10),
                 .BackColor = _darkBlue,
                 .ForeColor = Color.White,
                 .Font = New Font("Segoe UI", 9, FontStyle.Bold),
@@ -762,8 +715,8 @@ Public Class POSMainForm
         ' Show More / Show Less button
         btnShowMore = New Button With {
             .Text = If(_shortcutsExpanded, "▲ Less", "▼ More"),
-            .Size = New Size(110, 70),
-            .Location = New Point(pnlShortcuts.Width - 120, 10),
+            .Size = New Size(120, 70),
+            .Location = New Point(Screen.PrimaryScreen.Bounds.Width - 130, 10),
             .BackColor = _yellow,
             .ForeColor = Color.Black,
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
@@ -921,81 +874,73 @@ Public Class POSMainForm
             Return
         End If
         MessageBox.Show("Payment processing - To be implemented", "Payment", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        ' After payment, show idle screen immediately
         ShowIdleScreen()
     End Sub
 
-    ' Idle Screen Functions
     Private Sub SetupIdleScreen()
-        ' Create beautiful branded idle overlay
         _idleOverlay = New Panel With {
             .Dock = DockStyle.Fill,
             .BackColor = ColorTranslator.FromHtml("#D2691E"),
             .Visible = False
         }
 
-        ' Company logo/icon (large)
         Dim lblLogo As New Label With {
             .Text = "🍰",
             .Font = New Font("Segoe UI", 120, FontStyle.Bold),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
-            .Size = New Size(Me.Width, 200),
-            .Location = New Point(0, 200),
+            .AutoSize = False,
+            .Dock = DockStyle.None,
+            .Anchor = AnchorStyles.None,
             .BackColor = Color.Transparent
         }
 
-        ' Company name
         Dim lblCompany As New Label With {
             .Text = "OVEN DELIGHTS",
             .Font = New Font("Segoe UI", 72, FontStyle.Bold),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
-            .Size = New Size(Me.Width, 100),
-            .Location = New Point(0, 420),
+            .AutoSize = False,
+            .Dock = DockStyle.None,
+            .Anchor = AnchorStyles.None,
             .BackColor = Color.Transparent
         }
 
-        ' Tagline
         Dim lblTagline As New Label With {
             .Text = "Freshly Baked with Love",
             .Font = New Font("Segoe UI", 32, FontStyle.Italic),
             .ForeColor = ColorTranslator.FromHtml("#FFD700"),
             .TextAlign = ContentAlignment.MiddleCenter,
-            .Size = New Size(Me.Width, 60),
-            .Location = New Point(0, 540),
+            .AutoSize = False,
+            .Dock = DockStyle.None,
+            .Anchor = AnchorStyles.None,
             .BackColor = Color.Transparent
         }
 
-        ' Rotating messages with icons
         _lblRotatingMessage = New Label With {
             .Font = New Font("Segoe UI", 36, FontStyle.Bold),
             .ForeColor = ColorTranslator.FromHtml("#FFD700"),
             .TextAlign = ContentAlignment.MiddleCenter,
-            .Size = New Size(Me.Width, 80),
-            .Location = New Point(0, 640),
+            .AutoSize = False,
+            .Dock = DockStyle.None,
+            .Anchor = AnchorStyles.None,
             .BackColor = Color.Transparent
         }
 
-        ' Touch to continue
         Dim lblTouch As New Label With {
             .Text = "Touch screen to begin",
             .Font = New Font("Segoe UI", 28),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
-            .Size = New Size(Me.Width, 50),
-            .Location = New Point(0, 760),
+            .AutoSize = False,
+            .Dock = DockStyle.None,
+            .Anchor = AnchorStyles.None,
             .BackColor = Color.Transparent
         }
 
         _idleOverlay.Controls.AddRange({lblLogo, lblCompany, lblTagline, _lblRotatingMessage, lblTouch})
-
-        ' Add idle overlay AFTER all other controls are added
-        ' This ensures it can properly cover/uncover the UI
         Me.Controls.Add(_idleOverlay)
-        _idleOverlay.Visible = False ' Start hidden
 
-        ' Click anywhere to dismiss
         AddHandler _idleOverlay.Click, Sub() DismissIdleScreen()
         AddHandler lblLogo.Click, Sub() DismissIdleScreen()
         AddHandler lblCompany.Click, Sub() DismissIdleScreen()
@@ -1003,30 +948,42 @@ Public Class POSMainForm
         AddHandler _lblRotatingMessage.Click, Sub() DismissIdleScreen()
         AddHandler lblTouch.Click, Sub() DismissIdleScreen()
 
-        ' Setup message rotation timer
-        _messageTimer = New Timer With {.Interval = 3000} ' Change every 3 seconds
+        _messageTimer = New Timer With {.Interval = 3000}
         AddHandler _messageTimer.Tick, AddressOf RotateMessage
         UpdateRotatingMessage()
-
-        ' Setup timer - show idle screen when cart is empty
-        _idleTimer = New Timer With {.Interval = IDLE_TIMEOUT_MS}
-        AddHandler _idleTimer.Tick, Sub()
-                                        If _cartItems.Rows.Count = 0 Then
-                                            ShowIdleScreen()
-                                        Else
-                                            ResetIdleTimer()
-                                        End If
-                                    End Sub
-        _idleTimer.Start()
-
-        ' Reset timer on any activity
-        AddHandler Me.MouseMove, Sub() ResetIdleTimer()
-        AddHandler Me.KeyDown, Sub() ResetIdleTimer()
-        AddHandler Me.Click, Sub() ResetIdleTimer()
     End Sub
 
     Private Sub ShowIdleScreen()
         If _idleOverlay IsNot Nothing Then
+            ' Reposition idle screen content before showing
+            Dim screenWidth = Me.ClientSize.Width
+            Dim screenHeight = Me.ClientSize.Height
+
+            For Each ctrl As Control In _idleOverlay.Controls
+                If TypeOf ctrl Is Label Then
+                    Dim lbl = CType(ctrl, Label)
+                    lbl.Width = screenWidth
+                    lbl.Height = 100
+
+                    ' Center vertically based on actual form size
+                    If lbl.Text.Contains("🍰") Then
+                        lbl.Height = 200
+                        lbl.Location = New Point(0, (screenHeight \ 2) - 300)
+                    ElseIf lbl.Text = "OVEN DELIGHTS" Then
+                        lbl.Location = New Point(0, (screenHeight \ 2) - 80)
+                    ElseIf lbl.Text.Contains("Freshly Baked") Then
+                        lbl.Height = 60
+                        lbl.Location = New Point(0, (screenHeight \ 2) + 40)
+                    ElseIf lbl.Text.Contains("🍞") Or lbl.Text.Contains("🎂") Or lbl.Text.Contains("🥐") Or lbl.Text.Contains("🧁") Or lbl.Text.Contains("☕") Or lbl.Text.Contains("🍪") Then
+                        lbl.Height = 80
+                        lbl.Location = New Point(0, (screenHeight \ 2) + 120)
+                    ElseIf lbl.Text.Contains("Touch screen") Then
+                        lbl.Height = 50
+                        lbl.Location = New Point(0, (screenHeight \ 2) + 220)
+                    End If
+                End If
+            Next
+
             _idleOverlay.Visible = True
             _idleOverlay.BringToFront()
             _messageTimer?.Start()
@@ -1039,11 +996,6 @@ Public Class POSMainForm
             _idleOverlay.Visible = False
             _idleOverlay.SendToBack()
             _messageTimer?.Stop()
-            ResetIdleTimer()
-            ' Show welcome message after dismissing idle screen
-            If _cartItems.Rows.Count = 0 Then
-                ShowWelcomeMessage()
-            End If
         End If
     End Sub
 
@@ -1069,14 +1021,7 @@ Public Class POSMainForm
         End If
     End Sub
 
-    Private Sub ResetIdleTimer()
-        _idleTimer.Stop()
-        _idleTimer.Start()
-    End Sub
-
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
-        _idleTimer?.Stop()
-        _idleTimer?.Dispose()
         _messageTimer?.Stop()
         _messageTimer?.Dispose()
         MyBase.OnFormClosing(e)

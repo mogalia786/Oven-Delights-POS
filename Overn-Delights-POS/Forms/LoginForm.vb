@@ -17,8 +17,8 @@ Public Class LoginForm
     End Sub
 
     Private Sub LoadColors()
-        Dim primaryHex = ConfigurationManager.AppSettings("PrimaryColor") ?? "#D2691E"
-        Dim accentHex = ConfigurationManager.AppSettings("AccentColor") ?? "#FFD700"
+        Dim primaryHex = If(ConfigurationManager.AppSettings("PrimaryColor"), "#D2691E")
+        Dim accentHex = If(ConfigurationManager.AppSettings("AccentColor"), "#FFD700")
         _primaryColor = ColorTranslator.FromHtml(primaryHex)
         _accentColor = ColorTranslator.FromHtml(accentHex)
     End Sub
@@ -39,13 +39,14 @@ Public Class LoginForm
         mainPanel.Anchor = AnchorStyles.None
 
         ' Add shadow effect
-        mainPanel.Paint += Sub(s, e)
-                               Dim rect = mainPanel.ClientRectangle
-                               rect.Inflate(-2, -2)
-                               Using pen As New Pen(Color.FromArgb(200, 200, 200), 2)
-                                   e.Graphics.DrawRectangle(pen, rect)
-                               End Using
-                           End Sub
+        AddHandler mainPanel.Paint, Sub(s, e)
+                                        e.Graphics.SmoothingMode = Drawing2D.SmoothingMode.AntiAlias
+                                        Dim rect = mainPanel.ClientRectangle
+                                        rect.Inflate(-2, -2)
+                                        Using pen As New Pen(Color.FromArgb(200, 200, 200), 2)
+                                            e.Graphics.DrawRectangle(pen, rect)
+                                        End Using
+                                    End Sub
 
         ' Logo/Title area
         Dim titlePanel As New Panel With {
@@ -55,8 +56,8 @@ Public Class LoginForm
         }
 
         Dim lblTitle As New Label With {
-            .Text = ConfigurationManager.AppSettings("CompanyName") ?? "Oven Delights",
-            .Font = New Font("Segoe UI", 28, FontStyle.Bold),
+            .Text = If(ConfigurationManager.AppSettings("CompanyName"), "Oven Delights"),
+            .Font = New Font("Segoe UI", 48, FontStyle.Bold),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
             .Dock = DockStyle.Fill
@@ -160,51 +161,55 @@ Public Class LoginForm
             Return
         End If
         
-        ' Validate against ERP Users table
+        ' Validate against ERP Users table (same logic as ERP LoginForm)
         Try
             Using conn As New SqlClient.SqlConnection(ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString)
                 conn.Open()
                 
                 Dim sql As String = "
-                    SELECT u.UserID, u.Username, u.PasswordHash, u.Salt, u.BranchID, r.RoleName, u.IsLockedOut
+                    SELECT u.UserID, u.Username, u.Password, u.BranchID, u.IsActive, r.RoleName
                     FROM Users u
-                    INNER JOIN Roles r ON u.RoleID = r.RoleID
-                    WHERE u.Username = @Username 
-                      AND u.IsActive = 1
-                      AND (r.RoleName = 'Cashier' OR r.RoleName = 'Branch Manager' OR r.RoleName = 'Super Administrator')"
+                    LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                    WHERE u.Username = @Username"
                 
                 Using cmd As New SqlClient.SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@Username", username)
                     
                     Using reader = cmd.ExecuteReader()
                         If reader.Read() Then
-                            ' Check if locked out
-                            If CBool(reader("IsLockedOut")) Then
-                                MessageBox.Show("Account is locked. Please contact your manager.", 
-                                              "Account Locked", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                            ' Check if active
+                            If Not CBool(reader("IsActive")) Then
+                                MessageBox.Show("Account is inactive. Please contact your manager.", 
+                                              "Account Inactive", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                                 Return
                             End If
                             
-                            ' Verify password
-                            Dim storedHash = reader("PasswordHash").ToString()
-                            Dim salt = reader("Salt").ToString()
-                            Dim inputHash = HashPassword(password, salt)
+                            ' Get stored password
+                            Dim storedPassword = If(reader("Password") IsNot DBNull.Value, reader("Password").ToString(), String.Empty)
                             
-                            If inputHash = storedHash Then
-                                ' Valid login
-                                Me.CashierID = CInt(reader("UserID"))
-                                Me.CashierName = reader("Username").ToString()
-                                Me.BranchID = If(IsDBNull(reader("BranchID")), 1, CInt(reader("BranchID")))
-                                Me.DialogResult = DialogResult.OK
-                                Me.Close()
+                            ' Verify password (plain text comparison like ERP)
+                            If password = storedPassword Then
+                                ' Check role permissions for POS - only Teller role needed
+                                Dim roleName = If(reader("RoleName") IsNot DBNull.Value, reader("RoleName").ToString(), "")
+                                If roleName = "Teller" Then
+                                    ' Valid login
+                                    Me.CashierID = CInt(reader("UserID"))
+                                    Me.CashierName = reader("Username").ToString()
+                                    Me.BranchID = If(IsDBNull(reader("BranchID")), 1, CInt(reader("BranchID")))
+                                    Me.DialogResult = DialogResult.OK
+                                    Me.Close()
+                                Else
+                                    MessageBox.Show("Insufficient permissions for POS access." & vbCrLf & "Only users with 'Teller' role can access the POS system.", 
+                                                  "Access Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                End If
                             Else
                                 ' Invalid password
                                 MessageBox.Show("Invalid username or password.", 
                                               "Login Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
                             End If
                         Else
-                            ' User not found or insufficient permissions
-                            MessageBox.Show("Invalid username or password." & vbCrLf & "Or insufficient permissions for POS access.", 
+                            ' User not found
+                            MessageBox.Show("Invalid username or password.", 
                                           "Login Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
                         End If
                     End Using
@@ -215,14 +220,4 @@ Public Class LoginForm
             MessageBox.Show($"Login error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
-    
-    Private Function HashPassword(password As String, salt As String) As String
-        ' Use same hashing as ERP system
-        Using sha256 As New System.Security.Cryptography.SHA256Managed()
-            Dim saltedPassword = password & salt
-            Dim bytes = System.Text.Encoding.UTF8.GetBytes(saltedPassword)
-            Dim hash = sha256.ComputeHash(bytes)
-            Return Convert.ToBase64String(hash)
-        End Function
-    End Function
 End Class
