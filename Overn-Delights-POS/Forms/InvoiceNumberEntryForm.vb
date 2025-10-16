@@ -18,7 +18,7 @@ Public Class InvoiceNumberEntryForm
 
     Private Sub InitializeComponent()
         Me.Text = "Enter Invoice Number"
-        Me.Size = New Size(400, 600)
+        Me.Size = New Size(400, 650)
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
         Me.MaximizeBox = False

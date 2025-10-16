@@ -192,25 +192,74 @@ Public Class POSMainForm_REDESIGN
             .Padding = New Padding(10)
         }
 
+        ' Search panel with barcode scanner button
+        Dim pnlSearchBar As New Panel With {
+            .Dock = DockStyle.Top,
+            .Height = 60,
+            .BackColor = Color.White,
+            .Padding = New Padding(10, 8, 10, 8)
+        }
+        
+        ' Barcode scan button
+        Dim btnScan As New Button With {
+            .Text = "📷 SCAN",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Size = New Size(100, 44),
+            .Location = New Point(10, 8),
+            .BackColor = _lightBlue,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnScan.FlatAppearance.BorderSize = 0
+        AddHandler btnScan.Click, Sub()
+            txtBarcodeScanner.Focus()
+        End Sub
+        
+        ' Search textbox (for manual search with numpad)
         txtSearch = New TextBox With {
             .Font = New Font("Segoe UI", 14),
-            .Dock = DockStyle.Top,
-            .Height = 45,
-            .Text = "🔍 Search products...",
+            .Location = New Point(120, 8),
+            .Width = 450,
+            .Height = 44,
+            .Text = "🔍 Touch to search by code...",
             .ForeColor = _darkGray
         }
         AddHandler txtSearch.Enter, Sub()
-                                        If txtSearch.Text = "🔍 Search products..." Then
-                                            txtSearch.Text = ""
-                                            txtSearch.ForeColor = Color.Black
-                                        End If
-                                    End Sub
+            If txtSearch.Text = "🔍 Touch to search by code..." Then
+                txtSearch.Text = ""
+                txtSearch.ForeColor = Color.Black
+            End If
+            ShowNumpad()
+        End Sub
         AddHandler txtSearch.Leave, Sub()
-                                        If String.IsNullOrWhiteSpace(txtSearch.Text) Then
-                                            txtSearch.Text = "🔍 Search products..."
-                                            txtSearch.ForeColor = _darkGray
-                                        End If
-                                    End Sub
+            If String.IsNullOrWhiteSpace(txtSearch.Text) Then
+                txtSearch.Text = "🔍 Touch to search by code..."
+                txtSearch.ForeColor = _darkGray
+            End If
+        End Sub
+        AddHandler txtSearch.TextChanged, Sub()
+            If txtSearch.Text <> "🔍 Touch to search by code..." AndAlso Not String.IsNullOrWhiteSpace(txtSearch.Text) Then
+                SearchProducts(txtSearch.Text)
+            End If
+        End Sub
+        
+        ' Hidden barcode scanner input
+        txtBarcodeScanner = New TextBox With {
+            .Location = New Point(-100, -100),
+            .Size = New Size(1, 1)
+        }
+        AddHandler txtBarcodeScanner.KeyPress, Sub(sender, e)
+            If e.KeyChar = ChrW(Keys.Enter) Then
+                e.Handled = True
+                If Not String.IsNullOrWhiteSpace(txtBarcodeScanner.Text) Then
+                    AddProductByBarcode(txtBarcodeScanner.Text.Trim())
+                    txtBarcodeScanner.Clear()
+                End If
+            End If
+        End Sub
+        
+        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtBarcodeScanner})
 
         flpProducts = New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -221,7 +270,7 @@ Public Class POSMainForm_REDESIGN
             .BackColor = _lightGray
         }
 
-        pnlProducts.Controls.AddRange({flpProducts, txtSearch})
+        pnlProducts.Controls.AddRange({flpProducts, pnlSearchBar})
 
         ' RIGHT PANEL - Cart
         pnlCart = New Panel With {
@@ -1295,24 +1344,26 @@ Public Class POSMainForm_REDESIGN
                 conn.Open()
                 
                 
-                ' Get sales and returns for this cashier and till
+                ' Get sales and returns for this cashier and till for TODAY ONLY
                 Dim sql = "
                     SELECT 
-                        (SELECT COUNT(*) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS TotalTransactions,
-                        ISNULL((SELECT SUM(Subtotal) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalSubtotal,
-                        ISNULL((SELECT SUM(TaxAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalTax,
-                        ISNULL((SELECT SUM(TotalAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) - 
+                        (SELECT COUNT(*) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS TotalTransactions,
+                        ISNULL((SELECT SUM(Subtotal) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalSubtotal,
+                        ISNULL((SELECT SUM(TaxAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalTax,
+                        ISNULL((SELECT SUM(TotalAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) - 
                         ISNULL((SELECT SUM(TotalAmount) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalSales,
-                        (SELECT MIN(SaleDate) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS FirstSale,
-                        (SELECT MAX(SaleDate) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS LastSale,
-                        ISNULL((SELECT SUM(CashAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) - 
+                        (SELECT MIN(SaleDate) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS FirstSale,
+                        (SELECT MAX(SaleDate) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS LastSale,
+                        ISNULL((SELECT SUM(CashAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) - 
                         ISNULL((SELECT SUM(TotalAmount) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalCash,
-                        ISNULL((SELECT SUM(CardAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalCard,
+                        ISNULL((SELECT SUM(CardAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND BranchID = @BranchID AND TillPointID = @TillPointID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalCard,
                         ISNULL((SELECT COUNT(*) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalReturns,
                         ISNULL((SELECT SUM(TotalAmount) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalReturnAmount"
                 
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
                     
                     Using adapter As New SqlDataAdapter(cmd)
                         adapter.Fill(dt)
@@ -1520,12 +1571,28 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.White
         }
         
+        ' Print button
+        Dim btnPrint As New Button With {
+            .Text = "🖨️ PRINT",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Size = New Size(150, 50),
+            .Location = New Point(30, 15),
+            .BackColor = _lightBlue,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnPrint.FlatAppearance.BorderSize = 0
+        AddHandler btnPrint.Click, Sub()
+            PrintCashUpReport(transactions, subtotal, tax, total, totalCash, totalCard, totalReturns, totalReturnAmount, firstSale, lastSale)
+        End Sub
+        
         ' Close button
         Dim btnClose As New Button With {
             .Text = "CLOSE",
             .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .Size = New Size(150, 50),
-            .Location = New Point(150, 15),
+            .Location = New Point(190, 15),
             .BackColor = _darkGray,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
@@ -1539,7 +1606,7 @@ Public Class POSMainForm_REDESIGN
             .Text = "LOGOUT",
             .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .Size = New Size(150, 50),
-            .Location = New Point(310, 15),
+            .Location = New Point(350, 15),
             .BackColor = _red,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
@@ -1552,9 +1619,282 @@ Public Class POSMainForm_REDESIGN
             Me.Close()
         End Sub
         
-        pnlButtons.Controls.AddRange({btnClose, btnLogout})
+        pnlButtons.Controls.AddRange({btnPrint, btnClose, btnLogout})
         
         cashUpForm.Controls.AddRange({pnlHeader, pnlContent, pnlButtons})
         cashUpForm.ShowDialog()
+    End Sub
+    
+    Private Sub PrintCashUpReport(transactions As Integer, subtotal As Decimal, tax As Decimal, total As Decimal, 
+                                   totalCash As Decimal, totalCard As Decimal, totalReturns As Integer, 
+                                   totalReturnAmount As Decimal, firstSale As DateTime, lastSale As DateTime)
+        Try
+            ' Build receipt text
+            Dim receipt As New System.Text.StringBuilder()
+            
+            receipt.AppendLine("        CASH UP REPORT")
+            receipt.AppendLine("================================")
+            receipt.AppendLine()
+            receipt.AppendLine($"Cashier: {_cashierName}")
+            receipt.AppendLine($"Till Point: {GetTillNumber()}")
+            receipt.AppendLine($"Date: {DateTime.Now:dd/MM/yyyy}")
+            receipt.AppendLine($"Time: {firstSale:HH:mm} - {lastSale:HH:mm}")
+            receipt.AppendLine()
+            receipt.AppendLine("================================")
+            receipt.AppendLine()
+            receipt.AppendLine($"Total Transactions: {transactions}")
+            receipt.AppendLine()
+            receipt.AppendLine($"Subtotal: R{subtotal:N2}")
+            receipt.AppendLine($"VAT (15%): R{tax:N2}")
+            receipt.AppendLine()
+            receipt.AppendLine("RETURNS:")
+            receipt.AppendLine($"  Total Returns: {totalReturns}")
+            receipt.AppendLine($"  Return Amount: -R{totalReturnAmount:N2}")
+            receipt.AppendLine()
+            receipt.AppendLine("================================")
+            receipt.AppendLine()
+            receipt.AppendLine($"TOTAL SALES: R{total:N2}")
+            receipt.AppendLine()
+            receipt.AppendLine("================================")
+            receipt.AppendLine()
+            receipt.AppendLine($"Cash: R{totalCash:N2}")
+            receipt.AppendLine($"Card: R{totalCard:N2}")
+            receipt.AppendLine()
+            receipt.AppendLine("================================")
+            receipt.AppendLine($"Printed: {DateTime.Now:dd/MM/yyyy HH:mm:ss}")
+            receipt.AppendLine()
+            receipt.AppendLine()
+            
+            ' Print to default printer (receipt printer)
+            Dim printDoc As New System.Drawing.Printing.PrintDocument()
+            Dim receiptText As String = receipt.ToString()
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim font As New Font("Courier New", 10)
+                e.Graphics.DrawString(receiptText, font, Brushes.Black, 10, 10)
+            End Sub
+            
+            printDoc.Print()
+            
+            MessageBox.Show("Cash Up Report sent to printer!", "Print", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            
+        Catch ex As Exception
+            MessageBox.Show($"Print error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private _numpadForm As Form = Nothing
+    Private _numpadDisplay As Label = Nothing
+    
+    Private Sub ShowNumpad()
+        If _numpadForm IsNot Nothing AndAlso Not _numpadForm.IsDisposed Then
+            Return ' Already showing
+        End If
+        
+        ' Create numpad form
+        _numpadForm = New Form With {
+            .Text = "Search",
+            .Size = New Size(300, 480),
+            .StartPosition = FormStartPosition.Manual,
+            .Location = New Point(Me.Right - 320, Me.Top + 100),
+            .FormBorderStyle = FormBorderStyle.FixedToolWindow,
+            .TopMost = True,
+            .BackColor = _darkBlue,
+            .ShowInTaskbar = False
+        }
+        
+        ' Display panel showing current search text
+        Dim pnlDisplay As New Panel With {
+            .Dock = DockStyle.Top,
+            .Height = 70,
+            .BackColor = Color.White,
+            .Padding = New Padding(10)
+        }
+        
+        _numpadDisplay = New Label With {
+            .Text = txtSearch.Text,
+            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
+            .ForeColor = _darkBlue,
+            .Dock = DockStyle.Fill,
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .BackColor = Color.White
+        }
+        
+        pnlDisplay.Controls.Add(_numpadDisplay)
+        
+        Dim pnlNumpad As New Panel With {
+            .Dock = DockStyle.Fill,
+            .Padding = New Padding(10),
+            .BackColor = _darkBlue
+        }
+        
+        ' Number buttons
+        Dim buttons As String() = {"7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "⌫"}
+        Dim btnSize As Integer = 80
+        Dim spacing As Integer = 10
+        
+        For i As Integer = 0 To buttons.Length - 1
+            Dim row As Integer = i \ 3
+            Dim col As Integer = i Mod 3
+            Dim btnText As String = buttons(i)
+            
+            Dim btn As New Button With {
+                .Text = btnText,
+                .Font = New Font("Segoe UI", 20, FontStyle.Bold),
+                .Size = New Size(btnSize, btnSize),
+                .Location = New Point(10 + col * (btnSize + spacing), 10 + row * (btnSize + spacing)),
+                .BackColor = If(btnText = "C" OrElse btnText = "⌫", _red, Color.White),
+                .ForeColor = If(btnText = "C" OrElse btnText = "⌫", Color.White, _darkBlue),
+                .FlatStyle = FlatStyle.Flat,
+                .Cursor = Cursors.Hand
+            }
+            btn.FlatAppearance.BorderSize = 0
+            
+            AddHandler btn.Click, Sub(sender, e)
+                Dim clickedBtn = DirectCast(sender, Button)
+                Select Case clickedBtn.Text
+                    Case "C"
+                        txtSearch.Clear()
+                    Case "⌫"
+                        If txtSearch.Text.Length > 0 Then
+                            txtSearch.Text = txtSearch.Text.Substring(0, txtSearch.Text.Length - 1)
+                        End If
+                    Case Else
+                        txtSearch.Text &= clickedBtn.Text
+                End Select
+                
+                ' Update numpad display
+                If _numpadDisplay IsNot Nothing Then
+                    _numpadDisplay.Text = If(String.IsNullOrWhiteSpace(txtSearch.Text), "Enter code...", txtSearch.Text)
+                End If
+                
+                txtSearch.Focus()
+            End Sub
+            
+            pnlNumpad.Controls.Add(btn)
+        Next
+        
+        _numpadForm.Controls.AddRange({pnlNumpad, pnlDisplay})
+        
+        AddHandler _numpadForm.FormClosed, Sub()
+            _numpadForm = Nothing
+            _numpadDisplay = Nothing
+        End Sub
+        
+        _numpadForm.Show(Me)
+    End Sub
+    
+    Private Sub SearchProducts(searchText As String)
+        Try
+            Debug.WriteLine($"=== SEARCHING FOR: '{searchText}' ===")
+            flpProducts.Controls.Clear()
+            
+            Dim resultsCount As Integer = 0
+            
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                
+                Dim sql = "
+                    SELECT TOP 20
+                        drp.ProductID,
+                        drp.SKU AS ItemCode,
+                        drp.Name AS ProductName,
+                        ISNULL(price.SellingPrice, 0) AS SellingPrice,
+                        ISNULL(stock.QtyOnHand, 0) AS QtyOnHand
+                    FROM Demo_Retail_Product drp
+                    LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
+                    LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
+                    LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
+                    WHERE drp.SKU LIKE '%' + @SearchText + '%'
+                      AND drp.IsActive = 1
+                    ORDER BY drp.Name"
+                
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@SearchText", searchText)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    
+                    Debug.WriteLine($"BranchID: {_branchID}")
+                    
+                    Using reader = cmd.ExecuteReader()
+                        While reader.Read()
+                            resultsCount += 1
+                            Dim productID = CInt(reader("ProductID"))
+                            Dim itemCode = reader("ItemCode").ToString()
+                            Dim productName = reader("ProductName").ToString()
+                            Dim price = CDec(reader("SellingPrice"))
+                            Dim stock = CDec(reader("QtyOnHand"))
+                            
+                            Debug.WriteLine($"Found: {itemCode} - {productName}, Price: R{price}, Stock: {stock}")
+                            
+                            Dim card = CreateProductCard(productID, itemCode, productName, price, stock, 0)
+                            flpProducts.Controls.Add(card)
+                        End While
+                    End Using
+                End Using
+            End Using
+            
+            Debug.WriteLine($"Total results: {resultsCount}")
+            
+            If resultsCount = 0 Then
+                Dim lblNoResults As New Label With {
+                    .Text = $"No products found matching '{searchText}'",
+                    .Font = New Font("Segoe UI", 14),
+                    .ForeColor = _darkGray,
+                    .AutoSize = True,
+                    .Padding = New Padding(20)
+                }
+                flpProducts.Controls.Add(lblNoResults)
+            End If
+            
+        Catch ex As Exception
+            Debug.WriteLine($"Search error: {ex.Message}")
+            MessageBox.Show($"Search error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub AddProductByBarcode(barcode As String)
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                
+                Dim sql = "
+                    SELECT TOP 1
+                        drp.ProductID,
+                        drp.SKU AS ItemCode,
+                        drp.Name AS ProductName,
+                        ISNULL(price.SellingPrice, 0) AS SellingPrice,
+                        ISNULL(stock.QtyOnHand, 0) AS QtyOnHand
+                    FROM Demo_Retail_Product drp
+                    LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
+                    LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
+                    LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
+                    WHERE drp.SKU = @Barcode
+                      AND drp.IsActive = 1
+                      AND ISNULL(stock.QtyOnHand, 0) > 0
+                      AND ISNULL(price.SellingPrice, 0) > 0"
+                
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@Barcode", barcode)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            Dim productID = CInt(reader("ProductID"))
+                            Dim itemCode = reader("ItemCode").ToString()
+                            Dim productName = reader("ProductName").ToString()
+                            Dim price = CDec(reader("SellingPrice"))
+                            
+                            ' Add to cart directly
+                            AddProductToCart(productID, itemCode, productName, price)
+                        Else
+                            MessageBox.Show($"Product not found: {barcode}", "Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                        End If
+                    End Using
+                End Using
+            End Using
+            
+        Catch ex As Exception
+            MessageBox.Show($"Barcode scan error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 End Class

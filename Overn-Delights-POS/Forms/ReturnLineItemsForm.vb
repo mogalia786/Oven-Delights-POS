@@ -14,6 +14,7 @@ Public Class ReturnLineItemsForm
     Private _connectionString As String
     Private _invoiceLines As New DataTable()
     Private _returnItems As New List(Of ReturnLineItem)
+    Private _hasItems As Boolean = False
 
     Private flpLineItems As FlowLayoutPanel
     Private txtCustomerName As TextBox
@@ -37,6 +38,7 @@ Public Class ReturnLineItemsForm
         Public Property ReturnQty As Decimal
         Public Property UnitPrice As Decimal
         Public Property LineTotal As Decimal
+        Public Property RestockItem As Boolean
     End Class
 
     Public Sub New(invoiceNumber As String, branchID As Integer, tillPointID As Integer, cashierID As Integer, supervisorID As Integer)
@@ -53,7 +55,7 @@ Public Class ReturnLineItemsForm
 
     Private Sub InitializeComponent()
         Me.Text = $"Process Return - {_invoiceNumber}"
-        Me.Size = New Size(1000, 800)
+        Me.Size = New Size(1100, 800)
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
         Me.MaximizeBox = False
@@ -90,9 +92,42 @@ Public Class ReturnLineItemsForm
             .AutoSize = True
         }
 
-        flpLineItems = New FlowLayoutPanel With {
+        ' Column headers for line items
+        Dim pnlHeaders As New Panel With {
             .Location = New Point(20, 45),
-            .Size = New Size(940, 300),
+            .Size = New Size(1040, 30),
+            .BackColor = _darkBlue
+        }
+
+        Dim lblHeaderItem As New Label With {
+            .Text = "ITEM DETAILS",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .Location = New Point(10, 7),
+            .AutoSize = True
+        }
+
+        Dim lblHeaderRestock As New Label With {
+            .Text = "RESTOCK?",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .Location = New Point(680, 7),
+            .AutoSize = True
+        }
+
+        Dim lblHeaderActions As New Label With {
+            .Text = "ACTIONS",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .Location = New Point(850, 7),
+            .AutoSize = True
+        }
+
+        pnlHeaders.Controls.AddRange({lblHeaderItem, lblHeaderRestock, lblHeaderActions})
+
+        flpLineItems = New FlowLayoutPanel With {
+            .Location = New Point(20, 80),
+            .Size = New Size(1040, 265),
             .AutoScroll = True,
             .FlowDirection = FlowDirection.TopDown,
             .WrapContents = False,
@@ -163,7 +198,7 @@ Public Class ReturnLineItemsForm
             .Height = 60
         }
 
-        pnlMain.Controls.AddRange({lblLineItems, flpLineItems, lblCustomerDetails, lblName, txtCustomerName, lblPhone, txtPhone, lblAddress, txtAddress, lblReason, txtReason})
+        pnlMain.Controls.AddRange({lblLineItems, pnlHeaders, flpLineItems, lblCustomerDetails, lblName, txtCustomerName, lblPhone, txtPhone, lblAddress, txtAddress, lblReason, txtReason})
 
         ' Bottom panel
         Dim pnlBottom As New Panel With {
@@ -213,17 +248,19 @@ Public Class ReturnLineItemsForm
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
 
+                ' Load from POS_InvoiceLines - this is the source of truth
                 Dim sql = "
                     SELECT 
-                        il.ProductID,
-                        il.ItemCode,
-                        il.ProductName,
-                        il.Quantity,
-                        il.UnitPrice,
-                        il.LineTotal
-                    FROM POS_InvoiceLines il
-                    WHERE il.InvoiceNumber = @InvoiceNumber
-                    ORDER BY il.ProductID"
+                        ProductID,
+                        ItemCode,
+                        ProductName,
+                        Quantity,
+                        UnitPrice,
+                        LineTotal
+                    FROM POS_InvoiceLines
+                    WHERE InvoiceNumber = @InvoiceNumber
+                    AND Quantity > 0
+                    ORDER BY ProductName"
 
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
@@ -234,17 +271,28 @@ Public Class ReturnLineItemsForm
             End Using
 
             If _invoiceLines.Rows.Count = 0 Then
-                MessageBox.Show("No line items found for this invoice!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Me.Close()
+                _hasItems = False
                 Return
             End If
 
+            _hasItems = True
             DisplayLineItems()
 
         Catch ex As Exception
             MessageBox.Show($"Error loading invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Me.Close()
+            _hasItems = False
         End Try
+    End Sub
+    
+    Protected Overrides Sub OnShown(e As EventArgs)
+        MyBase.OnShown(e)
+        
+        ' Check if we have items after loading
+        If Not _hasItems Then
+            MessageBox.Show("No items available to return for this invoice! All items may have already been returned.", "No Items", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Me.DialogResult = DialogResult.Cancel
+            Me.Close()
+        End If
     End Sub
 
     Private Sub DisplayLineItems()
@@ -252,7 +300,7 @@ Public Class ReturnLineItemsForm
 
         For Each row As DataRow In _invoiceLines.Rows
             Dim pnlLine As New Panel With {
-                .Size = New Size(900, 60),
+                .Size = New Size(1020, 60),
                 .BorderStyle = BorderStyle.FixedSingle,
                 .Margin = New Padding(5),
                 .BackColor = Color.White
@@ -269,14 +317,14 @@ Public Class ReturnLineItemsForm
                 .Text = $"{itemCode} - {productName}  |  Qty: {qty}  |  Price: R {price:N2}  |  Total: R {total:N2}",
                 .Font = New Font("Segoe UI", 11),
                 .Location = New Point(10, 18),
-                .AutoSize = True
+                .Size = New Size(650, 25)
             }
 
             Dim btnReturn As New Button With {
                 .Text = "🔄 RETURN",
                 .Font = New Font("Segoe UI", 10, FontStyle.Bold),
                 .Size = New Size(120, 40),
-                .Location = New Point(650, 10),
+                .Location = New Point(780, 10),
                 .BackColor = _green,
                 .ForeColor = Color.White,
                 .FlatStyle = FlatStyle.Flat,
@@ -284,28 +332,46 @@ Public Class ReturnLineItemsForm
                 .Tag = New With {productID, itemCode, productName, qty, price}
             }
             btnReturn.FlatAppearance.BorderSize = 0
-            AddHandler btnReturn.Click, Sub() ReturnFullLine(productID, itemCode, productName, qty, price)
+            AddHandler btnReturn.Click, Sub(sender, e)
+                Dim btn = DirectCast(sender, Button)
+                Dim panel = DirectCast(btn.Parent, Panel)
+                Dim chk = panel.Controls.OfType(Of CheckBox)().FirstOrDefault()
+                ReturnFullLine(productID, itemCode, productName, qty, price, If(chk IsNot Nothing, chk.Checked, True))
+            End Sub
+
+            Dim chkRestock As New CheckBox With {
+                .Text = "",
+                .Font = New Font("Segoe UI", 9, FontStyle.Bold),
+                .Location = New Point(695, 20),
+                .Size = New Size(20, 20),
+                .Checked = True
+            }
 
             Dim btnMinus As New Button With {
                 .Text = "➖ MINUS",
                 .Font = New Font("Segoe UI", 10, FontStyle.Bold),
                 .Size = New Size(120, 40),
-                .Location = New Point(780, 10),
+                .Location = New Point(910, 10),
                 .BackColor = _orange,
                 .ForeColor = Color.White,
                 .FlatStyle = FlatStyle.Flat,
                 .Cursor = Cursors.Hand,
-                .Tag = New With {productID, itemCode, productName, qty, price}
+                .Tag = New With {productID, itemCode, productName, qty, price, chkRestock}
             }
             btnMinus.FlatAppearance.BorderSize = 0
-            AddHandler btnMinus.Click, Sub() ReduceQuantity(productID, itemCode, productName, qty, price)
+            AddHandler btnMinus.Click, Sub(sender, e)
+                Dim btn = DirectCast(sender, Button)
+                Dim panel = DirectCast(btn.Parent, Panel)
+                Dim chk = panel.Controls.OfType(Of CheckBox)().FirstOrDefault()
+                ReduceQuantity(productID, itemCode, productName, qty, price, If(chk IsNot Nothing, chk.Checked, True))
+            End Sub
 
-            pnlLine.Controls.AddRange({lblInfo, btnReturn, btnMinus})
+            pnlLine.Controls.AddRange({lblInfo, chkRestock, btnReturn, btnMinus})
             flpLineItems.Controls.Add(pnlLine)
         Next
     End Sub
 
-    Private Sub ReturnFullLine(productID As Integer, itemCode As String, productName As String, qty As Decimal, price As Decimal)
+    Private Sub ReturnFullLine(productID As Integer, itemCode As String, productName As String, qty As Decimal, price As Decimal, restockItem As Boolean)
         ' Check if already in return list
         Dim existing = _returnItems.FirstOrDefault(Function(x) x.ProductID = productID)
         If existing IsNot Nothing Then
@@ -320,13 +386,14 @@ Public Class ReturnLineItemsForm
             .OriginalQty = qty,
             .ReturnQty = qty,
             .UnitPrice = price,
-            .LineTotal = qty * price
+            .LineTotal = qty * price,
+            .RestockItem = restockItem
         })
 
         UpdateTotal()
     End Sub
 
-    Private Sub ReduceQuantity(productID As Integer, itemCode As String, productName As String, maxQty As Decimal, price As Decimal)
+    Private Sub ReduceQuantity(productID As Integer, itemCode As String, productName As String, maxQty As Decimal, price As Decimal, restockItem As Boolean)
         Dim input = InputBox($"Enter quantity to return (Max: {maxQty}):", "Reduce Quantity", "1")
 
         If String.IsNullOrEmpty(input) Then Return
@@ -351,7 +418,8 @@ Public Class ReturnLineItemsForm
             .OriginalQty = maxQty,
             .ReturnQty = returnQty,
             .UnitPrice = price,
-            .LineTotal = returnQty * price
+            .LineTotal = returnQty * price,
+            .RestockItem = restockItem
         })
 
         UpdateTotal()
@@ -364,6 +432,12 @@ Public Class ReturnLineItemsForm
     End Sub
 
     Private Sub ProcessReturn()
+        Debug.WriteLine("========================================")
+        Debug.WriteLine("PROCESS RETURN BUTTON CLICKED")
+        Debug.WriteLine($"Invoice Number: {_invoiceNumber}")
+        Debug.WriteLine($"Items to return: {_returnItems.Count}")
+        Debug.WriteLine("========================================")
+        
         If _returnItems.Count = 0 Then
             MessageBox.Show("Please select items to return!", "No Items", MessageBoxButtons.OK, MessageBoxIcon.Warning)
             Return
@@ -433,12 +507,18 @@ Public Class ReturnLineItemsForm
                         Dim returnID = InsertReturn(conn, transaction, returnNumber, authorizedSupervisorID, totalReturn, totalTax)
 
                         ' Insert return line items
+                        Debug.WriteLine($"Calling InsertReturnLineItems with ReturnID={returnID}")
                         InsertReturnLineItems(conn, transaction, returnID)
+                        Debug.WriteLine($"Completed InsertReturnLineItems")
 
                         ' Post to journals and ledgers
+                        Debug.WriteLine($"Calling PostReturnToJournalsAndLedgers")
                         PostReturnToJournalsAndLedgers(conn, transaction, returnID, returnNumber, totalReturn, totalTax)
+                        Debug.WriteLine($"Completed PostReturnToJournalsAndLedgers")
 
+                        Debug.WriteLine($"COMMITTING TRANSACTION...")
                         transaction.Commit()
+                        Debug.WriteLine($"TRANSACTION COMMITTED SUCCESSFULLY!")
 
                         ' Convert return items to receipt format
                         Dim receiptItems As New List(Of ReturnItem)
@@ -487,24 +567,46 @@ Public Class ReturnLineItemsForm
             If result IsNot Nothing Then branchCode = result.ToString()
         End Using
 
-        ' Get till number
+        ' Get till number (remove TILL prefix if it exists)
         Dim sqlTill = "SELECT TillNumber FROM TillPoints WHERE TillPointID = @TillPointID"
         Using cmd As New SqlCommand(sqlTill, conn, transaction)
             cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
             Dim result = cmd.ExecuteScalar()
-            If result IsNot Nothing Then tillNumber = result.ToString()
+            If result IsNot Nothing Then 
+                tillNumber = result.ToString().Replace("TILL", "").Replace("Till", "").Trim()
+            End If
         End Using
 
-        ' Get next sequence
+        ' Get next sequence - simpler approach using COUNT
         Dim sequence As Integer = 1
-        Dim sqlSeq = "SELECT ISNULL(MAX(CAST(RIGHT(ReturnNumber, CHARINDEX('-', REVERSE(ReturnNumber)) - 1) AS INT)), 0) + 1 FROM Returns WHERE ReturnNumber LIKE @Pattern"
+        Dim pattern = $"RET-{branchCode}-TILL-{tillNumber}-%"
+        Dim sqlSeq = "SELECT COUNT(*) + 1 FROM Demo_Returns WHERE ReturnNumber LIKE @Pattern"
         Using cmd As New SqlCommand(sqlSeq, conn, transaction)
-            cmd.Parameters.AddWithValue("@Pattern", $"RET-{branchCode}-TILL{tillNumber}-%")
+            cmd.Parameters.AddWithValue("@Pattern", pattern)
             Dim result = cmd.ExecuteScalar()
             If result IsNot Nothing AndAlso Not IsDBNull(result) Then sequence = CInt(result)
         End Using
 
-        Return $"RET-{branchCode}-TILL{tillNumber}-{sequence:D3}"
+        ' Keep trying until we find a unique number
+        Dim returnNumber As String
+        Dim attempts = 0
+        Do
+            returnNumber = $"RET-{branchCode}-TILL-{tillNumber}-{sequence:D6}"
+            
+            ' Check if this number already exists
+            Dim sqlCheck = "SELECT COUNT(*) FROM Demo_Returns WHERE ReturnNumber = @ReturnNumber"
+            Using cmdCheck As New SqlCommand(sqlCheck, conn, transaction)
+                cmdCheck.Parameters.AddWithValue("@ReturnNumber", returnNumber)
+                Dim exists = CInt(cmdCheck.ExecuteScalar())
+                If exists = 0 Then Exit Do
+            End Using
+            
+            sequence += 1
+            attempts += 1
+            If attempts > 100 Then Throw New Exception("Unable to generate unique return number")
+        Loop
+
+        Return returnNumber
     End Function
 
     Private Function InsertReturn(conn As SqlConnection, transaction As SqlTransaction, returnNumber As String, supervisorID As Integer, totalReturn As Decimal, totalTax As Decimal) As Integer
@@ -531,10 +633,15 @@ Public Class ReturnLineItemsForm
     End Function
 
     Private Sub InsertReturnLineItems(conn As SqlConnection, transaction As SqlTransaction, returnID As Integer)
+        Debug.WriteLine($"=== InsertReturnLineItems: Processing {_returnItems.Count} items ===")
+        
         For Each item In _returnItems
+            Debug.WriteLine($"Processing return item: {item.ProductName}, ProductID={item.ProductID}, Qty={item.ReturnQty}")
+            
+            ' Insert return line item
             Dim sql = "
-                INSERT INTO Demo_ReturnDetails (ReturnID, VariantID, ProductName, Quantity, UnitPrice, LineTotal)
-                VALUES (@ReturnID, @VariantID, @ProductName, @Quantity, @UnitPrice, @LineTotal)"
+                INSERT INTO Demo_ReturnDetails (ReturnID, VariantID, ProductName, Quantity, UnitPrice, LineTotal, RestockItem)
+                VALUES (@ReturnID, @VariantID, @ProductName, @Quantity, @UnitPrice, @LineTotal, @RestockItem)"
 
             Using cmd As New SqlCommand(sql, conn, transaction)
                 cmd.Parameters.AddWithValue("@ReturnID", returnID)
@@ -543,17 +650,207 @@ Public Class ReturnLineItemsForm
                 cmd.Parameters.AddWithValue("@Quantity", item.ReturnQty)
                 cmd.Parameters.AddWithValue("@UnitPrice", item.UnitPrice)
                 cmd.Parameters.AddWithValue("@LineTotal", item.LineTotal)
+                cmd.Parameters.AddWithValue("@RestockItem", item.RestockItem)
                 cmd.ExecuteNonQuery()
             End Using
+            
+            Debug.WriteLine($"Inserted into Demo_ReturnDetails")
+
+            ' If restock flag is checked, update inventory
+            If item.RestockItem Then
+                Debug.WriteLine($"Restocking item...")
+                UpdateInventoryStock(conn, transaction, item.ProductID, item.ReturnQty)
+            End If
+            
+            ' Update the original invoice line item
+            Debug.WriteLine($"About to call UpdateInvoiceLineItem for ProductID={item.ProductID}, Invoice={_invoiceNumber}")
+            UpdateInvoiceLineItem(conn, transaction, item.ProductID, item.ReturnQty)
+            Debug.WriteLine($"Finished UpdateInvoiceLineItem")
         Next
+        
+        Debug.WriteLine($"=== InsertReturnLineItems: Completed ===")
+    End Sub
+    
+    Private Sub UpdateInvoiceLineItem(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, returnedQty As Decimal)
+        Try
+            Debug.WriteLine($"Updating POS_InvoiceLines: Invoice={_invoiceNumber}, ProductID={productID}, ReturnQty={returnedQty}")
+        
+            ' Check current quantity in POS_InvoiceLines
+            Dim sqlCheck = "SELECT Quantity FROM POS_InvoiceLines WHERE InvoiceNumber = @InvoiceNumber AND ProductID = @ProductID"
+            Dim currentQty As Decimal = 0
+            Using cmd As New SqlCommand(sqlCheck, conn, transaction)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                cmd.Parameters.AddWithValue("@ProductID", productID)
+                Dim result = cmd.ExecuteScalar()
+                If result IsNot Nothing Then 
+                    currentQty = CDec(result)
+                Else
+                    Debug.WriteLine($"WARNING: No line item found in POS_InvoiceLines for Invoice={_invoiceNumber}, ProductID={productID}")
+                    Return
+                End If
+            End Using
+            
+            Debug.WriteLine($"Current quantity: {currentQty}, Returning: {returnedQty}")
+        
+            If currentQty <= returnedQty Then
+                ' Delete the line completely (returning all)
+                Debug.WriteLine($"DELETING line item - full return")
+                Dim sqlDelete = "DELETE FROM POS_InvoiceLines WHERE InvoiceNumber = @InvoiceNumber AND ProductID = @ProductID"
+                Using cmd As New SqlCommand(sqlDelete, conn, transaction)
+                    cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                    cmd.Parameters.AddWithValue("@ProductID", productID)
+                    Dim rowsAffected = cmd.ExecuteNonQuery()
+                    Debug.WriteLine($"Deleted {rowsAffected} rows from POS_InvoiceLines")
+                End Using
+            Else
+                ' Update the line item quantity (partial return)
+                Debug.WriteLine($"UPDATING line item - partial return")
+                Dim sql = "
+                    UPDATE POS_InvoiceLines 
+                    SET Quantity = Quantity - @ReturnedQty,
+                        LineTotal = (Quantity - @ReturnedQty) * UnitPrice
+                    WHERE InvoiceNumber = @InvoiceNumber 
+                    AND ProductID = @ProductID"
+                
+                Using cmd As New SqlCommand(sql, conn, transaction)
+                    cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                    cmd.Parameters.AddWithValue("@ProductID", productID)
+                    cmd.Parameters.AddWithValue("@ReturnedQty", returnedQty)
+                    Dim rowsAffected = cmd.ExecuteNonQuery()
+                    Debug.WriteLine($"Updated {rowsAffected} rows in POS_InvoiceLines")
+                End Using
+            End If
+            
+            Debug.WriteLine($"Successfully updated invoice {_invoiceNumber}")
+            
+        Catch ex As Exception
+            Debug.WriteLine($"ERROR updating invoice line item: {ex.Message}")
+            Throw
+        End Try
+    End Sub
+
+    Private Sub UpdateInventoryStock(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, quantity As Decimal)
+        ' Update Demo_Retail_Product stock for this branch
+        ' Note: If Demo_Retail_Product doesn't have BranchID, stock is global across branches
+        Dim sql = "
+            UPDATE Demo_Retail_Product 
+            SET CurrentStock = CurrentStock + @Quantity 
+            WHERE ProductID = @ProductID 
+            AND (BranchID = @BranchID OR BranchID IS NULL)"
+
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@ProductID", productID)
+            cmd.Parameters.AddWithValue("@Quantity", quantity)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            Dim rowsAffected = cmd.ExecuteNonQuery()
+            
+            ' If no rows affected with BranchID filter, try without it (global stock)
+            If rowsAffected = 0 Then
+                Dim sqlGlobal = "
+                    UPDATE Demo_Retail_Product 
+                    SET CurrentStock = CurrentStock + @Quantity 
+                    WHERE ProductID = @ProductID"
+                
+                Using cmdGlobal As New SqlCommand(sqlGlobal, conn, transaction)
+                    cmdGlobal.Parameters.AddWithValue("@ProductID", productID)
+                    cmdGlobal.Parameters.AddWithValue("@Quantity", quantity)
+                    cmdGlobal.ExecuteNonQuery()
+                End Using
+            End If
+        End Using
     End Sub
 
     Private Sub PostReturnToJournalsAndLedgers(conn As SqlConnection, transaction As SqlTransaction, returnID As Integer, returnNumber As String, totalReturn As Decimal, totalTax As Decimal)
-        ' Skip for now - journals table structure needs fixing
-        ' TODO: Implement journal entries:
-        ' 1. DEBIT: Sales Returns (contra-revenue)
-        ' 2. CREDIT: Cash/Bank (refund)
-        ' 3. DEBIT: Inventory (stock back)
-        ' 4. CREDIT: Cost of Sales (reverse COGS)
+        Try
+            ' Get ledger IDs
+            Dim salesReturnsLedgerID = GetLedgerID(conn, transaction, "Sales Returns")
+            Dim cashLedgerID = GetLedgerID(conn, transaction, "Cash")
+            Dim inventoryLedgerID = GetLedgerID(conn, transaction, "Inventory")
+            Dim costOfSalesLedgerID = GetLedgerID(conn, transaction, "Cost of Sales")
+            Dim stockWriteOffLedgerID = GetLedgerID(conn, transaction, "Stock Write-Off")
+
+            ' Calculate totals for restocked vs discarded items
+            Dim restockedAmount As Decimal = 0
+            Dim discardedAmount As Decimal = 0
+
+            For Each item In _returnItems
+                If item.RestockItem Then
+                    restockedAmount += item.LineTotal
+                Else
+                    discardedAmount += item.LineTotal
+                End If
+            Next
+
+            ' 1. DEBIT: Sales Returns (contra-revenue) - full amount
+            PostToJournal(conn, transaction, returnNumber, salesReturnsLedgerID, "Debit", totalReturn, $"Return: {returnNumber}")
+
+            ' 2. CREDIT: Cash (refund to customer) - full amount
+            PostToJournal(conn, transaction, returnNumber, cashLedgerID, "Credit", totalReturn, $"Refund: {returnNumber}")
+
+            ' 3. For restocked items: DEBIT Inventory, CREDIT Cost of Sales
+            If restockedAmount > 0 Then
+                PostToJournal(conn, transaction, returnNumber, inventoryLedgerID, "Debit", restockedAmount, $"Restock: {returnNumber}")
+                PostToJournal(conn, transaction, returnNumber, costOfSalesLedgerID, "Credit", restockedAmount, $"Reverse COGS: {returnNumber}")
+            End If
+
+            ' 4. For discarded items: DEBIT Stock Write-Off
+            If discardedAmount > 0 Then
+                PostToJournal(conn, transaction, returnNumber, stockWriteOffLedgerID, "Debit", discardedAmount, $"Discarded: {returnNumber}")
+            End If
+
+        Catch ex As Exception
+            ' Log but don't fail the return if ledger posting fails
+            Debug.WriteLine($"Ledger posting error: {ex.Message}")
+        End Try
     End Sub
+
+    Private Function GetLedgerID(conn As SqlConnection, transaction As SqlTransaction, ledgerName As String) As Integer
+        ' Get ledger for this specific branch
+        Dim sql = "SELECT LedgerID FROM Ledgers WHERE LedgerName = @LedgerName AND (BranchID = @BranchID OR BranchID IS NULL)"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@LedgerName", ledgerName)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            Dim result = cmd.ExecuteScalar()
+            If result IsNot Nothing Then
+                Return CInt(result)
+            End If
+            
+            ' If no branch-specific ledger found, try without branch filter (global ledgers)
+            Dim sqlGlobal = "SELECT LedgerID FROM Ledgers WHERE LedgerName = @LedgerName AND BranchID IS NULL"
+            Using cmdGlobal As New SqlCommand(sqlGlobal, conn, transaction)
+                cmdGlobal.Parameters.AddWithValue("@LedgerName", ledgerName)
+                Dim resultGlobal = cmdGlobal.ExecuteScalar()
+                If resultGlobal IsNot Nothing Then
+                    Return CInt(resultGlobal)
+                End If
+            End Using
+            
+            Return 0
+        End Using
+    End Function
+
+    Private Sub PostToJournal(conn As SqlConnection, transaction As SqlTransaction, reference As String, ledgerID As Integer, entryType As String, amount As Decimal, description As String)
+        If ledgerID = 0 Then Return
+
+        ' Journals table uses Debit/Credit columns, not EntryType/Amount
+        Dim debitAmount As Decimal = If(entryType = "Debit", amount, 0)
+        Dim creditAmount As Decimal = If(entryType = "Credit", amount, 0)
+
+        Dim sql = "
+            INSERT INTO Journals (JournalDate, JournalType, Reference, LedgerID, Debit, Credit, Description, BranchID)
+            VALUES (GETDATE(), 'Returns', @Reference, @LedgerID, @Debit, @Credit, @Description, @BranchID)"
+
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@Reference", reference)
+            cmd.Parameters.AddWithValue("@LedgerID", ledgerID)
+            cmd.Parameters.AddWithValue("@Debit", debitAmount)
+            cmd.Parameters.AddWithValue("@Credit", creditAmount)
+            cmd.Parameters.AddWithValue("@Description", description)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            cmd.ExecuteNonQuery()
+        End Using
+    End Sub
+
+    ' NOTE: Ledger balances are calculated from Journals table, not stored in Ledgers table
+    ' No need to update Ledgers table directly - just post to Journals
 End Class
