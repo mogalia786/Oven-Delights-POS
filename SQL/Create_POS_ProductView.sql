@@ -17,6 +17,7 @@ SELECT
     s.StockID,
     s.BranchID,
     s.QtyOnHand,
+    ISNULL(s.ReorderPoint, 5) AS ReorderLevel,  -- Use ReorderPoint column for low stock warning
     ISNULL(pr.SellingPrice, 0) AS SellingPrice,  -- Price from Demo_Retail_Price
     ISNULL(pr.CostPrice, 0) AS CostPrice
 FROM Demo_Retail_Product p

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -74,6 +74,15 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Forms\LoadingScreen.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\PasswordInputForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\TillPointSetupForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Services\POSDataService.vb" />
     <Compile Include="Forms\LoginForm.vb">
       <SubType>Form</SubType>
@@ -99,6 +108,16 @@
     <Compile Include="Forms\POSMainForm_REDESIGN.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\PaymentTenderForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\InvoiceNumberEntryForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\ReturnLineItemsForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\ReturnReceiptForm.vb" />
     <Compile Include="ApplicationEvents.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
@@ -117,6 +136,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Forms\IdleScreen.resx">
+      <DependentUpon>IdleScreen.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
@@ -136,6 +158,11 @@
     </None>
     <None Include="App.config" />
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="idleScreen.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
 </Project>

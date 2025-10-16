@@ -5,10 +5,13 @@ Imports System.Windows.Forms
 Public Class LoginForm
     Private _primaryColor As Color
     Private _accentColor As Color
+    Private btnTillSetup As Button
 
     Public Property CashierID As Integer
     Public Property CashierName As String
     Public Property BranchID As Integer
+    Public Property TillPointID As Integer
+    Public Property TillNumber As String
 
     Public Sub New()
         InitializeComponent()
@@ -132,6 +135,21 @@ Public Class LoginForm
                                             End If
                                         End Sub
 
+        ' Till Point Setup button - only show if not configured
+        btnTillSetup = New Button With {
+            .Text = "⚙ Setup Till Point",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Size = New Size(200, 45),
+            .Location = New Point(75, 460),
+            .BackColor = ColorTranslator.FromHtml("#9B59B6"),
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand,
+            .Visible = Not IsTillConfigured()
+        }
+        btnTillSetup.FlatAppearance.BorderSize = 0
+        AddHandler btnTillSetup.Click, AddressOf SetupTillPoint
+        
         ' Exit button
         Dim btnExit As New Button With {
             .Text = "Exit",
@@ -147,7 +165,7 @@ Public Class LoginForm
         AddHandler btnExit.Click, Sub() Application.Exit()
 
         ' Add all controls
-        mainPanel.Controls.AddRange({titlePanel, lblUsername, txtUsername, lblPassword, txtPassword, btnLogin, btnExit})
+        mainPanel.Controls.AddRange({titlePanel, lblUsername, txtUsername, lblPassword, txtPassword, btnLogin, btnTillSetup, btnExit})
         Me.Controls.Add(mainPanel)
         
         ' Set focus to username
@@ -192,10 +210,24 @@ Public Class LoginForm
                                 ' Check role permissions for POS - only Teller role needed
                                 Dim roleName = If(reader("RoleName") IsNot DBNull.Value, reader("RoleName").ToString(), "")
                                 If roleName = "Teller" Then
+                                    ' Store user data before closing reader
+                                    Dim userID = CInt(reader("UserID"))
+                                    Dim userFullName = reader("Username").ToString()
+                                    Dim userBranchID = If(IsDBNull(reader("BranchID")), 1, CInt(reader("BranchID")))
+                                    reader.Close()
+                                    
+                                    ' Check if Till Point is configured
+                                    Me.TillPointID = GetTillPointID()
+                                    
+                                    If Me.TillPointID = 0 Then
+                                        MessageBox.Show("Till Point not configured!" & vbCrLf & vbCrLf & "Please click 'Setup Till Point' button to configure this terminal.", "Till Point Required", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                        Return
+                                    End If
+                                    
                                     ' Valid login
-                                    Me.CashierID = CInt(reader("UserID"))
-                                    Me.CashierName = reader("Username").ToString()
-                                    Me.BranchID = If(IsDBNull(reader("BranchID")), 1, CInt(reader("BranchID")))
+                                    Me.CashierID = userID
+                                    Me.CashierName = userFullName
+                                    Me.BranchID = userBranchID
                                     Me.DialogResult = DialogResult.OK
                                     Me.Close()
                                 Else
@@ -220,4 +252,94 @@ Public Class LoginForm
             MessageBox.Show($"Login error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
+    
+    Private Function IsTillConfigured() As Boolean
+        Try
+            Using conn As New SqlClient.SqlConnection(ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString)
+                conn.Open()
+                Dim sql = "SELECT COUNT(*) FROM TillPoints WHERE MachineName = @MachineName AND IsActive = 1"
+                Using cmd As New SqlClient.SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@MachineName", Environment.MachineName)
+                    Return CInt(cmd.ExecuteScalar()) > 0
+                End Using
+            End Using
+        Catch
+            Return False
+        End Try
+    End Function
+    
+    Private Sub SetupTillPoint()
+        ' Request supervisor username
+        Dim supervisorUsername = InputBox("Enter Retail Supervisor Username:", "Authorization Required")
+        
+        If String.IsNullOrWhiteSpace(supervisorUsername) Then
+            Return
+        End If
+        
+        ' Request supervisor password using secure form
+        Using pwdForm As New PasswordInputForm("Enter Retail Supervisor Password:", "Authorization Required")
+            If pwdForm.ShowDialog() <> DialogResult.OK Then
+                Return
+            End If
+            Dim supervisorPassword = pwdForm.Password
+        
+        If String.IsNullOrWhiteSpace(supervisorPassword) Then
+            Return
+        End If
+        
+        ' Validate supervisor credentials
+        Try
+            Using conn As New SqlClient.SqlConnection(ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString)
+                conn.Open()
+                
+                ' Validate credentials
+                Dim checkUserSql = "SELECT COUNT(*) FROM Users u INNER JOIN Roles r ON u.RoleID = r.RoleID WHERE u.Username = @Username AND u.Password = @Password AND r.RoleName = 'Retail Supervisor' AND u.IsActive = 1"
+                Using cmdCheck As New SqlClient.SqlCommand(checkUserSql, conn)
+                    cmdCheck.Parameters.AddWithValue("@Username", supervisorUsername)
+                    cmdCheck.Parameters.AddWithValue("@Password", supervisorPassword)
+                    
+                    If CInt(cmdCheck.ExecuteScalar()) = 0 Then
+                        MessageBox.Show("Invalid Retail Supervisor credentials!", "Authorization Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
+                End Using
+                
+                ' Show Till Point setup form
+                Dim branchID = 1 ' Default branch, or get from config
+                Using tillSetupForm As New TillPointSetupForm(ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString, branchID)
+                    If tillSetupForm.ShowDialog() = DialogResult.OK Then
+                        MessageBox.Show($"Till Point '{tillSetupForm.TillNumber}' has been configured!" & vbCrLf & vbCrLf & "You can now login.", "Setup Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        ' Hide the setup button now that till is configured
+                        btnTillSetup.Visible = False
+                    End If
+                End Using
+            End Using
+        Catch ex As Exception
+            MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+        End Using
+    End Sub
+    
+    Private Function GetTillPointID() As Integer
+        Try
+            Using conn As New SqlClient.SqlConnection(ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString)
+                conn.Open()
+                
+                ' Try to find till point by machine name
+                Dim sql = "SELECT TOP 1 TillPointID, TillNumber FROM TillPoints WHERE MachineName = @MachineName AND IsActive = 1"
+                Using cmd As New SqlClient.SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@MachineName", Environment.MachineName)
+                    
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            TillNumber = reader("TillNumber").ToString()
+                            Return CInt(reader("TillPointID"))
+                        End If
+                    End Using
+                End Using
+            End Using
+        Catch
+        End Try
+        Return 0
+    End Function
 End Class

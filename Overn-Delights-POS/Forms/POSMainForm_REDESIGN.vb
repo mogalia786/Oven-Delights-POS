@@ -7,10 +7,11 @@ Public Class POSMainForm_REDESIGN
     Inherits Form
 
     ' Core properties
-    Private _connectionString As String
     Private _cashierID As Integer
     Private _cashierName As String
     Private _branchID As Integer
+    Private _tillPointID As Integer
+    Private _connectionString As String
     Private _cartItems As New DataTable()
     Private _allProducts As New DataTable() ' Cache all products
 
@@ -49,12 +50,13 @@ Public Class POSMainForm_REDESIGN
     Private _lightGray As Color = ColorTranslator.FromHtml("#ECF0F1")
     Private _darkGray As Color = ColorTranslator.FromHtml("#7F8C8D")
 
-    Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer)
+    Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer, tillPointID As Integer)
         MyBase.New()
 
         _cashierID = cashierID
         _cashierName = cashierName
         _branchID = branchID
+        _tillPointID = tillPointID
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
 
         Me.KeyPreview = True
@@ -83,9 +85,9 @@ Public Class POSMainForm_REDESIGN
 
         Dim lblTitle As New Label With {
             .Text = "🍰 OVEN DELIGHTS POS",
-            .Font = New Font("Segoe UI", 22, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
             .ForeColor = Color.White,
-            .Location = New Point(25, 18),
+            .Location = New Point(20, 20),
             .AutoSize = True
         }
 
@@ -112,30 +114,47 @@ Public Class POSMainForm_REDESIGN
                                                 End If
                                             End Sub
 
-        Dim lblCashier As New Label With {
-            .Text = $"👤 {_cashierName}",
-            .Font = New Font("Segoe UI", 12),
+        Dim btnCashUp As New Button With {
+            .Text = "💰 CASH UP",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Size = New Size(120, 40),
+            .BackColor = _green,
             .ForeColor = Color.White,
-            .AutoSize = True,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand,
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right
         }
-        lblCashier.Location = New Point(Screen.PrimaryScreen.Bounds.Width - 250, 25)
+        btnCashUp.Location = New Point(pnlTop.Width - 260, 15)
+        btnCashUp.FlatAppearance.BorderSize = 0
+        AddHandler btnCashUp.Click, AddressOf PerformCashUp
 
         Dim btnLogout As New Button With {
             .Text = "🚪 EXIT",
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
-            .Size = New Size(120, 40),
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Size = New Size(110, 40),
             .BackColor = _red,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
             .Anchor = AnchorStyles.Top Or AnchorStyles.Right
         }
-        btnLogout.Location = New Point(Screen.PrimaryScreen.Bounds.Width - 130, 15)
+        btnLogout.Location = New Point(pnlTop.Width - 130, 15)
         btnLogout.FlatAppearance.BorderSize = 0
         AddHandler btnLogout.Click, Sub() Me.Close()
 
-        pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnLogout})
+        Dim lblCashier As New Label With {
+            .Text = $"👤 {_cashierName} | Till: {GetTillNumber()}",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .AutoSize = False,
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .Width = 300,
+            .Height = 40,
+            .Anchor = AnchorStyles.Top
+        }
+        lblCashier.Location = New Point((pnlTop.Width \ 2) - 150, 15)
+
+        pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnCashUp, btnLogout})
 
         ' LEFT PANEL - Categories with FlowLayoutPanel
         Dim pnlCategoriesContainer As New Panel With {
@@ -343,14 +362,53 @@ Public Class POSMainForm_REDESIGN
         MyBase.OnLoad(e)
 
         Try
-            ' Reposition controls now that form is loaded
+            ' Show loading screen
+            Dim loadingScreen As New LoadingScreen()
+            loadingScreen.Show()
+            Application.DoEvents()
+
+            ' Load in stages with progress updates
+            loadingScreen.UpdateStatus("Setting up interface...")
+            loadingScreen.SetProgress(20)
             RepositionControls()
+
+            loadingScreen.UpdateStatus("Loading categories...")
+            loadingScreen.SetProgress(40)
             LoadCategories()
-            LoadAllProductsToCache() ' Load products once
+
+            loadingScreen.UpdateStatus("Loading products...")
+            loadingScreen.SetProgress(60)
+            LoadAllProductsToCache()
+
+            loadingScreen.UpdateStatus("Finalizing...")
+            loadingScreen.SetProgress(80)
+            
+            ' Force layout update before showing idle screen
+            Me.PerformLayout()
+            Application.DoEvents()
+            
             ShowIdleScreen()
+
+            loadingScreen.SetProgress(100)
+            Threading.Thread.Sleep(300) ' Brief pause to show 100%
+
+            ' Close loading screen
+            loadingScreen.Close()
+            loadingScreen.Dispose()
         Catch ex As Exception
             MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
+    End Sub
+
+    Private Sub LoadAllProductsFromDatabase()
+        ' Reload products from database to refresh stock levels
+        LoadAllProductsToCache()
+        ' Reload current view (thread-safe)
+        If Me.InvokeRequired Then
+            Me.Invoke(Sub() LoadProducts())
+        Else
+            LoadProducts()
+        End If
     End Sub
 
     Private Sub LoadAllProductsToCache()
@@ -362,9 +420,10 @@ Public Class POSMainForm_REDESIGN
             _allProducts.Columns.Add("ProductName", GetType(String))
             _allProducts.Columns.Add("SellingPrice", GetType(Decimal))
             _allProducts.Columns.Add("QtyOnHand", GetType(Decimal))
+            _allProducts.Columns.Add("ReorderLevel", GetType(Decimal))
             _allProducts.Columns.Add("Category", GetType(String))
 
-            ' SIMPLE: Query the view that has everything mapped correctly
+            ' Query the view - simple and fast!
             Dim sql = "
                 SELECT 
                     ProductID,
@@ -372,6 +431,7 @@ Public Class POSMainForm_REDESIGN
                     ProductName,
                     ISNULL(SellingPrice, 0) AS SellingPrice,
                     ISNULL(QtyOnHand, 0) AS QtyOnHand,
+                    ISNULL(ReorderLevel, 5) AS ReorderLevel,
                     Category
                 FROM vw_POS_Products
                 WHERE BranchID = @BranchID
@@ -392,36 +452,17 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub RepositionControls()
-        ' Fix top bar controls
+        ' Reposition cashier label to stay centered
         For Each ctrl As Control In pnlTop.Controls
-            If TypeOf ctrl Is Label AndAlso ctrl.Text.Contains("👤") Then
-                ctrl.Location = New Point(Me.Width - 250, 25)
-            ElseIf TypeOf ctrl Is Button AndAlso ctrl.Text.Contains("EXIT") Then
-                ctrl.Location = New Point(Me.Width - 130, 15)
+            If TypeOf ctrl Is Label AndAlso ctrl.Text.Contains("Till:") Then
+                ctrl.Left = (pnlTop.Width \ 2) - (ctrl.Width \ 2)
+                Exit For
             End If
         Next
 
-        ' Fix idle screen labels to use actual form size
-        If _idleOverlay IsNot Nothing Then
-            For Each ctrl As Control In _idleOverlay.Controls
-                If TypeOf ctrl Is Label Then
-                    Dim lbl = CType(ctrl, Label)
-                    lbl.Width = Me.Width
-
-                    ' Reposition vertically centered
-                    If lbl.Text.Contains("🍰") Then
-                        lbl.Location = New Point(0, (Me.Height \ 2) - 300)
-                    ElseIf lbl.Text = "OVEN DELIGHTS" Then
-                        lbl.Location = New Point(0, (Me.Height \ 2) - 80)
-                    ElseIf lbl.Text.Contains("Freshly Baked") Then
-                        lbl.Location = New Point(0, (Me.Height \ 2) + 40)
-                    ElseIf lbl.Text.Contains("🍞") Or lbl.Text.Contains("🎂") Or lbl.Text.Contains("🥐") Then
-                        lbl.Location = New Point(0, (Me.Height \ 2) + 120)
-                    ElseIf lbl.Text.Contains("Touch screen") Then
-                        lbl.Location = New Point(0, (Me.Height \ 2) + 220)
-                    End If
-                End If
-            Next
+        ' Reposition idle screen if visible
+        If _idleOverlay IsNot Nothing AndAlso _idleOverlay.Visible Then
+            ShowIdleScreen()
         End If
     End Sub
 
@@ -553,13 +594,16 @@ Public Class POSMainForm_REDESIGN
             Dim productCount = 0
             For Each row As DataRow In filteredRows
                 Dim price = If(IsDBNull(row("SellingPrice")), 0D, CDec(row("SellingPrice")))
+                Dim stock = If(IsDBNull(row("QtyOnHand")), 0D, CDec(row("QtyOnHand")))
+                Dim reorderLevel = If(IsDBNull(row("ReorderLevel")), 0D, CDec(row("ReorderLevel")))
                 ' Show all products
                 Dim card = CreateProductCard(
                     CInt(row("ProductID")),
                     row("ItemCode").ToString(),
                     row("ProductName").ToString(),
                     price,
-                    If(IsDBNull(row("QtyOnHand")), 0D, CDec(row("QtyOnHand")))
+                    stock,
+                    reorderLevel
                 )
                 flpProducts.Controls.Add(card)
                 productCount += 1
@@ -590,7 +634,10 @@ Public Class POSMainForm_REDESIGN
         End Try
     End Sub
 
-    Private Function CreateProductCard(productID As Integer, itemCode As String, productName As String, price As Decimal, stock As Decimal) As Panel
+    Private Function CreateProductCard(productID As Integer, itemCode As String, productName As String, price As Decimal, stock As Decimal, reorderLevel As Decimal) As Panel
+        ' Determine if stock is low (at or below reorder level)
+        Dim isLowStock = stock <= reorderLevel
+
         Dim card As New Panel With {
             .Size = New Size(200, 140),
             .BackColor = Color.White,
@@ -624,10 +671,14 @@ Public Class POSMainForm_REDESIGN
             .AutoSize = True
         }
 
+        ' Stock label - RED if at or below reorder level
+        Dim stockColor = If(isLowStock, Color.Red, _darkGray)
+        Dim stockText = If(isLowStock, $"Stock: {stock} ⚠ LOW!", $"Stock: {stock}")
+
         Dim lblStock As New Label With {
-            .Text = $"Stock: {stock}",
-            .Font = New Font("Segoe UI", 8),
-            .ForeColor = _darkGray,
+            .Text = stockText,
+            .Font = New Font("Segoe UI", 8, If(isLowStock, FontStyle.Bold, FontStyle.Regular)),
+            .ForeColor = stockColor,
             .Location = New Point(8, 115),
             .AutoSize = True
         }
@@ -853,7 +904,77 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub ProcessReturn()
-        MessageBox.Show("Returns - Coming soon", "Returns", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        ' Step 1: Supervisor Authorization
+        Dim supervisorUsername = InputBox("Enter Retail Supervisor Username:", "Returns Authorization")
+        If String.IsNullOrWhiteSpace(supervisorUsername) Then Return
+
+        Dim supervisorPassword As String = ""
+        Using pwdForm As New PasswordInputForm("Enter Retail Supervisor Password:", "Returns Authorization")
+            If pwdForm.ShowDialog() <> DialogResult.OK Then Return
+            supervisorPassword = pwdForm.Password
+        End Using
+
+        If String.IsNullOrWhiteSpace(supervisorPassword) Then Return
+
+        ' Validate supervisor credentials
+        Dim supervisorID As Integer = 0
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT u.UserID FROM Users u INNER JOIN Roles r ON u.RoleID = r.RoleID WHERE u.Username = @Username AND u.Password = @Password AND r.RoleName = 'Retail Supervisor' AND u.IsActive = 1"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@Username", supervisorUsername)
+                    cmd.Parameters.AddWithValue("@Password", supervisorPassword)
+                    Dim result = cmd.ExecuteScalar()
+                    If result Is Nothing Then
+                        MessageBox.Show("Invalid Retail Supervisor credentials!", "Authorization Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
+                    supervisorID = CInt(result)
+                End Using
+            End Using
+        Catch ex As Exception
+            MessageBox.Show($"Authorization error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End Try
+
+        ' Step 2: Get invoice number
+        Using invoiceForm As New InvoiceNumberEntryForm()
+            If invoiceForm.ShowDialog() <> DialogResult.OK Then Return
+
+            Dim digits = invoiceForm.InvoiceDigits
+            If String.IsNullOrWhiteSpace(digits) Then Return
+
+            ' Generate full invoice number - Format: INV-BranchCode-TILL-TillNumber-000001
+            ' Example: INV-PH-TILL-01-000003
+            Dim branchPrefix = GetBranchPrefix()
+            Dim tillNumber = GetTillNumber()
+            Dim fullInvoiceNumber = $"INV-{branchPrefix}-TILL-{tillNumber}-{digits.PadLeft(6, "0"c)}"
+
+            ' Verify invoice exists
+            Try
+                Using conn As New SqlConnection(_connectionString)
+                    conn.Open()
+                    Dim sql = "SELECT COUNT(*) FROM Demo_Sales WHERE InvoiceNumber = @InvoiceNumber"
+                    Using cmd As New SqlCommand(sql, conn)
+                        cmd.Parameters.AddWithValue("@InvoiceNumber", fullInvoiceNumber)
+                        Dim count = CInt(cmd.ExecuteScalar())
+                        If count = 0 Then
+                            MessageBox.Show($"Invoice {fullInvoiceNumber} not found!", "Invalid Invoice", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                            Return
+                        End If
+                    End Using
+                End Using
+            Catch ex As Exception
+                MessageBox.Show($"Error validating invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End Try
+
+            ' Step 3: Show return line items form
+            Using returnForm As New ReturnLineItemsForm(fullInvoiceNumber, _branchID, _tillPointID, _cashierID, supervisorID)
+                returnForm.ShowDialog()
+            End Using
+        End Using
     End Sub
 
     Private Sub ShowReports()
@@ -873,68 +994,130 @@ Public Class POSMainForm_REDESIGN
             MessageBox.Show("Cart is empty!", "Payment Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
             Return
         End If
-        MessageBox.Show("Payment processing - To be implemented", "Payment", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        ShowIdleScreen()
+
+        ' Calculate totals
+        CalculateTotals()
+        Dim subtotal As Decimal = 0
+        For Each row As DataRow In _cartItems.Rows
+            subtotal += CDec(row("Total"))
+        Next
+        Dim tax = subtotal * 0.15D
+        Dim total = subtotal + tax
+
+        ' Get branch prefix
+        Dim branchPrefix = GetBranchPrefix()
+
+        ' Show payment tender form
+        Using paymentForm As New PaymentTenderForm(_cashierID, _branchID, _tillPointID, branchPrefix, _cartItems, subtotal, tax, total)
+            If paymentForm.ShowDialog() = DialogResult.OK Then
+                ' Clear cart and show idle screen
+                _cartItems.Clear()
+                CalculateTotals()
+                ShowIdleScreen()
+            End If
+        End Using
     End Sub
+
+    Private Sub UpdateCachedStock()
+        ' Update stock quantities in the cached DataTable - INSTANT!
+        For Each cartRow As DataRow In _cartItems.Rows
+            Dim productID = CInt(cartRow("ProductID"))
+            Dim qtySold = CDec(cartRow("Qty"))
+
+            ' Find and update in cache
+            Dim cachedRows = _allProducts.Select($"ProductID = {productID}")
+            If cachedRows.Length > 0 Then
+                Dim currentStock = CDec(cachedRows(0)("QtyOnHand"))
+                cachedRows(0)("QtyOnHand") = currentStock - qtySold
+            End If
+        Next
+    End Sub
+
+    Private Function GetBranchPrefix() As String
+        Try
+            Dim sql = "SELECT BranchCode FROM Branches WHERE BranchID = @BranchID"
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    Dim result = cmd.ExecuteScalar()
+                    Return If(result IsNot Nothing, result.ToString(), "POS")
+                End Using
+            End Using
+        Catch
+            Return "POS"
+        End Try
+    End Function
 
     Private Sub SetupIdleScreen()
         _idleOverlay = New Panel With {
             .Dock = DockStyle.Fill,
-            .BackColor = ColorTranslator.FromHtml("#D2691E"),
+            .BackColor = Color.FromArgb(180, 139, 69, 19),
             .Visible = False
         }
+        
+        ' Set background image
+        Try
+            Dim imagePath = System.IO.Path.Combine(Application.StartupPath, "idleScreen.png")
+            If System.IO.File.Exists(imagePath) Then
+                _idleOverlay.BackgroundImage = Image.FromFile(imagePath)
+                _idleOverlay.BackgroundImageLayout = ImageLayout.Stretch
+            End If
+        Catch ex As Exception
+            ' If image fails to load, keep the solid color background
+        End Try
 
         Dim lblLogo As New Label With {
             .Text = "🍰",
             .Font = New Font("Segoe UI", 120, FontStyle.Bold),
-            .ForeColor = Color.White,
+            .ForeColor = ColorTranslator.FromHtml("#C84B31"),
             .TextAlign = ContentAlignment.MiddleCenter,
             .AutoSize = False,
             .Dock = DockStyle.None,
-            .Anchor = AnchorStyles.None,
+            .Height = 200,
             .BackColor = Color.Transparent
         }
 
         Dim lblCompany As New Label With {
             .Text = "OVEN DELIGHTS",
             .Font = New Font("Segoe UI", 72, FontStyle.Bold),
-            .ForeColor = Color.White,
+            .ForeColor = ColorTranslator.FromHtml("#D9534F"),
             .TextAlign = ContentAlignment.MiddleCenter,
             .AutoSize = False,
             .Dock = DockStyle.None,
-            .Anchor = AnchorStyles.None,
+            .Height = 100,
             .BackColor = Color.Transparent
         }
 
         Dim lblTagline As New Label With {
             .Text = "Freshly Baked with Love",
             .Font = New Font("Segoe UI", 32, FontStyle.Italic),
-            .ForeColor = ColorTranslator.FromHtml("#FFD700"),
+            .ForeColor = ColorTranslator.FromHtml("#E67E22"),
             .TextAlign = ContentAlignment.MiddleCenter,
             .AutoSize = False,
             .Dock = DockStyle.None,
-            .Anchor = AnchorStyles.None,
+            .Height = 60,
             .BackColor = Color.Transparent
         }
 
         _lblRotatingMessage = New Label With {
-            .Font = New Font("Segoe UI", 36, FontStyle.Bold),
-            .ForeColor = ColorTranslator.FromHtml("#FFD700"),
+            .Font = New Font("Segoe UI", 42, FontStyle.Bold),
+            .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
             .AutoSize = False,
             .Dock = DockStyle.None,
-            .Anchor = AnchorStyles.None,
+            .Height = 80,
             .BackColor = Color.Transparent
         }
 
         Dim lblTouch As New Label With {
             .Text = "Touch screen to begin",
-            .Font = New Font("Segoe UI", 28),
+            .Font = New Font("Segoe UI", 32, FontStyle.Bold),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
             .AutoSize = False,
             .Dock = DockStyle.None,
-            .Anchor = AnchorStyles.None,
+            .Height = 50,
             .BackColor = Color.Transparent
         }
 
@@ -955,32 +1138,34 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub ShowIdleScreen()
         If _idleOverlay IsNot Nothing Then
-            ' Reposition idle screen content before showing
-            Dim screenWidth = Me.ClientSize.Width
-            Dim screenHeight = Me.ClientSize.Height
+            ' Get actual overlay dimensions
+            Dim overlayWidth = _idleOverlay.Width
+            Dim overlayHeight = _idleOverlay.Height
+            Dim centerY = overlayHeight \ 2
 
+            Dim labelIndex = 0
             For Each ctrl As Control In _idleOverlay.Controls
                 If TypeOf ctrl Is Label Then
                     Dim lbl = CType(ctrl, Label)
-                    lbl.Width = screenWidth
-                    lbl.Height = 100
+                    lbl.Width = overlayWidth
+                    lbl.Left = 0
+                    lbl.TextAlign = ContentAlignment.MiddleCenter
 
-                    ' Center vertically based on actual form size
-                    If lbl.Text.Contains("🍰") Then
-                        lbl.Height = 200
-                        lbl.Location = New Point(0, (screenHeight \ 2) - 300)
-                    ElseIf lbl.Text = "OVEN DELIGHTS" Then
-                        lbl.Location = New Point(0, (screenHeight \ 2) - 80)
-                    ElseIf lbl.Text.Contains("Freshly Baked") Then
-                        lbl.Height = 60
-                        lbl.Location = New Point(0, (screenHeight \ 2) + 40)
-                    ElseIf lbl.Text.Contains("🍞") Or lbl.Text.Contains("🎂") Or lbl.Text.Contains("🥐") Or lbl.Text.Contains("🧁") Or lbl.Text.Contains("☕") Or lbl.Text.Contains("🍪") Then
-                        lbl.Height = 80
-                        lbl.Location = New Point(0, (screenHeight \ 2) + 120)
-                    ElseIf lbl.Text.Contains("Touch screen") Then
-                        lbl.Height = 50
-                        lbl.Location = New Point(0, (screenHeight \ 2) + 220)
-                    End If
+                    ' Position based on order added (0=logo, 1=company, 2=tagline, 3=rotating, 4=touch)
+                    Select Case labelIndex
+                        Case 0 ' Logo
+                            lbl.Top = centerY - 200
+                        Case 1 ' OVEN DELIGHTS
+                            lbl.Top = centerY - 20
+                        Case 2 ' Tagline
+                            lbl.Top = centerY + 90
+                        Case 3 ' Rotating message
+                            lbl.Top = centerY + 160
+                        Case 4 ' Touch screen
+                            lbl.Top = centerY + 250
+                    End Select
+                    
+                    labelIndex += 1
                 End If
             Next
 
@@ -1025,5 +1210,351 @@ Public Class POSMainForm_REDESIGN
         _messageTimer?.Stop()
         _messageTimer?.Dispose()
         MyBase.OnFormClosing(e)
+    End Sub
+    
+    Private Function GetTillNumber() As String
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT TillNumber FROM TillPoints WHERE TillPointID = @TillPointID"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
+                    Dim result = cmd.ExecuteScalar()
+                    If result IsNot Nothing Then
+                        Dim fullTillNumber = result.ToString()
+                        ' Extract just the number part (e.g., "PH-TILL-01" becomes "01")
+                        If fullTillNumber.Contains("-") Then
+                            Dim parts = fullTillNumber.Split("-"c)
+                            Return parts(parts.Length - 1) ' Get last part
+                        Else
+                            Return fullTillNumber
+                        End If
+                    Else
+                        Return "01"
+                    End If
+                End Using
+            End Using
+        Catch
+            Return "01"
+        End Try
+    End Function
+    
+    Private Sub PerformCashUp()
+        ' Request Retail Supervisor username
+        Dim supervisorUsername = InputBox("Enter Retail Supervisor Username:", "Cash Up Authorization")
+        
+        If String.IsNullOrWhiteSpace(supervisorUsername) Then
+            Return
+        End If
+        
+        ' Request Retail Supervisor password using secure form
+        Dim supervisorPassword As String = ""
+        Using pwdForm As New PasswordInputForm("Enter Retail Supervisor Password:", "Cash Up Authorization")
+            If pwdForm.ShowDialog() <> DialogResult.OK Then
+                Return
+            End If
+            supervisorPassword = pwdForm.Password
+        End Using
+        
+        If String.IsNullOrWhiteSpace(supervisorPassword) Then
+            Return
+        End If
+        
+        ' Validate Retail Supervisor credentials
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                
+                Dim sql = "SELECT COUNT(*) FROM Users u INNER JOIN Roles r ON u.RoleID = r.RoleID WHERE u.Username = @Username AND u.Password = @Password AND r.RoleName = 'Retail Supervisor' AND u.IsActive = 1"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@Username", supervisorUsername)
+                    cmd.Parameters.AddWithValue("@Password", supervisorPassword)
+                    
+                    If CInt(cmd.ExecuteScalar()) = 0 Then
+                        MessageBox.Show("Invalid Retail Supervisor credentials!", "Authorization Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
+                End Using
+                
+                ' Get cash up data
+                Dim cashUpData = GetCashUpData()
+                
+                ' Show cash up report (modal dialog)
+                ShowCashUpReport(cashUpData)
+            End Using
+        Catch ex As Exception
+            MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Function GetCashUpData() As DataTable
+        Dim dt As New DataTable()
+        
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                
+                
+                ' Get sales and returns for this cashier and till
+                Dim sql = "
+                    SELECT 
+                        (SELECT COUNT(*) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS TotalTransactions,
+                        ISNULL((SELECT SUM(Subtotal) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalSubtotal,
+                        ISNULL((SELECT SUM(TaxAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalTax,
+                        ISNULL((SELECT SUM(TotalAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) - 
+                        ISNULL((SELECT SUM(TotalAmount) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalSales,
+                        (SELECT MIN(SaleDate) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS FirstSale,
+                        (SELECT MAX(SaleDate) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)) AS LastSale,
+                        ISNULL((SELECT SUM(CashAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) - 
+                        ISNULL((SELECT SUM(TotalAmount) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalCash,
+                        ISNULL((SELECT SUM(CardAmount) FROM Demo_Sales WHERE CashierID = @CashierID AND CAST(SaleDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalCard,
+                        ISNULL((SELECT COUNT(*) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalReturns,
+                        ISNULL((SELECT SUM(TotalAmount) FROM Demo_Returns WHERE CashierID = @CashierID AND CAST(ReturnDate AS DATE) = CAST(GETDATE() AS DATE)), 0) AS TotalReturnAmount"
+                
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                    
+                    Using adapter As New SqlDataAdapter(cmd)
+                        adapter.Fill(dt)
+                    End Using
+                End Using
+            End Using
+        Catch ex As Exception
+            MessageBox.Show($"Error getting cash up data: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+        
+        Return dt
+    End Function
+    
+    Private Sub ShowCashUpReport(data As DataTable)
+        If data.Rows.Count = 0 Then
+            MessageBox.Show("No sales data found for today!", "Cash Up", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+        
+        Dim row = data.Rows(0)
+        Dim transactions = If(IsDBNull(row("TotalTransactions")), 0, CInt(row("TotalTransactions")))
+        Dim subtotal = If(IsDBNull(row("TotalSubtotal")), 0D, CDec(row("TotalSubtotal")))
+        Dim tax = If(IsDBNull(row("TotalTax")), 0D, CDec(row("TotalTax")))
+        Dim total = If(IsDBNull(row("TotalSales")), 0D, CDec(row("TotalSales")))
+        Dim totalCash = If(IsDBNull(row("TotalCash")), 0D, CDec(row("TotalCash")))
+        Dim totalCard = If(IsDBNull(row("TotalCard")), 0D, CDec(row("TotalCard")))
+        Dim totalReturns = If(IsDBNull(row("TotalReturns")), 0, CInt(row("TotalReturns")))
+        Dim totalReturnAmount = If(IsDBNull(row("TotalReturnAmount")), 0D, CDec(row("TotalReturnAmount")))
+        Dim firstSale = If(IsDBNull(row("FirstSale")), DateTime.Now, CDate(row("FirstSale")))
+        Dim lastSale = If(IsDBNull(row("LastSale")), DateTime.Now, CDate(row("LastSale")))
+        
+        ' Create cash up form
+        Dim cashUpForm As New Form With {
+            .Text = "Cash Up Report",
+            .Size = New Size(600, 700),
+            .StartPosition = FormStartPosition.CenterScreen,
+            .BackColor = Color.White,
+            .FormBorderStyle = FormBorderStyle.FixedDialog,
+            .MaximizeBox = False,
+            .MinimizeBox = False
+        }
+        
+        ' Header
+        Dim pnlHeader As New Panel With {
+            .Dock = DockStyle.Top,
+            .Height = 80,
+            .BackColor = _green
+        }
+        
+        Dim lblHeader As New Label With {
+            .Text = "💰 CASH UP REPORT",
+            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .Dock = DockStyle.Fill
+        }
+        pnlHeader.Controls.Add(lblHeader)
+        
+        ' Report content
+        Dim pnlContent As New Panel With {
+            .Location = New Point(50, 100),
+            .Size = New Size(500, 500),
+            .BackColor = Color.White
+        }
+        
+        Dim yPos = 20
+        
+        ' Cashier info
+        Dim lblCashier As New Label With {
+            .Text = $"Cashier: {_cashierName}",
+            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblCashier)
+        yPos += 35
+        
+        ' Till info
+        Dim lblTill As New Label With {
+            .Text = $"Till Point: {GetTillNumber()}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblTill)
+        yPos += 30
+        
+        ' Date
+        Dim lblDate As New Label With {
+            .Text = $"Date: {DateTime.Now:dd/MM/yyyy}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblDate)
+        yPos += 30
+        
+        ' Time range
+        Dim lblTime As New Label With {
+            .Text = $"Time: {firstSale:HH:mm} - {lastSale:HH:mm}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblTime)
+        yPos += 50
+        
+        ' Separator
+        Dim lblSep1 As New Label With {
+            .Text = "═══════════════════════════════════",
+            .Font = New Font("Courier New", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblSep1)
+        yPos += 30
+        
+        ' Transactions
+        Dim lblTransactions As New Label With {
+            .Text = $"Total Transactions: {transactions}",
+            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblTransactions)
+        yPos += 40
+        
+        ' Subtotal
+        Dim lblSubtotal As New Label With {
+            .Text = $"Subtotal: {subtotal.ToString("C2")}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblSubtotal)
+        yPos += 30
+        
+        ' Tax
+        Dim lblTax As New Label With {
+            .Text = $"VAT (15%): {tax.ToString("C2")}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblTax)
+        yPos += 40
+        
+        ' Returns section
+        If totalReturns > 0 Then
+            Dim lblReturnsHeader As New Label With {
+                .Text = "RETURNS:",
+                .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+                .ForeColor = Color.Red,
+                .Location = New Point(20, yPos),
+                .AutoSize = True
+            }
+            pnlContent.Controls.Add(lblReturnsHeader)
+            yPos += 30
+            
+            Dim lblReturnsCount As New Label With {
+                .Text = $"Total Returns: {totalReturns}",
+                .Font = New Font("Segoe UI", 11),
+                .ForeColor = Color.Red,
+                .Location = New Point(40, yPos),
+                .AutoSize = True
+            }
+            pnlContent.Controls.Add(lblReturnsCount)
+            yPos += 25
+            
+            Dim lblReturnsAmount As New Label With {
+                .Text = $"Return Amount: -{totalReturnAmount.ToString("C2")}",
+                .Font = New Font("Segoe UI", 11),
+                .ForeColor = Color.Red,
+                .Location = New Point(40, yPos),
+                .AutoSize = True
+            }
+            pnlContent.Controls.Add(lblReturnsAmount)
+            yPos += 35
+        End If
+        
+        ' Separator
+        Dim lblSep2 As New Label With {
+            .Text = "═══════════════════════════════════",
+            .Font = New Font("Courier New", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblSep2)
+        yPos += 30
+        
+        ' Total
+        Dim lblTotal As New Label With {
+            .Text = $"TOTAL SALES: {total.ToString("C2")}",
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .ForeColor = _green,
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblTotal)
+        
+        ' Button panel
+        Dim pnlButtons As New Panel With {
+            .Dock = DockStyle.Bottom,
+            .Height = 80,
+            .BackColor = Color.White
+        }
+        
+        ' Close button
+        Dim btnClose As New Button With {
+            .Text = "CLOSE",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Size = New Size(150, 50),
+            .Location = New Point(150, 15),
+            .BackColor = _darkGray,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnClose.FlatAppearance.BorderSize = 0
+        AddHandler btnClose.Click, Sub() cashUpForm.Close()
+        
+        ' Logout button
+        Dim btnLogout As New Button With {
+            .Text = "LOGOUT",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Size = New Size(150, 50),
+            .Location = New Point(310, 15),
+            .BackColor = _red,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnLogout.FlatAppearance.BorderSize = 0
+        AddHandler btnLogout.Click, Sub()
+            cashUpForm.Close()
+            Me.DialogResult = DialogResult.OK
+            Me.Close()
+        End Sub
+        
+        pnlButtons.Controls.AddRange({btnClose, btnLogout})
+        
+        cashUpForm.Controls.AddRange({pnlHeader, pnlContent, pnlButtons})
+        cashUpForm.ShowDialog()
     End Sub
 End Class
