@@ -17,7 +17,36 @@ Public Class PaymentTenderForm
     Private _taxAmount As Decimal
     Private _cashAmount As Decimal = 0
     Private _cardAmount As Decimal = 0
+    Private _changeAmount As Decimal = 0
     Private _paymentMethod As String = ""
+    Private _isOrderCollection As Boolean = False
+    Private _orderID As Integer = 0
+    Private _orderNumber As String = ""
+    
+    ' Public properties to expose payment details
+    Public ReadOnly Property PaymentMethod As String
+        Get
+            Return _paymentMethod
+        End Get
+    End Property
+    
+    Public ReadOnly Property CashAmount As Decimal
+        Get
+            Return _cashAmount
+        End Get
+    End Property
+    
+    Public ReadOnly Property CardAmount As Decimal
+        Get
+            Return _cardAmount
+        End Get
+    End Property
+    
+    Public ReadOnly Property ChangeAmount As Decimal
+        Get
+            Return _changeAmount
+        End Get
+    End Property
     
     Private _darkBlue As Color = ColorTranslator.FromHtml("#2C3E50")
     Private _green As Color = ColorTranslator.FromHtml("#27AE60")
@@ -25,7 +54,8 @@ Public Class PaymentTenderForm
     Private _purple As Color = ColorTranslator.FromHtml("#9B59B6")
     Private _lightGray As Color = ColorTranslator.FromHtml("#ECF0F1")
     
-    Public Sub New(cashierID As Integer, branchID As Integer, tillPointID As Integer, branchPrefix As String, cartItems As DataTable, subtotal As Decimal, taxAmount As Decimal, totalAmount As Decimal)
+    ' Constructor for regular sales and order collection
+    Public Sub New(cashierID As Integer, branchID As Integer, tillPointID As Integer, branchPrefix As String, cartItems As DataTable, subtotal As Decimal, taxAmount As Decimal, totalAmount As Decimal, Optional isOrderCollection As Boolean = False, Optional orderID As Integer = 0, Optional orderNumber As String = "")
         MyBase.New()
         _cashierID = cashierID
         _branchID = branchID
@@ -35,6 +65,29 @@ Public Class PaymentTenderForm
         _subtotal = subtotal
         _taxAmount = taxAmount
         _totalAmount = totalAmount
+        _isOrderCollection = isOrderCollection
+        _orderID = orderID
+        _orderNumber = orderNumber
+        _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
+        
+        InitializeComponent()
+        ShowPaymentMethodSelection()
+    End Sub
+    
+    ' Constructor for order deposits (simplified - no cart items needed, no sale recording)
+    Public Sub New(depositAmount As Decimal, branchID As Integer, tillPointID As Integer, cashierID As Integer)
+        MyBase.New()
+        _cashierID = cashierID
+        _branchID = branchID
+        _tillPointID = tillPointID
+        _branchPrefix = ""
+        _cartItems = Nothing
+        _subtotal = depositAmount
+        _taxAmount = 0
+        _totalAmount = depositAmount
+        _isOrderCollection = False ' This is a deposit, not a collection
+        _orderID = 0
+        _orderNumber = "DEPOSIT" ' Flag to indicate this is just payment collection, not a sale
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
         
         InitializeComponent()
@@ -53,44 +106,56 @@ Public Class PaymentTenderForm
     
     Private Sub ShowPaymentMethodSelection()
         Me.Controls.Clear()
-        Me.Size = New Size(800, 650)
+        Me.Size = New Size(1200, 650)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 100, .BackColor = _darkBlue}
         Dim lblTitle As New Label With {.Text = "💳 SELECT PAYMENT METHOD", .Font = New Font("Segoe UI", 24, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(30, 30)}
-        Dim lblAmount As New Label With {.Text = $"Total: {_totalAmount.ToString("C2")}", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = ColorTranslator.FromHtml("#F39C12"), .AutoSize = True, .Location = New Point(550, 35)}
+        Dim lblAmount As New Label With {.Text = $"Total: {_totalAmount.ToString("C2")}", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = ColorTranslator.FromHtml("#F39C12"), .AutoSize = True, .Location = New Point(900, 35)}
         pnlHeader.Controls.AddRange({lblTitle, lblAmount})
         
-        Dim pnlButtons As New Panel With {.Location = New Point(50, 130), .Size = New Size(700, 350)}
+        Dim pnlButtons As New Panel With {.Location = New Point(100, 130), .Size = New Size(1000, 400)}
         
-        Dim btnCash As New Button With {.Size = New Size(200, 300), .Location = New Point(0, 0), .BackColor = _green, .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        ' All buttons same size: 220x350 (tall vertical rectangle) in single row
+        Dim buttonSize As New Size(220, 350)
+        Dim spacing As Integer = 250 ' 220 + 30 gap
+        
+        Dim btnCash As New Button With {.Size = buttonSize, .Location = New Point(0, 0), .BackColor = _green, .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnCash.FlatAppearance.BorderSize = 0
-        Dim lblCashIcon As New Label With {.Text = "💵", .Font = New Font("Segoe UI", 80), .AutoSize = True, .Location = New Point(50, 30), .BackColor = Color.Transparent}
-        Dim lblCashText As New Label With {.Text = "CASH", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(60, 180), .BackColor = Color.Transparent}
-        Dim lblCashSub As New Label With {.Text = "Pay with Cash", .Font = New Font("Segoe UI", 12), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(40, 220), .BackColor = Color.Transparent}
+        Dim lblCashIcon As New Label With {.Text = "💵", .Font = New Font("Segoe UI", 90), .AutoSize = True, .Location = New Point(60, 50), .BackColor = Color.Transparent}
+        Dim lblCashText As New Label With {.Text = "CASH", .Font = New Font("Segoe UI", 26, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(55, 200), .BackColor = Color.Transparent}
+        Dim lblCashSub As New Label With {.Text = "Pay with Cash", .Font = New Font("Segoe UI", 13), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(45, 250), .BackColor = Color.Transparent}
         btnCash.Controls.AddRange({lblCashIcon, lblCashText, lblCashSub})
         AddHandler btnCash.Click, Sub() ProcessCashPayment()
         
-        Dim btnCard As New Button With {.Size = New Size(200, 300), .Location = New Point(250, 0), .BackColor = _purple, .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        Dim btnCard As New Button With {.Size = buttonSize, .Location = New Point(spacing, 0), .BackColor = _purple, .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnCard.FlatAppearance.BorderSize = 0
-        Dim lblCardIcon As New Label With {.Text = "💳", .Font = New Font("Segoe UI", 80), .AutoSize = True, .Location = New Point(50, 30), .BackColor = Color.Transparent}
-        Dim lblCardText As New Label With {.Text = "CARD", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(55, 180), .BackColor = Color.Transparent}
-        Dim lblCardSub As New Label With {.Text = "Credit/Debit Card", .Font = New Font("Segoe UI", 12), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(25, 220), .BackColor = Color.Transparent}
+        Dim lblCardIcon As New Label With {.Text = "💳", .Font = New Font("Segoe UI", 90), .AutoSize = True, .Location = New Point(60, 50), .BackColor = Color.Transparent}
+        Dim lblCardText As New Label With {.Text = "CARD", .Font = New Font("Segoe UI", 26, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(50, 200), .BackColor = Color.Transparent}
+        Dim lblCardSub As New Label With {.Text = "Credit/Debit Card", .Font = New Font("Segoe UI", 12), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(25, 250), .BackColor = Color.Transparent}
         btnCard.Controls.AddRange({lblCardIcon, lblCardText, lblCardSub})
         AddHandler btnCard.Click, Sub() ProcessCardPayment()
         
-        Dim btnSplit As New Button With {.Size = New Size(200, 300), .Location = New Point(500, 0), .BackColor = _orange, .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        Dim btnEFT As New Button With {.Size = buttonSize, .Location = New Point(spacing * 2, 0), .BackColor = ColorTranslator.FromHtml("#3498DB"), .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        btnEFT.FlatAppearance.BorderSize = 0
+        Dim lblEFTIcon As New Label With {.Text = "🏦", .Font = New Font("Segoe UI", 90), .AutoSize = True, .Location = New Point(60, 50), .BackColor = Color.Transparent}
+        Dim lblEFTText As New Label With {.Text = "EFT", .Font = New Font("Segoe UI", 26, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(75, 200), .BackColor = Color.Transparent}
+        Dim lblEFTSub As New Label With {.Text = "Bank Transfer", .Font = New Font("Segoe UI", 13), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(45, 250), .BackColor = Color.Transparent}
+        btnEFT.Controls.AddRange({lblEFTIcon, lblEFTText, lblEFTSub})
+        AddHandler btnEFT.Click, Sub() ProcessEFTPayment()
+        
+        Dim btnSplit As New Button With {.Size = buttonSize, .Location = New Point(spacing * 3, 0), .BackColor = _orange, .ForeColor = Color.White, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnSplit.FlatAppearance.BorderSize = 0
-        Dim lblSplitIcon As New Label With {.Text = "💵💳", .Font = New Font("Segoe UI", 60), .AutoSize = True, .Location = New Point(30, 40), .BackColor = Color.Transparent}
-        Dim lblSplitText As New Label With {.Text = "SPLIT", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(55, 180), .BackColor = Color.Transparent}
-        Dim lblSplitSub As New Label With {.Text = "Cash + Card", .Font = New Font("Segoe UI", 12), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(45, 220), .BackColor = Color.Transparent}
+        Dim lblSplitIcon As New Label With {.Text = "💵💳", .Font = New Font("Segoe UI", 75), .AutoSize = True, .Location = New Point(35, 50), .BackColor = Color.Transparent}
+        Dim lblSplitText As New Label With {.Text = "SPLIT", .Font = New Font("Segoe UI", 26, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(55, 200), .BackColor = Color.Transparent}
+        Dim lblSplitSub As New Label With {.Text = "Cash + Card", .Font = New Font("Segoe UI", 13), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(45, 250), .BackColor = Color.Transparent}
         btnSplit.Controls.AddRange({lblSplitIcon, lblSplitText, lblSplitSub})
         AddHandler btnSplit.Click, Sub() ProcessSplitPayment()
         
-        pnlButtons.Controls.AddRange({btnCash, btnCard, btnSplit})
+        pnlButtons.Controls.AddRange({btnCash, btnCard, btnEFT, btnSplit})
         
         Dim pnlBottom As New Panel With {.Dock = DockStyle.Bottom, .Height = 80, .BackColor = _lightGray}
-        Dim btnCancel As New Button With {.Text = "✖ CANCEL", .Size = New Size(200, 60), .Location = New Point(300, 10), .BackColor = ColorTranslator.FromHtml("#E74C3C"), .ForeColor = Color.White, .Font = New Font("Segoe UI", 14, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        Dim btnCancel As New Button With {.Text = "✖ CANCEL", .Size = New Size(250, 60), .Location = New Point(475, 10), .BackColor = ColorTranslator.FromHtml("#E74C3C"), .ForeColor = Color.White, .Font = New Font("Segoe UI", 14, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnCancel.FlatAppearance.BorderSize = 0
         AddHandler btnCancel.Click, Sub() Me.DialogResult = DialogResult.Cancel
         pnlBottom.Controls.Add(btnCancel)
@@ -114,17 +179,171 @@ Public Class PaymentTenderForm
         ShowCashKeypad(_totalAmount, "CASH PORTION - SPLIT PAYMENT")
     End Sub
     
-    Private Sub ShowCashKeypad(amountDue As Decimal, title As String)
+    Private Sub ProcessEFTPayment()
+        _paymentMethod = "EFT"
+        _cardAmount = _totalAmount ' EFT counts as electronic payment
+        ShowEFTSlip()
+    End Sub
+    
+    Private Sub ShowEFTSlip()
         Me.Controls.Clear()
-        Me.Size = New Size(600, 750)
+        Me.Size = New Size(600, 800)
         Me.StartPosition = FormStartPosition.CenterScreen
         
-        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 80, .BackColor = _green}
-        Dim lblChangeIcon As New Label With {.Text = "💰", .Font = New Font("Segoe UI", 40), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, 15)}
-        Dim lblChangeText As New Label With {.Text = $"CHANGE DUE: {amountDue.ToString("C2")}", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(100, 28)}
-        pnlHeader.Controls.AddRange({lblChangeIcon, lblChangeText})
+        ' Header
+        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 80, .BackColor = ColorTranslator.FromHtml("#3498DB")}
+        Dim lblHeader As New Label With {
+            .Text = "🏦 EFT PAYMENT SLIP",
+            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .Dock = DockStyle.Fill
+        }
+        pnlHeader.Controls.Add(lblHeader)
         
-        Dim txtAmount As New TextBox With {.Font = New Font("Segoe UI", 48, FontStyle.Bold), .TextAlign = HorizontalAlignment.Right, .Location = New Point(50, 150), .Size = New Size(500, 80), .Text = "0.00", .ReadOnly = True, .BackColor = Color.White, .ForeColor = _darkBlue}
+        ' Slip content
+        Dim pnlSlip As New Panel With {
+            .Location = New Point(50, 100),
+            .Size = New Size(500, 550),
+            .BackColor = Color.White,
+            .BorderStyle = BorderStyle.FixedSingle
+        }
+        
+        Dim yPos = 20
+        
+        ' Bank details
+        Dim lblBankHeader As New Label With {
+            .Text = "BANK DETAILS",
+            .Font = New Font("Courier New", 14, FontStyle.Bold),
+            .Location = New Point(150, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblBankHeader)
+        yPos += 40
+        
+        Dim lblSeparator1 As New Label With {
+            .Text = "========================================",
+            .Font = New Font("Courier New", 10),
+            .Location = New Point(50, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblSeparator1)
+        yPos += 30
+        
+        ' Bank info
+        Dim bankInfo() As String = {
+            "Bank: ABSA Bank",
+            "Account Name: Oven Delights (Pty) Ltd",
+            "Account Number: 4012345678",
+            "Branch Code: 632005",
+            "Account Type: Business Cheque"
+        }
+        
+        For Each info As String In bankInfo
+            Dim lblInfo As New Label With {
+                .Text = info,
+                .Font = New Font("Courier New", 11),
+                .Location = New Point(80, yPos),
+                .AutoSize = True
+            }
+            pnlSlip.Controls.Add(lblInfo)
+            yPos += 30
+        Next
+        
+        yPos += 10
+        Dim lblSeparator2 As New Label With {
+            .Text = "========================================",
+            .Font = New Font("Courier New", 10),
+            .Location = New Point(50, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblSeparator2)
+        yPos += 40
+        
+        ' Payment details
+        Dim lblPaymentHeader As New Label With {
+            .Text = "PAYMENT DETAILS",
+            .Font = New Font("Courier New", 14, FontStyle.Bold),
+            .Location = New Point(140, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblPaymentHeader)
+        yPos += 40
+        
+        Dim lblAmount As New Label With {
+            .Text = $"Amount Due: R{_totalAmount:N2}",
+            .Font = New Font("Courier New", 14, FontStyle.Bold),
+            .ForeColor = ColorTranslator.FromHtml("#E67E22"),
+            .Location = New Point(120, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblAmount)
+        yPos += 40
+        
+        Dim lblReference As New Label With {
+            .Text = $"Reference: INV-{DateTime.Now:yyyyMMddHHmmss}",
+            .Font = New Font("Courier New", 11),
+            .Location = New Point(80, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblReference)
+        yPos += 40
+        
+        Dim lblInstructions As New Label With {
+            .Text = "Use reference number for payment",
+            .Font = New Font("Courier New", 10),
+            .ForeColor = ColorTranslator.FromHtml("#E74C3C"),
+            .Location = New Point(80, yPos),
+            .AutoSize = True
+        }
+        pnlSlip.Controls.Add(lblInstructions)
+        
+        ' Buttons
+        Dim pnlButtons As New Panel With {.Dock = DockStyle.Bottom, .Height = 80, .BackColor = _lightGray}
+        
+        Dim btnConfirm As New Button With {
+            .Text = "✓ CONFIRM PAYMENT",
+            .Size = New Size(250, 60),
+            .Location = New Point(50, 10),
+            .BackColor = ColorTranslator.FromHtml("#27AE60"),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnConfirm.FlatAppearance.BorderSize = 0
+        AddHandler btnConfirm.Click, Sub() CompleteTransactionAndShowReceipt()
+        
+        Dim btnBack As New Button With {
+            .Text = "← BACK",
+            .Size = New Size(250, 60),
+            .Location = New Point(320, 10),
+            .BackColor = ColorTranslator.FromHtml("#E74C3C"),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnBack.FlatAppearance.BorderSize = 0
+        AddHandler btnBack.Click, Sub() ShowPaymentMethodSelection()
+        
+        pnlButtons.Controls.AddRange({btnConfirm, btnBack})
+        
+        Me.Controls.AddRange({pnlHeader, pnlSlip, pnlButtons})
+    End Sub
+    
+    Private Sub ShowCashKeypad(amountDue As Decimal, title As String)
+        Me.Controls.Clear()
+        Me.Size = New Size(600, 850)
+        Me.StartPosition = FormStartPosition.CenterScreen
+        
+        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 120, .BackColor = _green}
+        Dim lblAmountDue As New Label With {.Text = $"AMOUNT DUE: R{amountDue:N2}", .Font = New Font("Segoe UI", 18, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, 15)}
+        Dim lblTendered As New Label With {.Text = "TENDERED: R0.00", .Font = New Font("Segoe UI", 16), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, 50), .Name = "lblTendered"}
+        Dim lblChange As New Label With {.Text = "CHANGE: R0.00", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.Yellow, .AutoSize = True, .Location = New Point(20, 80), .Name = "lblChange"}
+        pnlHeader.Controls.AddRange({lblAmountDue, lblTendered, lblChange})
+        
+        Dim txtAmount As New TextBox With {.Font = New Font("Segoe UI", 48, FontStyle.Bold), .TextAlign = HorizontalAlignment.Right, .Location = New Point(50, 150), .Size = New Size(500, 80), .Text = "0.00", .ReadOnly = True, .BackColor = Color.White, .ForeColor = _darkBlue, .Name = "txtAmount"}
         
         Dim pnlKeypad As New Panel With {.Location = New Point(100, 260), .Size = New Size(400, 350)}
         Dim buttonSize As New Size(120, 70)
@@ -146,6 +365,13 @@ Public Class PaymentTenderForm
                         If txtAmount.Text = "0.00" Then txtAmount.Text = ""
                         txtAmount.Text &= clickedBtn.Text
                     End If
+                    
+                    ' Update tendered and change labels
+                    Dim tendered As Decimal = 0
+                    Decimal.TryParse(txtAmount.Text, tendered)
+                    Dim change = Math.Max(0, tendered - amountDue)
+                    CType(pnlHeader.Controls("lblTendered"), Label).Text = $"TENDERED: R{tendered:N2}"
+                    CType(pnlHeader.Controls("lblChange"), Label).Text = $"CHANGE: R{change:N2}"
                 End Sub
                 pnlKeypad.Controls.Add(btn)
             Next
@@ -447,6 +673,16 @@ Public Class PaymentTenderForm
             changeAmount = _cashAmount - (_totalAmount - _cardAmount)
         End If
         
+        ' Store change amount in private field for external access
+        _changeAmount = changeAmount
+        
+        ' For cake deposits (no cart items), just close with success
+        If _cartItems Is Nothing Then
+            Me.DialogResult = DialogResult.OK
+            Me.Close()
+            Return
+        End If
+        
         ' NOW complete the transaction and write to database
         Dim invoiceNumber As String = ""
         Dim saleDateTime As DateTime = DateTime.Now
@@ -460,6 +696,16 @@ Public Class PaymentTenderForm
                         Dim salesID = InsertSale(conn, transaction, invoiceNumber)
                         InsertInvoiceLineItems(conn, transaction, salesID, invoiceNumber)
                         PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
+                        
+                        ' If this is an order collection, update order status to Delivered
+                        If _isOrderCollection AndAlso _orderID > 0 Then
+                            Dim updateOrderSql = "UPDATE POS_CustomOrders SET OrderStatus = 'Delivered', CollectionDate = GETDATE() WHERE OrderID = @OrderID"
+                            Using cmdUpdate As New SqlCommand(updateOrderSql, conn, transaction)
+                                cmdUpdate.Parameters.AddWithValue("@OrderID", _orderID)
+                                cmdUpdate.ExecuteNonQuery()
+                            End Using
+                        End If
+                        
                         transaction.Commit()
                     Catch ex As Exception
                         transaction.Rollback()
@@ -799,11 +1045,25 @@ Public Class PaymentTenderForm
     End Function
     
     Private Function InsertSale(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String) As Integer
-        Dim insertSql = "INSERT INTO Demo_Sales (SaleNumber, InvoiceNumber, SaleDate, CashierID, BranchID, TillPointID, Subtotal, TaxAmount, TotalAmount, PaymentMethod, CashAmount, CardAmount) 
-                                VALUES (@SaleNumber, @InvoiceNumber, @SaleDate, @CashierID, @BranchID, @TillPointID, @Subtotal, @TaxAmount, @TotalAmount, @PaymentMethod, @CashAmount, @CardAmount);
+        ' Skip sale recording if this is just a deposit payment (order will record it)
+        If _orderNumber = "DEPOSIT" Then
+            Return 0 ' No sale ID needed for deposits
+        End If
+        
+        ' Determine sale type
+        Dim saleType As String = "Sale"
+        Dim referenceNumber As String = invoiceNumber
+        
+        If _isOrderCollection Then
+            saleType = "OrderCollection"
+            referenceNumber = _orderNumber
+        End If
+        
+        Dim insertSql = "INSERT INTO Demo_Sales (SaleNumber, InvoiceNumber, SaleDate, CashierID, BranchID, TillPointID, Subtotal, TaxAmount, TotalAmount, PaymentMethod, CashAmount, CardAmount, SaleType, ReferenceNumber) 
+                                VALUES (@SaleNumber, @InvoiceNumber, @SaleDate, @CashierID, @BranchID, @TillPointID, @Subtotal, @TaxAmount, @TotalAmount, @PaymentMethod, @CashAmount, @CardAmount, @SaleType, @ReferenceNumber);
                                 SELECT CAST(SCOPE_IDENTITY() AS INT)"
         Using cmd As New SqlCommand(insertSql, conn, transaction)
-            cmd.Parameters.AddWithValue("@SaleNumber", invoiceNumber) ' Use invoice number as sale number
+            cmd.Parameters.AddWithValue("@SaleNumber", invoiceNumber)
             cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
             cmd.Parameters.AddWithValue("@SaleDate", DateTime.Now)
             cmd.Parameters.AddWithValue("@CashierID", _cashierID)
@@ -815,6 +1075,8 @@ Public Class PaymentTenderForm
             cmd.Parameters.AddWithValue("@PaymentMethod", _paymentMethod)
             cmd.Parameters.AddWithValue("@CashAmount", _cashAmount)
             cmd.Parameters.AddWithValue("@CardAmount", _cardAmount)
+            cmd.Parameters.AddWithValue("@SaleType", saleType)
+            cmd.Parameters.AddWithValue("@ReferenceNumber", referenceNumber)
             Return CInt(cmd.ExecuteScalar())
         End Using
     End Function

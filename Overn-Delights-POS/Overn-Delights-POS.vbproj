@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -74,6 +74,19 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Forms\CustomerOrderDialog.Designer.vb" />
+    <Compile Include="Forms\CustomerOrderDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\OrderCollectionDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\OrderEntryKeyboard.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Forms\OrderEntryNumpad.vb">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Forms\LoadingScreen.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -118,6 +131,15 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\ReturnReceiptForm.vb" />
+    <Compile Include="Forms\CakeOrderForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\ProductLookupForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\OnScreenKeyboard.vb">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="ApplicationEvents.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
