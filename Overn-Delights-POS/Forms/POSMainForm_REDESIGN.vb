@@ -51,6 +51,13 @@ Public Class POSMainForm_REDESIGN
     Private _lightGray As Color = ColorTranslator.FromHtml("#ECF0F1")
     Private _darkGray As Color = ColorTranslator.FromHtml("#7F8C8D")
 
+    ' Screen scaling properties
+    Private _screenWidth As Integer
+    Private _screenHeight As Integer
+    Private _scaleFactor As Single = 1.0F
+    Private _baseWidth As Integer = 1920 ' Base design width
+    Private _baseHeight As Integer = 1080 ' Base design height
+
     Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer, tillPointID As Integer)
         MyBase.New()
 
@@ -61,12 +68,17 @@ Public Class POSMainForm_REDESIGN
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
 
         Me.KeyPreview = True
+        
+        ' Initialize screen dimensions and scaling
+        InitializeScreenScaling()
+        
         SetupModernUI()
         InitializeCart()
         SetupIdleScreen()
 
         ' Handle resize for different screen sizes
-        AddHandler Me.Resize, Sub() RepositionControls()
+        AddHandler Me.Resize, Sub() HandleFormResize()
+        AddHandler Me.Load, Sub() HandleFormResize()
     End Sub
 
     Private Sub SetupModernUI()
@@ -145,17 +157,18 @@ Public Class POSMainForm_REDESIGN
 
         Dim lblCashier As New Label With {
             .Text = $"👤 {_cashierName} | Till: {GetTillNumber()}",
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
             .ForeColor = Color.White,
-            .AutoSize = False,
+            .AutoSize = True,
             .TextAlign = ContentAlignment.MiddleCenter,
-            .Width = 300,
-            .Height = 40,
-            .Anchor = AnchorStyles.Top
+            .Anchor = AnchorStyles.Top,
+            .BackColor = Color.Transparent
         }
-        lblCashier.Location = New Point((pnlTop.Width \ 2) - 150, 15)
+        ' Position after pnlTop is added to form
+        lblCashier.Location = New Point(450, 20)
 
         pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnCashUp, btnLogout})
+        lblCashier.BringToFront()
 
         ' LEFT PANEL - Categories with FlowLayoutPanel
         Dim pnlCategoriesContainer As New Panel With {
@@ -217,53 +230,88 @@ Public Class POSMainForm_REDESIGN
                                       txtBarcodeScanner.Focus()
                                   End Sub
 
-        ' Search textbox (for manual search with numpad)
+        ' Search textbox (accepts keyboard and touch input) - smaller width
         txtSearch = New TextBox With {
-            .Font = New Font("Segoe UI", 14),
+            .Font = New Font("Segoe UI", 12),
             .Location = New Point(120, 8),
-            .Width = 450,
+            .Width = 300,
             .Height = 44,
-            .Text = "🔍 Touch to search by code...",
+            .Text = "🔍 Search by code...",
             .ForeColor = _darkGray,
-            .ReadOnly = True,
-            .Cursor = Cursors.Hand
+            .ReadOnly = False,
+            .Cursor = Cursors.IBeam
         }
-        AddHandler txtSearch.Click, Sub() ShowNumpad()
+        
+        ' Clear placeholder on focus OR when user starts typing
+        AddHandler txtSearch.Enter, Sub()
+            If txtSearch.Text.Contains("Search by code") Then
+                txtSearch.Text = ""
+                txtSearch.ForeColor = Color.Black
+            End If
+        End Sub
+        
+        ' Also clear placeholder on first keypress
+        AddHandler txtSearch.KeyDown, Sub(sender, e)
+            If txtSearch.Text.Contains("Search by code") Then
+                txtSearch.Text = ""
+                txtSearch.ForeColor = Color.Black
+            End If
+        End Sub
+        
+        ' Don't restore placeholder on Leave - keep search results visible
+        ' User can manually clear if needed
+        
+        ' Search as user types
         AddHandler txtSearch.TextChanged, Sub()
-                                              If txtSearch.Text <> "🔍 Touch to search by code..." AndAlso txtSearch.Text.Length >= 2 Then
+                                              If Not txtSearch.Text.Contains("Search by code") AndAlso txtSearch.Text.Length >= 2 Then
                                                   SearchProducts(txtSearch.Text)
-                                              ElseIf txtSearch.Text.Length = 1 Then
-                                                  flpProducts.Controls.Clear()
-                                                  Dim lblPrompt As New Label With {
-                                                      .Text = "Type at least 2 characters to search...",
-                                                      .Font = New Font("Segoe UI", 14, FontStyle.Italic),
-                                                      .ForeColor = Color.Gray,
-                                                      .AutoSize = True,
-                                                      .Padding = New Padding(20)
-                                                  }
-                                                  flpProducts.Controls.Add(lblPrompt)
                                               End If
                                           End Sub
 
-        ' Search by Name textbox (readonly, triggers keyboard)
+        ' Search by Name textbox (accepts keyboard and touch input) - adjusted position
         txtSearchByName = New TextBox With {
-            .Font = New Font("Segoe UI", 14),
-            .Location = New Point(580, 8),
-            .Width = 450,
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(430, 8),
+            .Width = 300,
             .Height = 44,
-            .Text = "⌨️ Touch to search by name (F4)...",
+            .Text = "⌨️ Search by name...",
             .ForeColor = _darkGray,
-            .ReadOnly = True,
-            .Cursor = Cursors.Hand
+            .ReadOnly = False,
+            .Cursor = Cursors.IBeam
         }
-        AddHandler txtSearchByName.Click, Sub() ToggleKeyboard()
+        
+        ' Clear placeholder on focus OR when user starts typing
+        AddHandler txtSearchByName.Enter, Sub()
+            If txtSearchByName.Text.Contains("Search by name") Then
+                txtSearchByName.Text = ""
+                txtSearchByName.ForeColor = Color.Black
+            End If
+        End Sub
+        
+        ' Also clear placeholder on first keypress
+        AddHandler txtSearchByName.KeyDown, Sub(sender, e)
+            If txtSearchByName.Text.Contains("Search by name") Then
+                txtSearchByName.Text = ""
+                txtSearchByName.ForeColor = Color.Black
+            End If
+        End Sub
+        
+        ' Don't restore placeholder on Leave - keep search results visible
+        ' User can manually clear if needed
+        
+        ' Search as user types
+        AddHandler txtSearchByName.TextChanged, Sub()
+            If Not txtSearchByName.Text.Contains("Search by name") AndAlso txtSearchByName.Text.Length >= 2 Then
+                SearchProducts(txtSearchByName.Text)
+            End If
+        End Sub
 
-        ' Refresh Products button
+        ' Refresh Products button - adjusted position
         Dim btnRefresh As New Button With {
             .Text = "🔄 REFRESH",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
-            .Size = New Size(120, 44),
-            .Location = New Point(1040, 8),
+            .Size = New Size(110, 44),
+            .Location = New Point(740, 8),
             .BackColor = _green,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
@@ -325,32 +373,32 @@ Public Class POSMainForm_REDESIGN
 
         Dim pnlTotals As New Panel With {
             .Dock = DockStyle.Bottom,
-            .Height = 220,
+            .Height = 240,
             .BackColor = _darkBlue,
             .Padding = New Padding(20)
         }
 
         lblSubtotal = New Label With {
             .Text = "Subtotal: R 0.00",
-            .Font = New Font("Segoe UI", 12),
+            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
             .ForeColor = Color.White,
-            .Location = New Point(20, 15),
+            .Location = New Point(20, 10),
             .AutoSize = True
         }
 
         lblTax = New Label With {
             .Text = "VAT (15%): R 0.00",
-            .Font = New Font("Segoe UI", 12),
+            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
             .ForeColor = Color.White,
-            .Location = New Point(20, 45),
+            .Location = New Point(20, 38),
             .AutoSize = True
         }
 
         lblTotal = New Label With {
             .Text = "R 0.00",
-            .Font = New Font("Segoe UI", 32, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 42, FontStyle.Bold),
             .ForeColor = _yellow,
-            .Location = New Point(20, 75),
+            .Location = New Point(20, 68),
             .AutoSize = True
         }
 
@@ -715,6 +763,43 @@ Public Class POSMainForm_REDESIGN
         End Try
     End Sub
 
+    Private Sub InitializeScreenScaling()
+        ' Get current screen dimensions
+        _screenWidth = Screen.PrimaryScreen.Bounds.Width
+        _screenHeight = Screen.PrimaryScreen.Bounds.Height
+        
+        ' Calculate scale factor based on screen size
+        Dim widthScale As Single = CSng(_screenWidth) / CSng(_baseWidth)
+        Dim heightScale As Single = CSng(_screenHeight) / CSng(_baseHeight)
+        
+        ' Use the smaller scale to maintain aspect ratio
+        _scaleFactor = Math.Min(widthScale, heightScale)
+        
+        ' Ensure minimum scale factor
+        If _scaleFactor < 0.5F Then _scaleFactor = 0.5F
+        
+        Debug.WriteLine($"[SCREEN SCALING] Screen: {_screenWidth}x{_screenHeight}, Scale Factor: {_scaleFactor:F2}")
+    End Sub
+    
+    Private Function ScaleSize(baseSize As Integer) As Integer
+        Return CInt(baseSize * _scaleFactor)
+    End Function
+    
+    Private Function ScaleFont(baseSize As Single) As Single
+        Return baseSize * _scaleFactor
+    End Function
+    
+    Private Sub HandleFormResize()
+        ' Recalculate scaling when form is resized
+        InitializeScreenScaling()
+        RepositionControls()
+        
+        ' Resize keyboard if visible
+        If _onScreenKeyboard IsNot Nothing Then
+            _onScreenKeyboard.UpdateKeyboardSize(_scaleFactor)
+        End If
+    End Sub
+
     Private Sub RepositionControls()
         ' Reposition cashier label to stay centered
         For Each ctrl As Control In pnlTop.Controls
@@ -898,36 +983,50 @@ Public Class POSMainForm_REDESIGN
         ' Determine if stock is low (at or below reorder level)
         Dim isLowStock = stock <= reorderLevel
 
+        ' Responsive sizing - minimum 200x140, scales up for larger screens
+        Dim cardWidth = Math.Max(200, ScaleSize(200))
+        Dim cardHeight = Math.Max(140, ScaleSize(140))
+        
+        ' Ensure minimum touch target size (40x40 pixels)
+        If cardWidth < 40 Then cardWidth = 40
+        If cardHeight < 40 Then cardHeight = 40
+
         Dim card As New Panel With {
-            .Size = New Size(200, 140),
+            .Size = New Size(cardWidth, cardHeight),
             .BackColor = Color.White,
             .BorderStyle = BorderStyle.FixedSingle,
             .Cursor = Cursors.Hand,
-            .Margin = New Padding(8),
+            .Margin = New Padding(ScaleSize(8)),
             .Tag = New With {productID, itemCode, productName, price, stock}
         }
 
+        ' Scale font sizes responsively
+        Dim codeFontSize = Math.Max(9, ScaleFont(9))
+        Dim nameFontSize = Math.Max(11, ScaleFont(11))
+        Dim priceFontSize = Math.Max(14, ScaleFont(14))
+        Dim stockFontSize = Math.Max(8, ScaleFont(8))
+
         Dim lblItemCode As New Label With {
             .Text = itemCode,
-            .Font = New Font("Segoe UI", 9, FontStyle.Bold),
+            .Font = New Font("Segoe UI", codeFontSize, FontStyle.Bold),
             .ForeColor = _lightBlue,
-            .Location = New Point(8, 8),
+            .Location = New Point(ScaleSize(8), ScaleSize(8)),
             .AutoSize = True
         }
 
         Dim lblName As New Label With {
             .Text = productName,
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
-            .Location = New Point(8, 30),
-            .Size = New Size(184, 50),
+            .Font = New Font("Segoe UI", nameFontSize, FontStyle.Bold),
+            .Location = New Point(ScaleSize(8), ScaleSize(30)),
+            .Size = New Size(cardWidth - ScaleSize(16), ScaleSize(50)),
             .AutoEllipsis = True
         }
 
         Dim lblPrice As New Label With {
             .Text = price.ToString("C2"),
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = New Font("Segoe UI", priceFontSize, FontStyle.Bold),
             .ForeColor = _green,
-            .Location = New Point(8, 85),
+            .Location = New Point(ScaleSize(8), cardHeight - ScaleSize(55)),
             .AutoSize = True
         }
 
@@ -937,15 +1036,21 @@ Public Class POSMainForm_REDESIGN
 
         Dim lblStock As New Label With {
             .Text = stockText,
-            .Font = New Font("Segoe UI", 8, If(isLowStock, FontStyle.Bold, FontStyle.Regular)),
+            .Font = New Font("Segoe UI", stockFontSize, If(isLowStock, FontStyle.Bold, FontStyle.Regular)),
             .ForeColor = stockColor,
-            .Location = New Point(8, 115),
+            .Location = New Point(ScaleSize(8), cardHeight - ScaleSize(25)),
             .AutoSize = True
         }
 
         card.Controls.AddRange({lblItemCode, lblName, lblPrice, lblStock})
 
+        ' Make entire card clickable - not just specific areas
         AddHandler card.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblItemCode.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblName.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblPrice.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblStock.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        
         AddHandler card.MouseEnter, Sub() card.BackColor = _lightGray
         AddHandler card.MouseLeave, Sub() card.BackColor = Color.White
 
@@ -953,21 +1058,9 @@ Public Class POSMainForm_REDESIGN
     End Function
 
     Private Sub AddProductToCart(productID As Integer, itemCode As String, productName As String, price As Decimal)
-        ' Hide keyboards when product is added
-        If _onScreenKeyboard.IsKeyboardVisible Then
-            _onScreenKeyboard.HideKeyboard()
-            txtSearchByName.Text = "⌨️ Touch to search by name (F4)..."
-            txtSearchByName.ForeColor = _darkGray
-        End If
-
-        ' Hide numpad if visible
-        HideNumpad()
-
-        ' Clear search textboxes
-        txtSearch.Text = "🔍 Touch to search by code..."
-        txtSearch.ForeColor = _darkGray
-        txtSearch.ReadOnly = True
-
+        ' Don't hide keyboards or clear search - keep search results visible
+        ' User can manually close keyboard/numpad or clear search if needed
+        
         Dim existingRow = _cartItems.Select($"ProductID = {productID}")
         If existingRow.Length > 0 Then
             existingRow(0)("Qty") = CDec(existingRow(0)("Qty")) + 1
@@ -1124,17 +1217,13 @@ Public Class POSMainForm_REDESIGN
     Private Sub ToggleKeyboard()
         If _onScreenKeyboard.IsKeyboardVisible Then
             _onScreenKeyboard.HideKeyboard()
-            ' Restore placeholder
-            If String.IsNullOrWhiteSpace(txtSearchByName.Text) Then
-                txtSearchByName.Text = "⌨️ Touch to search by name (F4)..."
-                txtSearchByName.ForeColor = _darkGray
-            End If
+            ' Don't restore placeholder - keep search results visible
         Else
             ' Hide numpad if visible
             HideNumpad()
 
-            ' Clear placeholder
-            If txtSearchByName.Text.Contains("Touch to search by name") Then
+            ' Clear placeholder if present
+            If txtSearchByName.Text.Contains("Search by name") Then
                 txtSearchByName.Text = ""
                 txtSearchByName.ForeColor = Color.Black
             End If
@@ -1188,13 +1277,53 @@ Public Class POSMainForm_REDESIGN
             
             pnlHeader.Controls.AddRange({lblTitle, btnClose})
             
-            ' Search textbox
+            ' Search textbox - accepts keyboard input with placeholder
             Dim txtCode As New TextBox With {
                 .Font = New Font("Segoe UI", 24, FontStyle.Bold),
                 .Location = New Point(20, 70),
                 .Size = New Size(360, 50),
-                .TextAlign = HorizontalAlignment.Center
+                .TextAlign = HorizontalAlignment.Center,
+                .ReadOnly = False,
+                .Text = "Type code...",
+                .ForeColor = Color.Gray
             }
+            
+            ' Clear placeholder when user starts typing
+            AddHandler txtCode.Enter, Sub()
+                If txtCode.Text = "Type code..." Then
+                    txtCode.Text = ""
+                    txtCode.ForeColor = Color.Black
+                End If
+            End Sub
+            
+            ' Also clear on first keypress
+            AddHandler txtCode.KeyDown, Sub(sender, e)
+                If txtCode.Text = "Type code..." Then
+                    txtCode.Text = ""
+                    txtCode.ForeColor = Color.Black
+                End If
+            End Sub
+            
+            ' Handle keyboard input - search directly
+            AddHandler txtCode.TextChanged, Sub()
+                If txtCode.Text <> "Type code..." AndAlso Not String.IsNullOrWhiteSpace(txtCode.Text) AndAlso txtCode.Text.Length >= 2 Then
+                    SearchProducts(txtCode.Text)
+                End If
+            End Sub
+            
+            ' Allow only numbers and backspace - prevent alphabets
+            AddHandler txtCode.KeyPress, Sub(sender, e)
+                ' Allow: digits (0-9), backspace, delete
+                If Not Char.IsDigit(e.KeyChar) AndAlso 
+                   e.KeyChar <> ChrW(Keys.Back) AndAlso 
+                   e.KeyChar <> ChrW(Keys.Delete) Then
+                    e.Handled = True ' Block the character
+                End If
+            End Sub
+            
+            ' Focus the textbox so keyboard works immediately
+            txtCode.Focus()
+            txtCode.SelectionStart = txtCode.Text.Length
             
             ' Numpad buttons
             Dim pnlButtons As New Panel With {
@@ -1204,6 +1333,7 @@ Public Class POSMainForm_REDESIGN
             
             Dim buttonSize As New Size(90, 70)
             Dim buttons(,) As String = {{"7", "8", "9"}, {"4", "5", "6"}, {"1", "2", "3"}, {"CLR", "0", "⌫"}}
+            Dim numpadButtons As New List(Of Button) ' Store buttons for visual feedback
             
             For row = 0 To 3
                 For col = 0 To 2
@@ -1219,8 +1349,16 @@ Public Class POSMainForm_REDESIGN
                         .Cursor = Cursors.Hand
                     }
                     btn.FlatAppearance.BorderSize = 0
+                    btn.Tag = btnText ' Store button text for matching
                     AddHandler btn.Click, Sub(s, e)
                         Dim clickedBtn = CType(s, Button)
+                        
+                        ' Clear placeholder on first click
+                        If txtCode.Text = "Type code..." Then
+                            txtCode.Text = ""
+                            txtCode.ForeColor = Color.Black
+                        End If
+                        
                         If clickedBtn.Text = "⌫" Then
                             If txtCode.Text.Length > 0 Then txtCode.Text = txtCode.Text.Substring(0, txtCode.Text.Length - 1)
                         ElseIf clickedBtn.Text = "CLR" Then
@@ -1229,14 +1367,32 @@ Public Class POSMainForm_REDESIGN
                             txtCode.Text &= clickedBtn.Text
                         End If
                         
-                        ' Search by code
-                        If Not String.IsNullOrWhiteSpace(txtCode.Text) Then
-                            FilterProductsByCode(txtCode.Text)
-                        End If
+                        ' TextChanged event will trigger the search
                     End Sub
                     pnlButtons.Controls.Add(btn)
+                    numpadButtons.Add(btn) ' Add to list for visual feedback
                 Next
             Next
+            
+            ' Add visual feedback for physical keyboard on numpad
+            AddHandler txtCode.KeyDown, Sub(sender, e)
+                ' Find matching button and flash it
+                Dim keyChar = e.KeyCode.ToString()
+                If e.KeyCode >= Keys.D0 AndAlso e.KeyCode <= Keys.D9 Then
+                    keyChar = keyChar.Replace("D", "") ' Remove "D" prefix from D0-D9
+                ElseIf e.KeyCode >= Keys.NumPad0 AndAlso e.KeyCode <= Keys.NumPad9 Then
+                    keyChar = keyChar.Replace("NumPad", "") ' Remove "NumPad" prefix
+                ElseIf e.KeyCode = Keys.Back Then
+                    keyChar = "⌫"
+                End If
+                
+                For Each btn As Button In numpadButtons
+                    If btn.Tag IsNot Nothing AndAlso btn.Tag.ToString() = keyChar Then
+                        FlashNumpadButton(btn)
+                        Exit For
+                    End If
+                Next
+            End Sub
             
             pnlNumpad.Controls.AddRange({pnlHeader, txtCode, pnlButtons})
             Me.Controls.Add(pnlNumpad)
@@ -1245,12 +1401,37 @@ Public Class POSMainForm_REDESIGN
         
         pnlNumpad.Visible = True
         pnlNumpad.BringToFront()
+        
+        ' Focus the textbox so physical keyboard works
+        Dim numpadTextBox = CType(pnlNumpad.Controls.OfType(Of TextBox)().FirstOrDefault(), TextBox)
+        If numpadTextBox IsNot Nothing Then
+            numpadTextBox.Focus()
+            If numpadTextBox.Text = "Type code..." Then
+                numpadTextBox.SelectionStart = 0
+            Else
+                numpadTextBox.SelectionStart = numpadTextBox.Text.Length
+            End If
+        End If
     End Sub
     
     Private Sub HideNumpad()
         If pnlNumpad IsNot Nothing Then
             pnlNumpad.Visible = False
         End If
+    End Sub
+    
+    Private Async Sub FlashNumpadButton(btn As Button)
+        ' Highlight the button briefly when physical key is pressed
+        Dim originalColor = btn.BackColor
+        
+        ' Flash with darker color
+        btn.BackColor = Color.FromArgb(Math.Max(0, originalColor.R - 50), Math.Max(0, originalColor.G - 50), Math.Max(0, originalColor.B - 50))
+        
+        ' Wait 150ms
+        Await Task.Delay(150)
+        
+        ' Restore original color
+        btn.BackColor = originalColor
     End Sub
     
     Private Sub FilterProductsByCode(code As String)
@@ -2270,12 +2451,13 @@ Public Class POSMainForm_REDESIGN
         ' Create cash up form
         Dim cashUpForm As New Form With {
             .Text = "Cash Up Report",
-            .Size = New Size(600, 700),
+            .Size = New Size(600, 850),
             .StartPosition = FormStartPosition.CenterScreen,
             .BackColor = Color.White,
-            .FormBorderStyle = FormBorderStyle.FixedDialog,
+            .FormBorderStyle = FormBorderStyle.Sizable,
             .MaximizeBox = False,
-            .MinimizeBox = False
+            .MinimizeBox = False,
+            .MinimumSize = New Size(600, 700)
         }
 
         ' Header
@@ -2294,11 +2476,12 @@ Public Class POSMainForm_REDESIGN
         }
         pnlHeader.Controls.Add(lblHeader)
 
-        ' Report content
+        ' Report content - use AutoScroll for long content
         Dim pnlContent As New Panel With {
             .Location = New Point(50, 100),
-            .Size = New Size(500, 500),
-            .BackColor = Color.White
+            .Size = New Size(500, 600),
+            .BackColor = Color.White,
+            .AutoScroll = True
         }
 
         Dim yPos = 20
@@ -2662,22 +2845,27 @@ Public Class POSMainForm_REDESIGN
             flpProducts.SuspendLayout()
             flpProducts.Controls.Clear()
 
-            ' Filter cached products by ItemCode - INSTANT!
+            ' Filter cached products by ItemCode OR ProductName - INSTANT!
             Dim allMatches = _allProducts.AsEnumerable().
                 Where(Function(row)
                           Dim itemCode = row("ItemCode").ToString()
-                          Return itemCode.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0
+                          Dim productName = row("ProductName").ToString()
+                          Return itemCode.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                                 productName.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0
                       End Function).
                 OrderBy(Function(row)
                             Dim itemCode = row("ItemCode").ToString()
-                            ' Sort by: 1) Starts with search (best), 2) Contains search, 3) Alphabetical
+                            Dim productName = row("ProductName").ToString()
+                            ' Sort by: 1) Code starts with search, 2) Name starts with search, 3) Contains search, 4) Alphabetical
                             If itemCode.StartsWith(searchText, StringComparison.OrdinalIgnoreCase) Then
-                                Return 0 ' Highest priority
+                                Return 0 ' Highest priority - exact code match
+                            ElseIf productName.StartsWith(searchText, StringComparison.OrdinalIgnoreCase) Then
+                                Return 1 ' Second priority - name starts with search
                             Else
-                                Return 1 ' Lower priority
+                                Return 2 ' Lower priority - contains search
                             End If
                         End Function).
-                ThenBy(Function(row) row("ItemCode").ToString()).
+                ThenBy(Function(row) row("ProductName").ToString()).
                 ToList()
 
             Dim totalMatches = allMatches.Count

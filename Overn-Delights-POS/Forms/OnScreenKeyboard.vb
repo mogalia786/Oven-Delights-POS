@@ -9,6 +9,7 @@ Public Class OnScreenKeyboard
     
     Private _btnHide As Button
     Private _keys As New List(Of Button)
+    Private _scaleFactor As Single = 1.0F
     
     ' Modern color palette
     Private _keyColor As Color = Color.White
@@ -27,19 +28,25 @@ Public Class OnScreenKeyboard
     End Sub
     
     Private Sub InitializeKeyboard()
-        Me.Height = 300
+        ' Calculate initial scale factor based on screen width
+        Dim screenWidth = Screen.PrimaryScreen.Bounds.Width
+        _scaleFactor = CSng(screenWidth) / 1920.0F
+        If _scaleFactor < 0.6F Then _scaleFactor = 0.6F
+        If _scaleFactor > 1.5F Then _scaleFactor = 1.5F
+        
+        Me.Height = CInt(300 * _scaleFactor)
         Me.Dock = DockStyle.Bottom
         Me.BackColor = _panelColor
         Me.Visible = False
         
-        ' Hide/Show button (down arrow)
+        ' Hide/Show button (down arrow) - scaled
         _btnHide = New Button With {
             .Text = "▼ HIDE KEYBOARD",
-            .Size = New Size(200, 35),
-            .Location = New Point(10, 10),
+            .Size = New Size(CInt(200 * _scaleFactor), CInt(35 * _scaleFactor)),
+            .Location = New Point(CInt(10 * _scaleFactor), CInt(10 * _scaleFactor)),
             .BackColor = ColorTranslator.FromHtml("#34495E"),
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Font = New Font("Segoe UI", CSng(10 * _scaleFactor), FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -52,27 +59,28 @@ Public Class OnScreenKeyboard
         Dim row2 = {"A", "S", "D", "F", "G", "H", "J", "K", "L"}
         Dim row3 = {"Z", "X", "C", "V", "B", "N", "M"}
         
-        Dim keyWidth = 80
-        Dim keyHeight = 60
-        Dim spacing = 5
-        Dim startY = 55
+        ' Scale key dimensions based on screen size
+        Dim keyWidth = CInt(80 * _scaleFactor)
+        Dim keyHeight = CInt(60 * _scaleFactor)
+        Dim spacing = CInt(5 * _scaleFactor)
+        Dim startY = CInt(55 * _scaleFactor)
         
         ' Row 1
-        Dim x = 10
+        Dim x = CInt(10 * _scaleFactor)
         For Each key In row1
             CreateKey(key, x, startY, keyWidth, keyHeight)
             x += keyWidth + spacing
         Next
         
         ' Row 2 (slightly offset)
-        x = 40
+        x = CInt(40 * _scaleFactor)
         For Each key In row2
             CreateKey(key, x, startY + keyHeight + spacing, keyWidth, keyHeight)
             x += keyWidth + spacing
         Next
         
         ' Row 3 (more offset)
-        x = 70
+        x = CInt(70 * _scaleFactor)
         For Each key In row3
             CreateKey(key, x, startY + (keyHeight + spacing) * 2, keyWidth, keyHeight)
             x += keyWidth + spacing
@@ -82,11 +90,11 @@ Public Class OnScreenKeyboard
         ' Delete button
         Dim btnDelete As New Button With {
             .Text = "⌫ DELETE",
-            .Size = New Size(160, keyHeight),
-            .Location = New Point(x + 10, startY + (keyHeight + spacing) * 2),
+            .Size = New Size(CInt(160 * _scaleFactor), keyHeight),
+            .Location = New Point(x + CInt(10 * _scaleFactor), startY + (keyHeight + spacing) * 2),
             .BackColor = _deleteKeyColor,
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Font = New Font("Segoe UI", CSng(11 * _scaleFactor), FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -99,11 +107,11 @@ Public Class OnScreenKeyboard
         ' Space bar (bottom row)
         Dim btnSpace As New Button With {
             .Text = "SPACE",
-            .Size = New Size(400, keyHeight),
-            .Location = New Point(150, startY + (keyHeight + spacing) * 3),
+            .Size = New Size(CInt(400 * _scaleFactor), keyHeight),
+            .Location = New Point(CInt(150 * _scaleFactor), startY + (keyHeight + spacing) * 3),
             .BackColor = _spaceKeyColor,
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Font = New Font("Segoe UI", CSng(11 * _scaleFactor), FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -116,11 +124,11 @@ Public Class OnScreenKeyboard
         ' Clear button
         Dim btnClear As New Button With {
             .Text = "✖ CLEAR",
-            .Size = New Size(120, keyHeight),
-            .Location = New Point(560, startY + (keyHeight + spacing) * 3),
+            .Size = New Size(CInt(120 * _scaleFactor), keyHeight),
+            .Location = New Point(CInt(560 * _scaleFactor), startY + (keyHeight + spacing) * 3),
             .BackColor = ColorTranslator.FromHtml("#E67E22"),
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Font = New Font("Segoe UI", CSng(11 * _scaleFactor), FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -138,7 +146,7 @@ Public Class OnScreenKeyboard
             .Location = New Point(x, y),
             .BackColor = _keyColor,
             .ForeColor = Color.Black,
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = New Font("Segoe UI", CSng(14 * _scaleFactor), FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
             .Tag = letter
@@ -189,22 +197,29 @@ Public Class OnScreenKeyboard
     Public Sub ShowKeyboard()
         If _isVisible Then Return
         
-        ' Make textbox editable
-        If _textBox IsNot Nothing Then
-            _textBox.ReadOnly = False
-        End If
+        ' Textbox is already editable for physical keyboard - don't change it
         
         Me.Visible = True
         Me.BringToFront()
         _isVisible = True
+        
+        ' Focus the textbox so user can also type with physical keyboard
+        If _textBox IsNot Nothing Then
+            _textBox.Focus()
+            
+            ' Add keyboard event handler for visual feedback
+            AddHandler _textBox.KeyDown, AddressOf OnPhysicalKeyPress
+        End If
     End Sub
     
     Public Sub HideKeyboard()
         If Not _isVisible Then Return
         
-        ' Make textbox readonly again
+        ' Keep textbox editable for physical keyboard - don't make it readonly
+        
+        ' Remove keyboard event handler
         If _textBox IsNot Nothing Then
-            _textBox.ReadOnly = True
+            RemoveHandler _textBox.KeyDown, AddressOf OnPhysicalKeyPress
         End If
         
         Me.Visible = False
@@ -212,9 +227,54 @@ Public Class OnScreenKeyboard
         _isVisible = False
     End Sub
     
+    Private Sub OnPhysicalKeyPress(sender As Object, e As KeyEventArgs)
+        ' Show visual feedback on virtual keyboard when physical key is pressed
+        Dim keyChar = ChrW(e.KeyCode).ToString().ToUpper()
+        
+        ' Find the matching button
+        For Each btn As Button In _keys
+            If btn.Tag IsNot Nothing AndAlso btn.Tag.ToString().ToUpper() = keyChar Then
+                ' Flash the button
+                FlashButton(btn)
+                Exit For
+            End If
+        Next
+    End Sub
+    
+    Private Async Sub FlashButton(btn As Button)
+        ' Highlight the button briefly
+        Dim originalColor = btn.BackColor
+        Dim originalForeColor = btn.ForeColor
+        
+        btn.BackColor = _keyPressedColor
+        btn.ForeColor = Color.White
+        
+        ' Wait 150ms
+        Await Task.Delay(150)
+        
+        ' Restore original colors
+        btn.BackColor = originalColor
+        btn.ForeColor = originalForeColor
+    End Sub
+    
     Public ReadOnly Property IsKeyboardVisible As Boolean
         Get
             Return _isVisible
         End Get
     End Property
+    
+    Public Sub UpdateKeyboardSize(scaleFactor As Single)
+        ' Update scale factor and rebuild keyboard
+        _scaleFactor = scaleFactor
+        If _scaleFactor < 0.6F Then _scaleFactor = 0.6F
+        If _scaleFactor > 1.5F Then _scaleFactor = 1.5F
+        
+        ' Update keyboard height
+        Me.Height = CInt(300 * _scaleFactor)
+        
+        ' Rebuild keyboard with new scale
+        Me.Controls.Clear()
+        _keys.Clear()
+        InitializeKeyboard()
+    End Sub
 End Class

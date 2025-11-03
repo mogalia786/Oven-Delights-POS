@@ -16,7 +16,7 @@ Public Class OrderEntryNumpad
     End Sub
     
     Private Sub InitializeNumpad()
-        Me.Size = New Size(400, 450)
+        Me.Size = ResponsiveHelper.ScaleSize(New Size(400, 450))
         Me.BackColor = _darkBlue
         Me.Visible = False
         Me.BorderStyle = BorderStyle.FixedSingle
@@ -24,25 +24,25 @@ Public Class OrderEntryNumpad
         ' Header
         Dim pnlHeader As New Panel With {
             .Dock = DockStyle.Top,
-            .Height = 40,
+            .Height = ResponsiveHelper.ScaleSize(40),
             .BackColor = _orange
         }
         
         Dim lblTitle As New Label With {
             .Text = "🔢 NUMPAD",
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = ResponsiveHelper.CreateScaledFont("Segoe UI", 14, FontStyle.Bold),
             .ForeColor = Color.White,
-            .Location = New Point(10, 8),
+            .Location = ResponsiveHelper.ScalePoint(New Point(10, 8)),
             .AutoSize = True
         }
         
         Dim btnClose As New Button With {
             .Text = "✖",
-            .Size = New Size(35, 35),
-            .Location = New Point(360, 2),
+            .Size = ResponsiveHelper.EnsureTouchTarget(ResponsiveHelper.ScaleSize(New Size(35, 35))),
+            .Location = ResponsiveHelper.ScalePoint(New Point(360, 2)),
             .BackColor = _red,
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = ResponsiveHelper.CreateScaledFont("Segoe UI", 14, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -60,21 +60,25 @@ Public Class OrderEntryNumpad
         }
         
         Dim pnlKeys As New Panel With {
-            .Location = New Point(50, 60),
-            .Size = New Size(300, 360),
+            .Location = ResponsiveHelper.ScalePoint(New Point(50, 60)),
+            .Size = ResponsiveHelper.ScaleSize(New Size(300, 360)),
             .BackColor = _darkBlue
         }
+        
+        Dim keySize = ResponsiveHelper.EnsureTouchTarget(ResponsiveHelper.ScaleSize(New Size(90, 80)))
+        Dim keySpacingX = ResponsiveHelper.ScaleSize(100)
+        Dim keySpacingY = ResponsiveHelper.ScaleSize(90)
         
         For row = 0 To 3
             For col = 0 To 2
                 Dim key = keys(row, col)
                 Dim btn As New Button With {
                     .Text = key,
-                    .Size = New Size(90, 80),
-                    .Location = New Point(col * 100, row * 90),
+                    .Size = keySize,
+                    .Location = New Point(col * keySpacingX, row * keySpacingY),
                     .BackColor = If(key = "⌫", _red, Color.White),
                     .ForeColor = If(key = "⌫", Color.White, _darkBlue),
-                    .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+                    .Font = ResponsiveHelper.CreateScaledFont("Segoe UI", 24, FontStyle.Bold),
                     .FlatStyle = FlatStyle.Flat,
                     .Cursor = Cursors.Hand
                 }
