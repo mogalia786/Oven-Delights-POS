@@ -18,17 +18,19 @@ Partial Class CustomerOrderDialog
     Friend WithEvents pnlTop As Panel
     Friend WithEvents lblTitle As Label
     Friend WithEvents grpCustomer As GroupBox
-    Friend WithEvents txtCustomerEmail As TextBox
-    Friend WithEvents lblEmail As Label
-    Friend WithEvents txtCustomerPhone As TextBox
-    Friend WithEvents lblPhone As Label
-    Friend WithEvents txtCustomerSurname As TextBox
-    Friend WithEvents lblSurname As Label
+    Friend WithEvents txtCellNumber As TextBox
+    Friend WithEvents lblCellNumber As Label
     Friend WithEvents txtCustomerName As TextBox
     Friend WithEvents lblName As Label
+    Friend WithEvents txtCustomerSurname As TextBox
+    Friend WithEvents lblSurname As Label
+    Friend WithEvents txtCustomerEmail As TextBox
+    Friend WithEvents lblEmail As Label
     Friend WithEvents grpOrderDetails As GroupBox
     Friend WithEvents txtSpecialInstructions As TextBox
     Friend WithEvents lblSpecialInstructions As Label
+    Friend WithEvents txtCollectionDay As TextBox
+    Friend WithEvents lblCollectionDay As Label
     Friend WithEvents dtpReadyTime As DateTimePicker
     Friend WithEvents lblReadyTime As Label
     Friend WithEvents dtpReadyDate As DateTimePicker
@@ -51,17 +53,19 @@ Partial Class CustomerOrderDialog
         Me.pnlTop = New System.Windows.Forms.Panel()
         Me.lblTitle = New System.Windows.Forms.Label()
         Me.grpCustomer = New System.Windows.Forms.GroupBox()
-        Me.txtCustomerEmail = New System.Windows.Forms.TextBox()
-        Me.lblEmail = New System.Windows.Forms.Label()
-        Me.txtCustomerPhone = New System.Windows.Forms.TextBox()
-        Me.lblPhone = New System.Windows.Forms.Label()
-        Me.txtCustomerSurname = New System.Windows.Forms.TextBox()
-        Me.lblSurname = New System.Windows.Forms.Label()
+        Me.txtCellNumber = New System.Windows.Forms.TextBox()
+        Me.lblCellNumber = New System.Windows.Forms.Label()
         Me.txtCustomerName = New System.Windows.Forms.TextBox()
         Me.lblName = New System.Windows.Forms.Label()
+        Me.txtCustomerSurname = New System.Windows.Forms.TextBox()
+        Me.lblSurname = New System.Windows.Forms.Label()
+        Me.txtCustomerEmail = New System.Windows.Forms.TextBox()
+        Me.lblEmail = New System.Windows.Forms.Label()
         Me.grpOrderDetails = New System.Windows.Forms.GroupBox()
         Me.txtSpecialInstructions = New System.Windows.Forms.TextBox()
         Me.lblSpecialInstructions = New System.Windows.Forms.Label()
+        Me.txtCollectionDay = New System.Windows.Forms.TextBox()
+        Me.lblCollectionDay = New System.Windows.Forms.Label()
         Me.dtpReadyTime = New System.Windows.Forms.DateTimePicker()
         Me.lblReadyTime = New System.Windows.Forms.Label()
         Me.dtpReadyDate = New System.Windows.Forms.DateTimePicker()
@@ -94,7 +98,7 @@ Partial Class CustomerOrderDialog
         Me.pnlTop.Dock = System.Windows.Forms.DockStyle.Top
         Me.pnlTop.Location = New System.Drawing.Point(0, 0)
         Me.pnlTop.Name = "pnlTop"
-        Me.pnlTop.Size = New System.Drawing.Size(1000, 60)
+        Me.pnlTop.Size = New System.Drawing.Size(1200, 60)
         Me.pnlTop.TabIndex = 0
         '
         'lblTitle
@@ -112,60 +116,60 @@ Partial Class CustomerOrderDialog
         '
         Me.grpCustomer.Controls.Add(Me.txtCustomerEmail)
         Me.grpCustomer.Controls.Add(Me.lblEmail)
-        Me.grpCustomer.Controls.Add(Me.txtCustomerPhone)
-        Me.grpCustomer.Controls.Add(Me.lblPhone)
         Me.grpCustomer.Controls.Add(Me.txtCustomerSurname)
         Me.grpCustomer.Controls.Add(Me.lblSurname)
         Me.grpCustomer.Controls.Add(Me.txtCustomerName)
         Me.grpCustomer.Controls.Add(Me.lblName)
+        Me.grpCustomer.Controls.Add(Me.txtCellNumber)
+        Me.grpCustomer.Controls.Add(Me.lblCellNumber)
         Me.grpCustomer.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
         Me.grpCustomer.Location = New System.Drawing.Point(12, 70)
         Me.grpCustomer.Name = "grpCustomer"
-        Me.grpCustomer.Size = New System.Drawing.Size(480, 180)
+        Me.grpCustomer.Size = New System.Drawing.Size(480, 220)
         Me.grpCustomer.TabIndex = 1
         Me.grpCustomer.TabStop = False
         Me.grpCustomer.Text = "Customer Details"
         '
-        'txtCustomerEmail
+        'txtCellNumber (FIRST FIELD)
         '
-        Me.txtCustomerEmail.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.txtCustomerEmail.Location = New System.Drawing.Point(120, 135)
-        Me.txtCustomerEmail.Name = "txtCustomerEmail"
-        Me.txtCustomerEmail.Size = New System.Drawing.Size(340, 25)
-        Me.txtCustomerEmail.TabIndex = 7
+        Me.txtCellNumber.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtCellNumber.Location = New System.Drawing.Point(120, 30)
+        Me.txtCellNumber.Name = "txtCellNumber"
+        Me.txtCellNumber.Size = New System.Drawing.Size(340, 25)
+        Me.txtCellNumber.TabIndex = 1
         '
-        'lblEmail
+        'lblCellNumber
         '
-        Me.lblEmail.AutoSize = True
-        Me.lblEmail.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.lblEmail.Location = New System.Drawing.Point(15, 138)
-        Me.lblEmail.Name = "lblEmail"
-        Me.lblEmail.Size = New System.Drawing.Size(99, 19)
-        Me.lblEmail.TabIndex = 6
-        Me.lblEmail.Text = "Email (optional):"
+        Me.lblCellNumber.AutoSize = True
+        Me.lblCellNumber.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblCellNumber.Location = New System.Drawing.Point(15, 33)
+        Me.lblCellNumber.Name = "lblCellNumber"
+        Me.lblCellNumber.Size = New System.Drawing.Size(87, 19)
+        Me.lblCellNumber.TabIndex = 0
+        Me.lblCellNumber.Text = "Cell Number:"
         '
-        'txtCustomerPhone
+        'txtCustomerName
         '
-        Me.txtCustomerPhone.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.txtCustomerPhone.Location = New System.Drawing.Point(120, 100)
-        Me.txtCustomerPhone.Name = "txtCustomerPhone"
-        Me.txtCustomerPhone.Size = New System.Drawing.Size(340, 25)
-        Me.txtCustomerPhone.TabIndex = 5
+        Me.txtCustomerName.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtCustomerName.Location = New System.Drawing.Point(120, 70)
+        Me.txtCustomerName.Name = "txtCustomerName"
+        Me.txtCustomerName.Size = New System.Drawing.Size(340, 25)
+        Me.txtCustomerName.TabIndex = 2
         '
-        'lblPhone
+        'lblName
         '
-        Me.lblPhone.AutoSize = True
-        Me.lblPhone.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.lblPhone.Location = New System.Drawing.Point(15, 103)
-        Me.lblPhone.Name = "lblPhone"
-        Me.lblPhone.Size = New System.Drawing.Size(52, 19)
-        Me.lblPhone.TabIndex = 4
-        Me.lblPhone.Text = "Phone:"
+        Me.lblName.AutoSize = True
+        Me.lblName.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblName.Location = New System.Drawing.Point(15, 73)
+        Me.lblName.Name = "lblName"
+        Me.lblName.Size = New System.Drawing.Size(48, 19)
+        Me.lblName.TabIndex = 1
+        Me.lblName.Text = "Name:"
         '
         'txtCustomerSurname
         '
         Me.txtCustomerSurname.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.txtCustomerSurname.Location = New System.Drawing.Point(120, 65)
+        Me.txtCustomerSurname.Location = New System.Drawing.Point(120, 110)
         Me.txtCustomerSurname.Name = "txtCustomerSurname"
         Me.txtCustomerSurname.Size = New System.Drawing.Size(340, 25)
         Me.txtCustomerSurname.TabIndex = 3
@@ -174,34 +178,36 @@ Partial Class CustomerOrderDialog
         '
         Me.lblSurname.AutoSize = True
         Me.lblSurname.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.lblSurname.Location = New System.Drawing.Point(15, 68)
+        Me.lblSurname.Location = New System.Drawing.Point(15, 113)
         Me.lblSurname.Name = "lblSurname"
         Me.lblSurname.Size = New System.Drawing.Size(67, 19)
         Me.lblSurname.TabIndex = 2
         Me.lblSurname.Text = "Surname:"
         '
-        'txtCustomerName
+        'txtCustomerEmail
         '
-        Me.txtCustomerName.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.txtCustomerName.Location = New System.Drawing.Point(120, 30)
-        Me.txtCustomerName.Name = "txtCustomerName"
-        Me.txtCustomerName.Size = New System.Drawing.Size(340, 25)
-        Me.txtCustomerName.TabIndex = 1
+        Me.txtCustomerEmail.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtCustomerEmail.Location = New System.Drawing.Point(120, 170)
+        Me.txtCustomerEmail.Name = "txtCustomerEmail"
+        Me.txtCustomerEmail.Size = New System.Drawing.Size(340, 25)
+        Me.txtCustomerEmail.TabIndex = 4
         '
-        'lblName
+        'lblEmail
         '
-        Me.lblName.AutoSize = True
-        Me.lblName.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.lblName.Location = New System.Drawing.Point(15, 33)
-        Me.lblName.Name = "lblName"
-        Me.lblName.Size = New System.Drawing.Size(48, 19)
-        Me.lblName.TabIndex = 0
-        Me.lblName.Text = "Name:"
+        Me.lblEmail.AutoSize = True
+        Me.lblEmail.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblEmail.Location = New System.Drawing.Point(15, 173)
+        Me.lblEmail.Name = "lblEmail"
+        Me.lblEmail.Size = New System.Drawing.Size(99, 19)
+        Me.lblEmail.TabIndex = 3
+        Me.lblEmail.Text = "Email (optional):"
         '
         'grpOrderDetails
         '
         Me.grpOrderDetails.Controls.Add(Me.txtSpecialInstructions)
         Me.grpOrderDetails.Controls.Add(Me.lblSpecialInstructions)
+        Me.grpOrderDetails.Controls.Add(Me.txtCollectionDay)
+        Me.grpOrderDetails.Controls.Add(Me.lblCollectionDay)
         Me.grpOrderDetails.Controls.Add(Me.dtpReadyTime)
         Me.grpOrderDetails.Controls.Add(Me.lblReadyTime)
         Me.grpOrderDetails.Controls.Add(Me.dtpReadyDate)
@@ -209,28 +215,48 @@ Partial Class CustomerOrderDialog
         Me.grpOrderDetails.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
         Me.grpOrderDetails.Location = New System.Drawing.Point(508, 70)
         Me.grpOrderDetails.Name = "grpOrderDetails"
-        Me.grpOrderDetails.Size = New System.Drawing.Size(480, 180)
+        Me.grpOrderDetails.Size = New System.Drawing.Size(680, 220)
         Me.grpOrderDetails.TabIndex = 2
         Me.grpOrderDetails.TabStop = False
         Me.grpOrderDetails.Text = "Order Details"
         '
+        'txtCollectionDay (Auto-filled from date)
+        '
+        Me.txtCollectionDay.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
+        Me.txtCollectionDay.Location = New System.Drawing.Point(550, 30)
+        Me.txtCollectionDay.Name = "txtCollectionDay"
+        Me.txtCollectionDay.ReadOnly = True
+        Me.txtCollectionDay.Size = New System.Drawing.Size(110, 25)
+        Me.txtCollectionDay.TabIndex = 4
+        Me.txtCollectionDay.BackColor = System.Drawing.Color.LightYellow
+        '
+        'lblCollectionDay
+        '
+        Me.lblCollectionDay.AutoSize = True
+        Me.lblCollectionDay.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblCollectionDay.Location = New System.Drawing.Point(485, 33)
+        Me.lblCollectionDay.Name = "lblCollectionDay"
+        Me.lblCollectionDay.Size = New System.Drawing.Size(35, 19)
+        Me.lblCollectionDay.TabIndex = 3
+        Me.lblCollectionDay.Text = "Day:"
+        '
         'txtSpecialInstructions
         '
         Me.txtSpecialInstructions.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.txtSpecialInstructions.Location = New System.Drawing.Point(15, 105)
+        Me.txtSpecialInstructions.Location = New System.Drawing.Point(15, 90)
         Me.txtSpecialInstructions.Multiline = True
         Me.txtSpecialInstructions.Name = "txtSpecialInstructions"
-        Me.txtSpecialInstructions.Size = New System.Drawing.Size(450, 60)
-        Me.txtSpecialInstructions.TabIndex = 5
+        Me.txtSpecialInstructions.Size = New System.Drawing.Size(640, 100)
+        Me.txtSpecialInstructions.TabIndex = 6
         '
         'lblSpecialInstructions
         '
         Me.lblSpecialInstructions.AutoSize = True
         Me.lblSpecialInstructions.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.lblSpecialInstructions.Location = New System.Drawing.Point(15, 83)
+        Me.lblSpecialInstructions.Location = New System.Drawing.Point(15, 68)
         Me.lblSpecialInstructions.Name = "lblSpecialInstructions"
         Me.lblSpecialInstructions.Size = New System.Drawing.Size(132, 19)
-        Me.lblSpecialInstructions.TabIndex = 4
+        Me.lblSpecialInstructions.TabIndex = 5
         Me.lblSpecialInstructions.Text = "Special Instructions:"
         '
         'dtpReadyTime
@@ -276,9 +302,9 @@ Partial Class CustomerOrderDialog
         '
         Me.grpItems.Controls.Add(Me.dgvItems)
         Me.grpItems.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
-        Me.grpItems.Location = New System.Drawing.Point(12, 260)
+        Me.grpItems.Location = New System.Drawing.Point(12, 300)
         Me.grpItems.Name = "grpItems"
-        Me.grpItems.Size = New System.Drawing.Size(680, 280)
+        Me.grpItems.Size = New System.Drawing.Size(680, 350)
         Me.grpItems.TabIndex = 3
         Me.grpItems.TabStop = False
         Me.grpItems.Text = "Order Items"
@@ -305,9 +331,9 @@ Partial Class CustomerOrderDialog
         Me.grpPayment.Controls.Add(Me.lblTax)
         Me.grpPayment.Controls.Add(Me.lblSubtotal)
         Me.grpPayment.Font = New System.Drawing.Font("Segoe UI", 10.0!, System.Drawing.FontStyle.Bold)
-        Me.grpPayment.Location = New System.Drawing.Point(708, 260)
+        Me.grpPayment.Location = New System.Drawing.Point(708, 300)
         Me.grpPayment.Name = "grpPayment"
-        Me.grpPayment.Size = New System.Drawing.Size(280, 280)
+        Me.grpPayment.Size = New System.Drawing.Size(480, 350)
         Me.grpPayment.TabIndex = 4
         Me.grpPayment.TabStop = False
         Me.grpPayment.Text = "Payment"
@@ -380,9 +406,9 @@ Partial Class CustomerOrderDialog
         Me.pnlBottom.Controls.Add(Me.btnCancel)
         Me.pnlBottom.Controls.Add(Me.btnCreateOrder)
         Me.pnlBottom.Dock = System.Windows.Forms.DockStyle.Bottom
-        Me.pnlBottom.Location = New System.Drawing.Point(0, 550)
+        Me.pnlBottom.Location = New System.Drawing.Point(0, 660)
         Me.pnlBottom.Name = "pnlBottom"
-        Me.pnlBottom.Size = New System.Drawing.Size(1000, 70)
+        Me.pnlBottom.Size = New System.Drawing.Size(1200, 70)
         Me.pnlBottom.TabIndex = 5
         '
         'btnCancel
@@ -417,7 +443,7 @@ Partial Class CustomerOrderDialog
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(7.0!, 15.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1000, 620)
+        Me.ClientSize = New System.Drawing.Size(1200, 730)
         Me.Controls.Add(Me.pnlBottom)
         Me.Controls.Add(Me.grpPayment)
         Me.Controls.Add(Me.grpItems)

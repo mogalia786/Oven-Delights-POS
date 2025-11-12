@@ -30,22 +30,23 @@ Public Class POSDataService
                 p.SKU,
                 p.Name AS ProductName,
                 p.Category,
-                v.VariantID,
-                v.Barcode,
-                pr.SellingPrice,
-                pr.CostPrice,
-                s.QtyOnHand,
-                s.ReorderPoint,
-                CASE WHEN s.QtyOnHand > 0 THEN 1 ELSE 0 END AS InStock
+                p.ProductID AS VariantID,
+                ISNULL(p.ExternalBarcode, p.SKU) AS Barcode,
+                ISNULL(pr.SellingPrice, 0) AS SellingPrice,
+                ISNULL(pr.CostPrice, 0) AS CostPrice,
+                ISNULL(s.Quantity, 0) AS QtyOnHand,
+                0 AS ReorderPoint,
+                CASE WHEN ISNULL(s.Quantity, 0) > 0 THEN 1 ELSE 0 END AS InStock
             FROM {GetTableName("Retail_Product")} p
-            INNER JOIN {GetTableName("Retail_Variant")} v ON p.ProductID = v.ProductID
             LEFT JOIN {GetTableName("Retail_Price")} pr ON p.ProductID = pr.ProductID 
                 AND (pr.BranchID IS NULL OR pr.BranchID = @BranchID)
                 AND pr.EffectiveFrom <= GETDATE()
                 AND (pr.EffectiveTo IS NULL OR pr.EffectiveTo >= GETDATE())
-            LEFT JOIN {GetTableName("Retail_Stock")} s ON v.VariantID = s.VariantID 
+            LEFT JOIN dbo.RetailStock s ON p.ProductID = s.ProductID 
                 AND s.BranchID = @BranchID
-            WHERE p.IsActive = 1 AND v.IsActive = 1
+            WHERE p.IsActive = 1 
+                AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
+                AND (p.ProductType IN ('External', 'Internal') OR p.ProductType IS NULL)
             ORDER BY p.Category, p.Name"
 
         Using conn As New SqlConnection(_connectionString)
@@ -72,18 +73,19 @@ Public Class POSDataService
                 p.SKU,
                 p.Name AS ProductName,
                 p.Category,
-                v.VariantID,
-                v.Barcode,
-                pr.SellingPrice,
-                s.QtyOnHand
+                p.ProductID AS VariantID,
+                ISNULL(p.ExternalBarcode, p.SKU) AS Barcode,
+                ISNULL(pr.SellingPrice, 0) AS SellingPrice,
+                ISNULL(s.Quantity, 0) AS QtyOnHand
             FROM {GetTableName("Retail_Product")} p
-            INNER JOIN {GetTableName("Retail_Variant")} v ON p.ProductID = v.ProductID
             LEFT JOIN {GetTableName("Retail_Price")} pr ON p.ProductID = pr.ProductID 
                 AND (pr.BranchID IS NULL OR pr.BranchID = @BranchID)
-            LEFT JOIN {GetTableName("Retail_Stock")} s ON v.VariantID = s.VariantID 
+            LEFT JOIN dbo.RetailStock s ON p.ProductID = s.ProductID 
                 AND s.BranchID = @BranchID
             WHERE p.IsActive = 1 
-                AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR v.Barcode LIKE @Search)
+                AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
+                AND (p.ProductType IN ('External', 'Internal') OR p.ProductType IS NULL)
+                AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.ExternalBarcode, p.SKU) LIKE @Search)
             ORDER BY p.Name"
 
         Using conn As New SqlConnection(_connectionString)
@@ -149,28 +151,28 @@ Public Class POSDataService
                             cmd.ExecuteNonQuery()
                         End Using
 
-                        ' Update stock
-                        Dim sqlStock As String = $"
-                            UPDATE {GetTableName("Retail_Stock")}
-                            SET QtyOnHand = QtyOnHand - @Quantity,
-                                UpdatedAt = GETDATE()
-                            WHERE VariantID = @VariantID AND BranchID = @BranchID"
+                        ' Update stock (using RetailStock with ProductID)
+                        Dim sqlStock As String = "
+                            UPDATE dbo.RetailStock
+                            SET Quantity = Quantity - @Quantity,
+                                LastUpdated = GETDATE()
+                            WHERE ProductID = @ProductID AND BranchID = @BranchID"
 
                         Using cmd As New SqlCommand(sqlStock, conn, trans)
                             cmd.Parameters.AddWithValue("@Quantity", item.Quantity)
-                            cmd.Parameters.AddWithValue("@VariantID", item.VariantID)
+                            cmd.Parameters.AddWithValue("@ProductID", item.VariantID) ' VariantID is actually ProductID now
                             cmd.Parameters.AddWithValue("@BranchID", saleData.BranchID)
                             cmd.ExecuteNonQuery()
                         End Using
 
                         ' Log stock movement
-                        Dim sqlMovement As String = $"
-                            INSERT INTO {GetTableName("Retail_StockMovements")}
-                            (VariantID, BranchID, QtyDelta, Reason, Ref1, CreatedBy)
-                            VALUES (@VariantID, @BranchID, @QtyDelta, 'Sale', @SaleNumber, @CashierID)"
+                        Dim sqlMovement As String = "
+                            INSERT INTO dbo.StockMovements
+                            (MaterialID, BranchID, MovementType, Quantity, Reason, Reference, CreatedBy, CreatedDate)
+                            VALUES (@ProductID, @BranchID, 'Sale', @QtyDelta, 'POS Sale', @SaleNumber, @CashierID, GETDATE())"
 
                         Using cmd As New SqlCommand(sqlMovement, conn, trans)
-                            cmd.Parameters.AddWithValue("@VariantID", item.VariantID)
+                            cmd.Parameters.AddWithValue("@ProductID", item.VariantID) ' VariantID is actually ProductID now
                             cmd.Parameters.AddWithValue("@BranchID", saleData.BranchID)
                             cmd.Parameters.AddWithValue("@QtyDelta", -item.Quantity)
                             cmd.Parameters.AddWithValue("@SaleNumber", saleData.SaleNumber)
@@ -213,7 +215,9 @@ Public Class POSDataService
         Dim sql As String = $"
             SELECT DISTINCT Category 
             FROM {GetTableName("Retail_Product")} 
-            WHERE IsActive = 1 AND Category IS NOT NULL
+            WHERE IsActive = 1 
+                AND Category IS NOT NULL
+                AND (ProductType IN ('External', 'Internal') OR ProductType IS NULL)
             ORDER BY Category"
 
         Using conn As New SqlConnection(_connectionString)

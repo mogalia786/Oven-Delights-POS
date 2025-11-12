@@ -8,6 +8,7 @@ Public Class PaymentTenderForm
 
     Private _connectionString As String
     Private _cashierID As Integer
+    Private _cashierName As String
     Private _branchID As Integer
     Private _tillPointID As Integer
     Private _branchPrefix As String
@@ -55,9 +56,10 @@ Public Class PaymentTenderForm
     Private _lightGray As Color = ColorTranslator.FromHtml("#ECF0F1")
     
     ' Constructor for regular sales and order collection
-    Public Sub New(cashierID As Integer, branchID As Integer, tillPointID As Integer, branchPrefix As String, cartItems As DataTable, subtotal As Decimal, taxAmount As Decimal, totalAmount As Decimal, Optional isOrderCollection As Boolean = False, Optional orderID As Integer = 0, Optional orderNumber As String = "")
+    Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer, tillPointID As Integer, branchPrefix As String, cartItems As DataTable, subtotal As Decimal, taxAmount As Decimal, totalAmount As Decimal, Optional isOrderCollection As Boolean = False, Optional orderID As Integer = 0, Optional orderNumber As String = "")
         MyBase.New()
         _cashierID = cashierID
+        _cashierName = cashierName
         _branchID = branchID
         _tillPointID = tillPointID
         _branchPrefix = branchPrefix
@@ -75,9 +77,10 @@ Public Class PaymentTenderForm
     End Sub
     
     ' Constructor for order deposits (simplified - no cart items needed, no sale recording)
-    Public Sub New(depositAmount As Decimal, branchID As Integer, tillPointID As Integer, cashierID As Integer)
+    Public Sub New(depositAmount As Decimal, branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String)
         MyBase.New()
         _cashierID = cashierID
+        _cashierName = cashierName
         _branchID = branchID
         _tillPointID = tillPointID
         _branchPrefix = ""
@@ -355,10 +358,28 @@ Public Class PaymentTenderForm
         Me.Size = New Size(600, 750)
         Me.StartPosition = FormStartPosition.CenterScreen
         
-        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 120, .BackColor = _green}
-        Dim lblAmountDue As New Label With {.Text = $"AMOUNT DUE: R{amountDue:N2}", .Font = New Font("Segoe UI", 18, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, 15)}
-        Dim lblTendered As New Label With {.Text = "TENDERED: R0.00", .Font = New Font("Segoe UI", 16), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, 50), .Name = "lblTendered"}
-        Dim lblChange As New Label With {.Text = "CHANGE: R0.00", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.Yellow, .AutoSize = True, .Location = New Point(20, 80), .Name = "lblChange"}
+        ' Adjust header height for split payments
+        Dim headerHeight = If(_paymentMethod = "SPLIT", 150, 120)
+        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = headerHeight, .BackColor = _green}
+        
+        ' Add CASH DUE label for split payments (centered at top, no amount)
+        If _paymentMethod = "SPLIT" Then
+            Dim lblCashDue As New Label With {
+                .Text = "CASH DUE",
+                .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+                .ForeColor = Color.Yellow,
+                .AutoSize = True,
+                .TextAlign = ContentAlignment.MiddleCenter
+            }
+            ' Center the label
+            lblCashDue.Location = New Point((600 - lblCashDue.Width) \ 2, 10)
+            pnlHeader.Controls.Add(lblCashDue)
+        End If
+        
+        Dim lblAmountDue As New Label With {.Text = $"AMOUNT DUE: R{amountDue:N2}", .Font = New Font("Segoe UI", 18, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, If(_paymentMethod = "SPLIT", 50, 15))}
+        Dim lblTendered As New Label With {.Text = "TENDERED: R0.00", .Font = New Font("Segoe UI", 16), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, If(_paymentMethod = "SPLIT", 80, 50)), .Name = "lblTendered"}
+        Dim lblChange As New Label With {.Text = "CHANGE: R0.00", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.Yellow, .AutoSize = True, .Location = New Point(20, If(_paymentMethod = "SPLIT", 110, 80)), .Name = "lblChange"}
+        
         pnlHeader.Controls.AddRange({lblAmountDue, lblTendered, lblChange})
         
         ' Make text box accept keyboard input
@@ -1306,13 +1327,39 @@ Public Class PaymentTenderForm
     End Function
     
     Private Sub InsertJournalEntry(conn As SqlConnection, transaction As SqlTransaction, journalDate As DateTime, journalType As String, reference As String, ledgerID As Integer, debit As Decimal, credit As Decimal, description As String)
-        ' Skip journal posting for now - table structure mismatch
-        ' TODO: Fix Journals table structure to match requirements
-        Return
+        Dim sql = "INSERT INTO GeneralJournal (TransactionDate, JournalType, Reference, LedgerID, Debit, Credit, Description, BranchID, CreatedBy, CreatedDate) " &
+                  "VALUES (@Date, @Type, @Ref, @LedgerID, @Debit, @Credit, @Desc, @BranchID, @CreatedBy, GETDATE())"
+        
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@Date", journalDate)
+            cmd.Parameters.AddWithValue("@Type", journalType)
+            cmd.Parameters.AddWithValue("@Ref", reference)
+            cmd.Parameters.AddWithValue("@LedgerID", ledgerID)
+            cmd.Parameters.AddWithValue("@Debit", debit)
+            cmd.Parameters.AddWithValue("@Credit", credit)
+            cmd.Parameters.AddWithValue("@Desc", description)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
+            cmd.ExecuteNonQuery()
+        End Using
     End Sub
     
     Private Function GetAverageCost(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, branchID As Integer) As Decimal
-        ' Return 0 for now - AverageCost column doesn't exist in your schema
-        Return 0D
+        Try
+            ' Join through ProductVariants since Retail_Stock uses VariantID
+            Dim sql = "SELECT TOP 1 ISNULL(rs.AverageCost, 0) FROM Retail_Stock rs " &
+                      "INNER JOIN ProductVariants pv ON rs.VariantID = pv.VariantID " &
+                      "WHERE pv.ProductID = @ProductID AND rs.BranchID = @BranchID"
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@ProductID", productID)
+                cmd.Parameters.AddWithValue("@BranchID", branchID)
+                Dim result = cmd.ExecuteScalar()
+                Return If(result IsNot Nothing AndAlso Not IsDBNull(result), CDec(result), 0D)
+            End Using
+        Catch ex As Exception
+            ' Log error and return 0 if cost cannot be determined
+            System.Diagnostics.Debug.WriteLine($"Error getting average cost for ProductID {productID}: {ex.Message}")
+            Return 0D
+        End Try
     End Function
 End Class

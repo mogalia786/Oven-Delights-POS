@@ -1,0 +1,132 @@
+========================================
+CODE FIXES FOR GL POSTING
+PaymentTenderForm.vb
+========================================
+
+LOCATION 1: Line ~1308 - InsertJournalEntry Method
+---------------------------------------------------
+REPLACE THIS:
+
+    Private Sub InsertJournalEntry(conn As SqlConnection, transaction As SqlTransaction, journalDate As DateTime, journalType As String, reference As String, ledgerID As Integer, debit As Decimal, credit As Decimal, description As String)
+        ' Skip journal posting for now - table structure mismatch
+        ' TODO: Fix Journals table structure to match requirements
+        Return
+    End Sub
+
+WITH THIS:
+
+    Private Sub InsertJournalEntry(conn As SqlConnection, transaction As SqlTransaction, journalDate As DateTime, journalType As String, reference As String, ledgerID As Integer, debit As Decimal, credit As Decimal, description As String)
+        Dim sql = "INSERT INTO GeneralJournal (TransactionDate, JournalType, Reference, LedgerID, Debit, Credit, Description, BranchID, CreatedBy, CreatedDate) " &
+                  "VALUES (@Date, @Type, @Ref, @LedgerID, @Debit, @Credit, @Desc, @BranchID, @CreatedBy, GETDATE())"
+        
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@Date", journalDate)
+            cmd.Parameters.AddWithValue("@Type", journalType)
+            cmd.Parameters.AddWithValue("@Ref", reference)
+            cmd.Parameters.AddWithValue("@LedgerID", ledgerID)
+            cmd.Parameters.AddWithValue("@Debit", debit)
+            cmd.Parameters.AddWithValue("@Credit", credit)
+            cmd.Parameters.AddWithValue("@Desc", description)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
+            cmd.ExecuteNonQuery()
+        End Using
+    End Sub
+
+
+LOCATION 2: Line ~1314 - GetAverageCost Method
+---------------------------------------------------
+REPLACE THIS:
+
+    Private Function GetAverageCost(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, branchID As Integer) As Decimal
+        ' Return 0 for now - AverageCost column doesn't exist in your schema
+        Return 0D
+    End Function
+
+WITH THIS:
+
+    Private Function GetAverageCost(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, branchID As Integer) As Decimal
+        Try
+            ' Join through ProductVariants since Retail_Stock uses VariantID
+            Dim sql = "SELECT TOP 1 ISNULL(rs.AverageCost, 0) FROM Retail_Stock rs " &
+                      "INNER JOIN ProductVariants pv ON rs.VariantID = pv.VariantID " &
+                      "WHERE pv.ProductID = @ProductID AND rs.BranchID = @BranchID"
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@ProductID", productID)
+                cmd.Parameters.AddWithValue("@BranchID", branchID)
+                Dim result = cmd.ExecuteScalar()
+                Return If(result IsNot Nothing AndAlso Not IsDBNull(result), CDec(result), 0D)
+            End Using
+        Catch ex As Exception
+            ' Log error and return 0 if cost cannot be determined
+            System.Diagnostics.Debug.WriteLine($"Error getting average cost for ProductID {productID}: {ex.Message}")
+            Return 0D
+        End Try
+    End Function
+
+
+LOCATION 3: Line ~1278 - Update Cost of Sales Loop (OPTIONAL ENHANCEMENT)
+---------------------------------------------------
+CURRENT CODE (works but can be improved):
+
+        For Each row As DataRow In _cartItems.Rows
+            Dim qty = CDec(row("Qty"))
+            Dim productID = CInt(row("ProductID"))
+            Dim avgCost = GetAverageCost(conn, transaction, productID, _branchID)
+            Dim totalCost = qty * avgCost
+            
+            If totalCost > 0 Then
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, costOfSalesLedgerID, totalCost, 0, $"COGS for {row("ProductName")}")
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, inventoryLedgerID, 0, totalCost, $"Inventory reduction for {row("ProductName")}")
+            End If
+        Next
+
+ENHANCED VERSION (adds inventory reduction):
+
+        For Each row As DataRow In _cartItems.Rows
+            Dim qty = CDec(row("Qty"))
+            Dim productID = CInt(row("ProductID"))
+            Dim variantID = If(row.Table.Columns.Contains("VariantID"), CInt(row("VariantID")), 0)
+            Dim avgCost = GetAverageCost(conn, transaction, productID, _branchID)
+            Dim totalCost = qty * avgCost
+            
+            If totalCost > 0 Then
+                ' Post Cost of Sales
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, costOfSalesLedgerID, totalCost, 0, $"COGS for {row("ProductName")}")
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, inventoryLedgerID, 0, totalCost, $"Inventory reduction for {row("ProductName")}")
+                
+                ' Reduce physical inventory
+                If variantID > 0 Then
+                    Dim updateStockSql = "UPDATE Retail_Stock SET QtyOnHand = QtyOnHand - @Qty WHERE VariantID = @VariantID AND BranchID = @BranchID"
+                    Using cmdStock As New SqlCommand(updateStockSql, conn, transaction)
+                        cmdStock.Parameters.AddWithValue("@Qty", qty)
+                        cmdStock.Parameters.AddWithValue("@VariantID", variantID)
+                        cmdStock.Parameters.AddWithValue("@BranchID", _branchID)
+                        cmdStock.ExecuteNonQuery()
+                    End Using
+                End If
+            End If
+        Next
+
+
+========================================
+SUMMARY OF CHANGES
+========================================
+
+1. ✓ Enable InsertJournalEntry to actually post to GeneralJournal table
+2. ✓ Enable GetAverageCost to retrieve cost from Retail_Stock table
+3. ✓ (Optional) Add physical inventory reduction in the same transaction
+
+AFTER MAKING THESE CHANGES:
+- Every sale will post to General Ledger
+- Cost of Sales will be calculated and posted
+- Inventory will be reduced
+- Profit & Loss reports will show accurate data
+
+IMPORTANT:
+- Make sure to run all SQL setup scripts FIRST
+- Test with a small sale before going live
+- Check GeneralJournal table after test sale
+- Verify Retail_Stock quantities are reducing
+
+========================================

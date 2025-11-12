@@ -31,6 +31,10 @@ Public Class POSMainForm_REDESIGN
     Private txtSearchByName As TextBox
     Private txtBarcodeScanner As TextBox
     Private _onScreenKeyboard As OnScreenKeyboard
+    
+    ' Search debouncing
+    Private _searchTimer As Timer
+    Private _pendingSearchText As String = ""
 
     ' Idle screen
     Private _idleTimer As Timer
@@ -75,10 +79,26 @@ Public Class POSMainForm_REDESIGN
         SetupModernUI()
         InitializeCart()
         SetupIdleScreen()
+        InitializeSearchTimer()
 
         ' Handle resize for different screen sizes
         AddHandler Me.Resize, Sub() HandleFormResize()
         AddHandler Me.Load, Sub() HandleFormResize()
+    End Sub
+    
+    Private Sub InitializeSearchTimer()
+        _searchTimer = New Timer()
+        _searchTimer.Interval = 300 ' 300ms delay
+        AddHandler _searchTimer.Tick, Sub()
+            _searchTimer.Stop()
+            SearchProducts(_pendingSearchText)
+        End Sub
+    End Sub
+    
+    Private Sub DebouncedSearch(searchText As String)
+        _pendingSearchText = searchText
+        _searchTimer.Stop()
+        _searchTimer.Start()
     End Sub
 
     Private Sub SetupModernUI()
@@ -261,10 +281,10 @@ Public Class POSMainForm_REDESIGN
         ' Don't restore placeholder on Leave - keep search results visible
         ' User can manually clear if needed
         
-        ' Search as user types
+        ' Search as user types (debounced)
         AddHandler txtSearch.TextChanged, Sub()
                                               If Not txtSearch.Text.Contains("Search by code") AndAlso txtSearch.Text.Length >= 2 Then
-                                                  SearchProducts(txtSearch.Text)
+                                                  DebouncedSearch(txtSearch.Text)
                                               End If
                                           End Sub
 
@@ -299,10 +319,10 @@ Public Class POSMainForm_REDESIGN
         ' Don't restore placeholder on Leave - keep search results visible
         ' User can manually clear if needed
         
-        ' Search as user types
+        ' Search as user types (debounced)
         AddHandler txtSearchByName.TextChanged, Sub()
             If Not txtSearchByName.Text.Contains("Search by name") AndAlso txtSearchByName.Text.Length >= 2 Then
-                SearchProducts(txtSearchByName.Text)
+                DebouncedSearch(txtSearchByName.Text)
             End If
         End Sub
 
@@ -1073,17 +1093,20 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub CalculateTotals()
-        Dim subtotal As Decimal = 0
+        ' Cart prices are VAT INCLUSIVE
+        ' Calculate totals: Total Inc VAT, then work backwards to get Ex VAT and VAT amount
+        Dim totalInclVAT As Decimal = 0
         For Each row As DataRow In _cartItems.Rows
-            subtotal += CDec(row("Total"))
+            totalInclVAT += CDec(row("Total"))
         Next
 
-        Dim tax = subtotal * 0.15D
-        Dim total = subtotal + tax
+        ' Calculate Ex VAT and VAT amount from inclusive price
+        Dim totalExVAT = Math.Round(totalInclVAT / 1.15D, 2)
+        Dim vatAmount = totalInclVAT - totalExVAT
 
-        lblSubtotal.Text = $"Subtotal: {subtotal.ToString("C2")}"
-        lblTax.Text = $"VAT (15%): {tax.ToString("C2")}"
-        lblTotal.Text = total.ToString("C2")
+        lblSubtotal.Text = $"Subtotal (Ex VAT): {totalExVAT.ToString("C2")}"
+        lblTax.Text = $"VAT (15%): {vatAmount.ToString("C2")}"
+        lblTotal.Text = totalInclVAT.ToString("C2")
     End Sub
 
     Private Sub CreateShortcutButtons()
@@ -2071,7 +2094,7 @@ Public Class POSMainForm_REDESIGN
         Dim branchPrefix = GetBranchPrefix()
 
         ' Show payment tender form
-        Using paymentForm As New PaymentTenderForm(_cashierID, _branchID, _tillPointID, branchPrefix, _cartItems, subtotal, tax, total, _isOrderCollectionMode, _collectionOrderID, _collectionOrderNumber)
+        Using paymentForm As New PaymentTenderForm(_cashierID, _cashierName, _branchID, _tillPointID, branchPrefix, _cartItems, subtotal, tax, total, _isOrderCollectionMode, _collectionOrderID, _collectionOrderNumber)
             If paymentForm.ShowDialog() = DialogResult.OK Then
                 ' If order collection, mark as delivered
                 If _isOrderCollectionMode Then
@@ -2448,6 +2471,29 @@ Public Class POSMainForm_REDESIGN
         Dim generalOrderDeposits = If(IsDBNull(row("GeneralOrderDeposits")), 0D, CDec(row("GeneralOrderDeposits")))
         Dim generalOrderCollections = If(IsDBNull(row("GeneralOrderCollections")), 0D, CDec(row("GeneralOrderCollections")))
 
+        ' Get Cash Float from TillFloatConfig
+        Dim cashFloat As Decimal = 0
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT FloatAmount FROM TillFloatConfig WHERE BranchID = @BranchID AND TillPointID = @TillPointID AND IsActive = 1"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
+                    Dim result = cmd.ExecuteScalar()
+                    If result IsNot Nothing Then
+                        cashFloat = CDec(result)
+                    End If
+                End Using
+            End Using
+        Catch ex As Exception
+            ' Default to 0 if not configured
+            cashFloat = 0
+        End Try
+        
+        ' Calculate Total Cash in Till = Cash Float + Cash Sales
+        Dim totalCashInTill = cashFloat + totalCash
+
         ' Create cash up form
         Dim cashUpForm As New Form With {
             .Text = "Cash Up Report",
@@ -2707,6 +2753,46 @@ Public Class POSMainForm_REDESIGN
         pnlContent.Controls.Add(lblSep2)
         yPos += 30
 
+        ' PAYMENT BREAKDOWN SECTION
+        Dim lblPaymentHeader As New Label With {
+            .Text = "PAYMENT BREAKDOWN:",
+            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblPaymentHeader)
+        yPos += 35
+
+        ' Cash
+        Dim lblCash As New Label With {
+            .Text = $"💵 Cash: {totalCash.ToString("C2")}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(40, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblCash)
+        yPos += 30
+
+        ' Card
+        Dim lblCard As New Label With {
+            .Text = $"💳 Card: {totalCard.ToString("C2")}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(40, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblCard)
+        yPos += 40
+
+        ' Separator before total
+        Dim lblSep3 As New Label With {
+            .Text = "═══════════════════════════════════",
+            .Font = New Font("Courier New", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblSep3)
+        yPos += 30
+
         ' Total
         Dim lblTotal As New Label With {
             .Text = $"TOTAL SALES: {total.ToString("C2")}",
@@ -2716,6 +2802,58 @@ Public Class POSMainForm_REDESIGN
             .AutoSize = True
         }
         pnlContent.Controls.Add(lblTotal)
+        yPos += 50
+        
+        ' Separator
+        Dim lblSep4 As New Label With {
+            .Text = "═══════════════════════════════════",
+            .Font = New Font("Courier New", 12),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblSep4)
+        yPos += 30
+        
+        ' CASH FLOAT SECTION
+        Dim lblFloatHeader As New Label With {
+            .Text = "CASH FLOAT:",
+            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
+            .ForeColor = Color.DarkBlue,
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblFloatHeader)
+        yPos += 35
+        
+        ' Cash Float Amount
+        Dim lblCashFloat As New Label With {
+            .Text = $"Opening Float: {cashFloat.ToString("C2")}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(40, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblCashFloat)
+        yPos += 30
+        
+        ' Cash Sales (repeated for clarity)
+        Dim lblCashSalesInTill As New Label With {
+            .Text = $"Cash Sales: {totalCash.ToString("C2")}",
+            .Font = New Font("Segoe UI", 12),
+            .Location = New Point(40, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblCashSalesInTill)
+        yPos += 40
+        
+        ' Total Cash in Till (BOLD and highlighted)
+        Dim lblTotalCashInTill As New Label With {
+            .Text = $"💰 TOTAL CASH IN TILL: {totalCashInTill.ToString("C2")}",
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .ForeColor = Color.DarkGreen,
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlContent.Controls.Add(lblTotalCashInTill)
 
         ' Button panel
         Dim pnlButtons As New Panel With {
@@ -2737,7 +2875,7 @@ Public Class POSMainForm_REDESIGN
         }
         btnPrint.FlatAppearance.BorderSize = 0
         AddHandler btnPrint.Click, Sub()
-                                       PrintCashUpReport(transactions, subtotal, tax, total, totalCash, totalCard, totalReturns, totalReturnAmount, firstSale, lastSale)
+                                       PrintCashUpReport(transactions, subtotal, tax, total, totalCash, totalCard, totalReturns, totalReturnAmount, firstSale, lastSale, cashFloat, totalCashInTill)
                                    End Sub
 
         ' Close button
@@ -2780,41 +2918,61 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub PrintCashUpReport(transactions As Integer, subtotal As Decimal, tax As Decimal, total As Decimal,
                                    totalCash As Decimal, totalCard As Decimal, totalReturns As Integer,
-                                   totalReturnAmount As Decimal, firstSale As DateTime, lastSale As DateTime)
+                                   totalReturnAmount As Decimal, firstSale As DateTime, lastSale As DateTime,
+                                   cashFloat As Decimal, totalCashInTill As Decimal)
         Try
-            ' Build receipt text
+            ' Build receipt text for 80mm thermal printer (42 characters wide)
             Dim receipt As New System.Text.StringBuilder()
 
-            receipt.AppendLine("        CASH UP REPORT")
-            receipt.AppendLine("================================")
+            receipt.AppendLine("========================================")
+            receipt.AppendLine("       OVEN DELIGHTS")
+            receipt.AppendLine("       CASH UP REPORT")
+            receipt.AppendLine("========================================")
             receipt.AppendLine()
             receipt.AppendLine($"Cashier: {_cashierName}")
-            receipt.AppendLine($"Till Point: {GetTillNumber()}")
-            receipt.AppendLine($"Date: {DateTime.Now:dd/MM/yyyy}")
-            receipt.AppendLine($"Time: {firstSale:HH:mm} - {lastSale:HH:mm}")
+            receipt.AppendLine($"Till: {GetTillNumber()}")
+            receipt.AppendLine($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}")
+            receipt.AppendLine($"Period: {firstSale:HH:mm} - {lastSale:HH:mm}")
             receipt.AppendLine()
-            receipt.AppendLine("================================")
+            receipt.AppendLine("========================================")
+            receipt.AppendLine("SALES SUMMARY")
+            receipt.AppendLine("========================================")
             receipt.AppendLine()
-            receipt.AppendLine($"Total Transactions: {transactions}")
+            receipt.AppendLine($"Total Transactions:          {transactions,10}")
             receipt.AppendLine()
-            receipt.AppendLine($"Subtotal: R{subtotal:N2}")
-            receipt.AppendLine($"VAT (15%): R{tax:N2}")
+            receipt.AppendLine($"Subtotal:              R{subtotal,14:N2}")
+            receipt.AppendLine($"VAT (15%):             R{tax,14:N2}")
             receipt.AppendLine()
-            receipt.AppendLine("RETURNS:")
-            receipt.AppendLine($"  Total Returns: {totalReturns}")
-            receipt.AppendLine($"  Return Amount: -R{totalReturnAmount:N2}")
+            
+            If totalReturns > 0 Then
+                receipt.AppendLine("RETURNS:")
+                receipt.AppendLine($"  Count:                      {totalReturns,10}")
+                receipt.AppendLine($"  Amount:               -R{totalReturnAmount,14:N2}")
+                receipt.AppendLine()
+            End If
+            
+            receipt.AppendLine("----------------------------------------")
+            receipt.AppendLine($"TOTAL SALES:           R{total,14:N2}")
+            receipt.AppendLine("========================================")
             receipt.AppendLine()
-            receipt.AppendLine("================================")
+            receipt.AppendLine("PAYMENT BREAKDOWN")
+            receipt.AppendLine("========================================")
             receipt.AppendLine()
-            receipt.AppendLine($"TOTAL SALES: R{total:N2}")
+            receipt.AppendLine($"Cash:                  R{totalCash,14:N2}")
+            receipt.AppendLine($"Card:                  R{totalCard,14:N2}")
             receipt.AppendLine()
-            receipt.AppendLine("================================")
+            receipt.AppendLine("========================================")
+            receipt.AppendLine("CASH FLOAT")
+            receipt.AppendLine("========================================")
             receipt.AppendLine()
-            receipt.AppendLine($"Cash: R{totalCash:N2}")
-            receipt.AppendLine($"Card: R{totalCard:N2}")
+            receipt.AppendLine($"Opening Float:         R{cashFloat,14:N2}")
+            receipt.AppendLine($"Cash Sales:            R{totalCash,14:N2}")
+            receipt.AppendLine("----------------------------------------")
+            receipt.AppendLine($"*** TOTAL CASH IN TILL: R{totalCashInTill,11:N2} ***")
             receipt.AppendLine()
-            receipt.AppendLine("================================")
+            receipt.AppendLine("========================================")
             receipt.AppendLine($"Printed: {DateTime.Now:dd/MM/yyyy HH:mm:ss}")
+            receipt.AppendLine()
             receipt.AppendLine()
             receipt.AppendLine()
 
@@ -2823,8 +2981,24 @@ Public Class POSMainForm_REDESIGN
             Dim receiptText As String = receipt.ToString()
 
             AddHandler printDoc.PrintPage, Sub(sender, e)
-                                               Dim font As New Font("Courier New", 10)
-                                               e.Graphics.DrawString(receiptText, font, Brushes.Black, 10, 10)
+                                               ' Use monospaced font for proper alignment
+                                               Dim font As New Font("Courier New", 9, FontStyle.Regular)
+                                               Dim boldFont As New Font("Courier New", 9, FontStyle.Bold)
+                                               
+                                               ' Draw text with proper formatting
+                                               Dim yPos As Single = 10
+                                               Dim lineHeight As Single = font.GetHeight(e.Graphics)
+                                               
+                                               For Each line In receiptText.Split(New String() {Environment.NewLine}, StringSplitOptions.None)
+                                                   ' Use bold for important lines
+                                                   Dim useFont = font
+                                                   If line.Contains("***") OrElse line.Contains("TOTAL SALES") OrElse line.Contains("CASH UP REPORT") Then
+                                                       useFont = boldFont
+                                                   End If
+                                                   
+                                                   e.Graphics.DrawString(line, useFont, Brushes.Black, 10, yPos)
+                                                   yPos += lineHeight
+                                               Next
                                            End Sub
 
             printDoc.Print()
@@ -2997,16 +3171,18 @@ Public Class POSMainForm_REDESIGN
                     ' Get order data
                     Dim orderData = orderDialog.GetOrderData()
                     Dim depositAmount = orderData.DepositAmount
+                    Dim collectionDay = orderData.CollectionDay
+                    Dim specialInstructions = orderData.SpecialInstructions
                     
                     ' Open payment tender for deposit
-                    Using paymentForm As New PaymentTenderForm(depositAmount, _branchID, _tillPointID, _cashierID)
+                    Using paymentForm As New PaymentTenderForm(depositAmount, _branchID, _tillPointID, _cashierID, _cashierName)
                         If paymentForm.ShowDialog() = DialogResult.OK Then
                             ' Payment successful, now create the order in database
-                            Dim orderNumber = CreateOrderInDatabase(orderData.CustomerName, orderData.CustomerSurname, orderData.CustomerPhone, orderData.ReadyDate, orderData.ReadyTime, depositAmount, total)
+                            Dim orderNumber = CreateOrderInDatabase(orderData.CustomerName, orderData.CustomerSurname, orderData.CustomerPhone, orderData.ReadyDate, orderData.ReadyTime, specialInstructions, depositAmount, total)
                             
                             If Not String.IsNullOrEmpty(orderNumber) Then
-                                ' Print order receipt
-                                PrintOrderReceipt(orderNumber, orderData.CustomerName, orderData.CustomerSurname, orderData.CustomerPhone, orderData.ReadyDate, orderData.ReadyTime, depositAmount, total)
+                                ' Print order receipt with Collection Day and Special Instructions
+                                PrintOrderReceipt(orderNumber, orderData.CustomerName, orderData.CustomerSurname, orderData.CustomerPhone, orderData.ReadyDate, orderData.ReadyTime, collectionDay, specialInstructions, depositAmount, total)
                                 
                                 ' Clear cart
                                 _cartItems.Clear()
@@ -3022,7 +3198,7 @@ Public Class POSMainForm_REDESIGN
         End Try
     End Sub
 
-    Private Function CreateOrderInDatabase(customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, depositAmount As Decimal, totalAmount As Decimal) As String
+    Private Function CreateOrderInDatabase(customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, specialInstructions As String, depositAmount As Decimal, totalAmount As Decimal) As String
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
@@ -3038,12 +3214,14 @@ Public Class POSMainForm_REDESIGN
                                 OrderNumber, BranchID, OrderType,
                                 CustomerName, CustomerSurname, CustomerPhone,
                                 OrderDate, ReadyDate, ReadyTime,
+                                SpecialInstructions,
                                 TotalAmount, DepositPaid, BalanceDue,
                                 OrderStatus, CreatedBy
                             ) VALUES (
                                 @OrderNumber, @BranchID, 'Order',
                                 @CustomerName, @CustomerSurname, @CustomerPhone,
                                 GETDATE(), @ReadyDate, @ReadyTime,
+                                @SpecialInstructions,
                                 @TotalAmount, @DepositPaid, @BalanceDue,
                                 'New', @CreatedBy
                             );
@@ -3058,6 +3236,7 @@ Public Class POSMainForm_REDESIGN
                             cmd.Parameters.AddWithValue("@CustomerPhone", customerPhone)
                             cmd.Parameters.AddWithValue("@ReadyDate", readyDate)
                             cmd.Parameters.AddWithValue("@ReadyTime", readyTime)
+                            cmd.Parameters.AddWithValue("@SpecialInstructions", If(String.IsNullOrWhiteSpace(specialInstructions), DBNull.Value, specialInstructions))
                             cmd.Parameters.AddWithValue("@TotalAmount", totalAmount)
                             cmd.Parameters.AddWithValue("@DepositPaid", depositAmount)
                             cmd.Parameters.AddWithValue("@BalanceDue", totalAmount - depositAmount)
@@ -3127,7 +3306,7 @@ Public Class POSMainForm_REDESIGN
         End Try
     End Function
 
-    Private Sub PrintOrderReceipt(orderNumber As String, customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, depositPaid As Decimal, totalAmount As Decimal)
+    Private Sub PrintOrderReceipt(orderNumber As String, customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, collectionDay As String, specialInstructions As String, depositPaid As Decimal, totalAmount As Decimal)
         Try
             ' Get branch details
             Dim branchInfo = GetBranchDetails()
@@ -3139,13 +3318,14 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine()
             receipt.AppendLine($"Order Number: {orderNumber}")
             receipt.AppendLine($"Date: {DateTime.Now:dd MMM yyyy HH:mm}")
+            receipt.AppendLine($"Till: {_tillPointID}  |  Cashier: {_cashierName}")
             receipt.AppendLine()
-            receipt.AppendLine("╔══════════════════════════════════════╗")
-            receipt.AppendLine("║   *** PICKUP LOCATION ***            ║")
-            receipt.AppendLine($"║   {branchInfo.Name.ToUpper().PadRight(34)} ║")
-            receipt.AppendLine($"║   {branchInfo.Address.PadRight(34)} ║")
-            receipt.AppendLine($"║   Tel: {branchInfo.Phone.PadRight(28)} ║")
-            receipt.AppendLine("╚══════════════════════════════════════╝")
+            receipt.AppendLine("========================================")
+            receipt.AppendLine("*** PICKUP LOCATION ***")
+            receipt.AppendLine($"{branchInfo.Name}")
+            receipt.AppendLine($"{branchInfo.Address}")
+            receipt.AppendLine($"Tel: {branchInfo.Phone}")
+            receipt.AppendLine("========================================")
             receipt.AppendLine()
             receipt.AppendLine("CUSTOMER DETAILS:")
             receipt.AppendLine($"Name: {customerName} {customerSurname}")
@@ -3154,7 +3334,15 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine("READY FOR COLLECTION:")
             receipt.AppendLine($"Date: {readyDate:dd/MM/yyyy}")
             receipt.AppendLine($"Time: {readyTime:hh\:mm}")
+            receipt.AppendLine($"*** {collectionDay.ToUpper()} ***")  ' BOLD DAY OF WEEK
             receipt.AppendLine()
+            
+            ' Special Instructions
+            If Not String.IsNullOrWhiteSpace(specialInstructions) Then
+                receipt.AppendLine("SPECIAL INSTRUCTIONS:")
+                receipt.AppendLine($"  {specialInstructions}")
+                receipt.AppendLine()
+            End If
             receipt.AppendLine("ORDER ITEMS:")
             receipt.AppendLine("----------------------------------------")
             
@@ -3203,18 +3391,21 @@ Public Class POSMainForm_REDESIGN
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                Dim cmd As New SqlCommand("SELECT BranchName, BranchAddress, BranchPhone FROM Branches WHERE BranchID = @branchID", conn)
+                Dim cmd As New SqlCommand("SELECT BranchName, Address, Phone FROM Branches WHERE BranchID = @branchID", conn)
                 cmd.Parameters.AddWithValue("@branchID", _branchID)
                 Using reader = cmd.ExecuteReader()
                     If reader.Read() Then
-                        Dim name = If(reader("BranchName") IsNot DBNull.Value, reader("BranchName").ToString(), "BRANCH")
-                        Dim address = If(reader("BranchAddress") IsNot DBNull.Value, reader("BranchAddress").ToString(), "Address not available")
-                        Dim phone = If(reader("BranchPhone") IsNot DBNull.Value, reader("BranchPhone").ToString(), "Phone not available")
+                        Dim name = If(reader("BranchName") IsNot DBNull.Value, reader("BranchName").ToString().Trim(), "BRANCH")
+                        Dim address = If(reader("Address") IsNot DBNull.Value, reader("Address").ToString().Trim(), "Address not available")
+                        Dim phone = If(reader("Phone") IsNot DBNull.Value, reader("Phone").ToString().Trim(), "Phone not available")
                         Return (name, address, phone)
+                    Else
+                        System.Diagnostics.Debug.WriteLine($"No branch found for BranchID: {_branchID}")
                     End If
                 End Using
             End Using
-        Catch
+        Catch ex As Exception
+            System.Diagnostics.Debug.WriteLine($"Error getting branch details: {ex.Message}")
         End Try
         Return ("BRANCH", "Address not available", "Phone not available")
     End Function
@@ -3386,7 +3577,7 @@ Public Class POSMainForm_REDESIGN
     Private Sub ProcessOrderCollectionPayment(balanceDue As Decimal)
         Try
             ' Open payment tender for balance
-            Using paymentForm As New PaymentTenderForm(balanceDue, _branchID, _tillPointID, _cashierID)
+            Using paymentForm As New PaymentTenderForm(balanceDue, _branchID, _tillPointID, _cashierID, _cashierName)
                 If paymentForm.ShowDialog() = DialogResult.OK Then
                     ' Payment successful - record and complete
                     Dim paymentMethod = paymentForm.PaymentMethod

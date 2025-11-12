@@ -830,7 +830,7 @@ Public Class CakeOrderForm
     Private Sub ProcessDepositPayment(orderID As Integer, orderNumber As String, branchName As String)
         Try
             ' Open payment tender form for deposit
-            Using paymentForm As New PaymentTenderForm(_depositAmount, _branchID, _tillPointID, _cashierID)
+            Using paymentForm As New PaymentTenderForm(_depositAmount, _branchID, _tillPointID, _cashierID, _cashierName)
                 If paymentForm.ShowDialog() = DialogResult.OK Then
                     ' Get payment details
                     Dim paymentMethod = paymentForm.PaymentMethod

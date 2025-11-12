@@ -920,8 +920,44 @@ Public Class POSMainForm
             MessageBox.Show("Cart is empty!", "Payment Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
             Return
         End If
-        MessageBox.Show("Payment processing - To be implemented", "Payment", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        ' After payment, show idle screen immediately
+        
+        ' Calculate totals
+        Dim subtotal As Decimal = 0
+        For Each row As DataRow In _cartItems.Rows
+            subtotal += Convert.ToDecimal(row("Total"))
+        Next
+        Dim tax As Decimal = subtotal * 0.15D
+        Dim total As Decimal = subtotal + tax
+        
+        ' Simulate payment processing
+        MessageBox.Show($"Payment: R{total:N2}", "Payment", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        
+        ' Generate invoice number
+        Dim invoiceNumber As String = "INV" & DateTime.Now.ToString("yyyyMMddHHmmss")
+        
+        ' Prepare receipt data
+        Dim orderData As New Dictionary(Of String, String)
+        orderData("InvoiceNumber") = invoiceNumber
+        orderData("CustomerName") = "WALK-IN CUSTOMER"
+        orderData("AccountNo") = ""
+        orderData("Telephone") = ""
+        orderData("CellNumber") = ""
+        orderData("OrderDetails") = $"POS Sale    {invoiceNumber}    {DateTime.Now:yyyy/MM/dd}    {_cashierName}"
+        orderData("InvoiceTotal") = total.ToString("N2")
+        orderData("DepositPaid") = total.ToString("N2")
+        orderData("BalanceOwing") = "0.00"
+        
+        ' Show receipt preview
+        ' TODO: Fix ReceiptPreviewForm reference
+        'Try
+        '    Dim preview As New ReceiptPreviewForm(_branchID, orderData)
+        '    preview.ShowDialog()
+        'Catch ex As Exception
+        '    MessageBox.Show($"Receipt preview error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        'End Try
+        
+        ' Clear cart and show idle screen
+        _cartItems.Clear()
         ShowIdleScreen()
     End Sub
 
@@ -1080,5 +1116,9 @@ Public Class POSMainForm
         _messageTimer?.Stop()
         _messageTimer?.Dispose()
         MyBase.OnFormClosing(e)
+    End Sub
+
+    Private Sub POSMainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+
     End Sub
 End Class

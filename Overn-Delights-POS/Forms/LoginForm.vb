@@ -207,9 +207,14 @@ Public Class LoginForm
                             
                             ' Verify password (plain text comparison like ERP)
                             If password = storedPassword Then
-                                ' Check role permissions for POS - only Teller role needed
-                                Dim roleName = If(reader("RoleName") IsNot DBNull.Value, reader("RoleName").ToString(), "")
-                                If roleName = "Teller" Then
+                                ' Check role permissions for POS - Teller or Super Administrator
+                                Dim roleName = If(reader("RoleName") IsNot DBNull.Value, reader("RoleName").ToString().Trim(), "")
+                                
+                                ' Debug: Show role name
+                                Debug.WriteLine($"User Role: '{roleName}'")
+                                
+                                If roleName.Equals("Teller", StringComparison.OrdinalIgnoreCase) OrElse 
+                                   roleName.Equals("Super Administrator", StringComparison.OrdinalIgnoreCase) Then
                                     ' Store user data before closing reader
                                     Dim userID = CInt(reader("UserID"))
                                     Dim userFullName = reader("Username").ToString()
@@ -224,14 +229,19 @@ Public Class LoginForm
                                         Return
                                     End If
                                     
-                                    ' Valid login
-                                    Me.CashierID = userID
-                                    Me.CashierName = userFullName
-                                    Me.BranchID = userBranchID
-                                    Me.DialogResult = DialogResult.OK
-                                    Me.Close()
+                                    ' Super Administrator: Show branch selection dialog
+                                    If roleName = "Super Administrator" Then
+
+                                    Else
+                                        ' Regular Teller: Use assigned branch
+                                        Me.CashierID = userID
+                                        Me.CashierName = userFullName
+                                        Me.BranchID = userBranchID
+                                        Me.DialogResult = DialogResult.OK
+                                        Me.Close()
+                                    End If
                                 Else
-                                    MessageBox.Show("Insufficient permissions for POS access." & vbCrLf & "Only users with 'Teller' role can access the POS system.", 
+                                    MessageBox.Show("Insufficient permissions for POS access." & vbCrLf & "Only users with 'Teller' or 'Super Administrator' role can access the POS system.", 
                                                   "Access Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                                 End If
                             Else
