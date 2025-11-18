@@ -1,0 +1,138 @@
+﻿<?xml version="1.0"?>
+<doc>
+<assembly>
+<name>
+Overn-Delights-POS
+</name>
+</assembly>
+<members>
+<member name="T:Overn_Delights_POS.My.Resources.Resources">
+<summary>
+  A strongly-typed resource class, for looking up localized strings, etc.
+</summary>
+</member>
+<member name="P:Overn_Delights_POS.My.Resources.Resources.ResourceManager">
+<summary>
+  Returns the cached ResourceManager instance used by this class.
+</summary>
+</member>
+<member name="P:Overn_Delights_POS.My.Resources.Resources.Culture">
+<summary>
+  Overrides the current thread's CurrentUICulture property for all
+  resource lookups using this strongly typed resource class.
+</summary>
+</member>
+<member name="T:Overn_Delights_POS.CategoryNavigationService">
+ <summary>
+ Service for Category -> SubCategory -> Product navigation
+ Maps to database views: v_POS_Categories, v_POS_SubCategories, v_POS_Products
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.LoadCategories">
+ <summary>
+ Load all categories with product counts
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.LoadSubCategories(System.Int32)">
+ <summary>
+ Load subcategories for a specific category
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.LoadProducts(System.Int32,System.Int32,System.Int32)">
+ <summary>
+ Load products for a specific subcategory and branch
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.SearchProducts(System.String,System.Int32)">
+ <summary>
+ Search products across all categories by name or code
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.GetProductsWithStock(System.Int32)">
+ <summary>
+ Get all products with prices and stock for a branch
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.SearchProducts(System.String,System.Int32)">
+ <summary>
+ Search products by SKU, barcode, or name
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.ProcessSale(Overn_Delights_POS.SaleTransaction)">
+ <summary>
+ Process a sale transaction
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.GetCategories">
+ <summary>
+ Get categories for filtering
+ </summary>
+</member>
+<member name="T:Overn_Delights_POS.ResponsiveHelper">
+ <summary>
+ Universal responsive scaling helper for all forms and dialogs
+ Ensures consistent touch-friendly sizing across all screen sizes
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.Initialize">
+ <summary>
+ Initialize screen scaling - call this once at app startup
+ </summary>
+</member>
+<member name="P:Overn_Delights_POS.ResponsiveHelper.ScaleFactor">
+ <summary>
+ Get current scale factor
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleSize(System.Int32)">
+ <summary>
+ Scale a size value (width or height in pixels)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleFont(System.Single)">
+ <summary>
+ Scale a font size
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleSize(System.Drawing.Size)">
+ <summary>
+ Scale a Size structure
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScalePoint(System.Drawing.Point)">
+ <summary>
+ Scale a Point structure
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.EnsureTouchTarget(System.Drawing.Size)">
+ <summary>
+ Ensure minimum touch target size (40x40 pixels)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.CreateScaledFont(System.String,System.Single,System.Drawing.FontStyle)">
+ <summary>
+ Create a scaled Font
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleForm(System.Windows.Forms.Form,System.Int32,System.Int32)">
+ <summary>
+ Scale a form/dialog to fit screen
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.CreateScaledButton(System.String,System.Int32,System.Int32,System.Int32,System.Int32,System.Drawing.Color,System.Single)">
+ <summary>
+ Create a scaled button with touch-friendly size
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleSpacing(System.Int32)">
+ <summary>
+ Get scaled spacing value
+ </summary>
+</member>
+<member name="P:Overn_Delights_POS.ResponsiveHelper.ScreenWidth">
+ <summary>
+ Get screen dimensions
+ </summary>
+</member>
+</members>
+</doc>
