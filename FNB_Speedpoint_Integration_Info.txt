@@ -1,0 +1,266 @@
+================================================================================
+FNB SPEEDPOINT DEVICE - POS INTEGRATION INFORMATION
+================================================================================
+Date: November 3, 2025
+
+================================================================================
+DEVICE INFORMATION
+================================================================================
+
+Device Options:
+1. FNB Speedpoint (with printer) - R1,999.00
+2. FNB Speedee (without printer) - R699.00
+
+Purchase Options:
+- FNB eBucks Store (online)
+- FNB Banking App (coming soon)
+- FNB Online Banking platform (coming soon)
+- FNB Branch Network
+- Partner retail stores
+
+Payment Methods:
+- Bank card
+- eBucks (FNB customers get free delivery + next-day settlement)
+
+Warranty:
+- 12-month warranty included with outright purchase
+- Standard factory warranty also applies
+- Note: Replacement device during repairs NOT included in outright purchase
+- Misuse/damage not covered
+
+Benefits:
+- Next-day settlement
+- Competitive commission rates
+- Point-to-Point Encryption (P2PE) security
+- Contactless, chip, and swipe enabled
+- QR code payment support (SpeedeeQR)
+
+================================================================================
+FNB CONTACT INFORMATION
+================================================================================
+
+Main Contact:
+FNB Business Banking - Merchant Services
+Phone: 087 575 9404
+Available: 24/7 Business Desk
+
+Alternative:
+FNB Business Banking General Line
+Website: www.fnb.co.za/business-banking/merchant-services
+
+================================================================================
+QUESTIONS TO ASK FNB MERCHANT SERVICES
+================================================================================
+
+GENERAL INTEGRATION QUESTIONS:
+-------------------------------
+1. Do you provide ECR (Electronic Cash Register) integration for Speedpoint 
+   devices to connect with custom POS software?
+
+2. What communication protocols do your Speedpoint devices support?
+   - Serial/RS-232?
+   - USB?
+   - Ethernet/TCP-IP?
+   - Bluetooth?
+
+3. Is there an SDK (Software Development Kit) or API available for integrating 
+   Speedpoint devices with custom POS systems built in VB.NET/Visual Basic?
+
+4. Do you provide technical documentation for direct device integration?
+   - Communication protocol specifications?
+   - Command reference guide?
+   - Sample code or libraries?
+
+5. What is the difference between "Integrated Switch Solution" and direct 
+   device integration?
+
+
+TECHNICAL DOCUMENTATION:
+------------------------
+6. Can you provide the ECR Integration Kit for Speedpoint devices?
+
+7. Is there a developer guide or technical manual for POS integration?
+
+8. Do you have sample code available for:
+   - VB.NET / Visual Basic?
+   - C#?
+   - Any .NET languages?
+
+9. What data format does the device use for communication?
+   - Plain text commands?
+   - XML?
+   - JSON?
+   - Proprietary format?
+
+10. Can you provide a list of supported commands for:
+    - Sale transactions?
+    - Refunds?
+    - Void transactions?
+    - Transaction status queries?
+    - Settlement reports?
+
+
+TESTING & DEVELOPMENT:
+----------------------
+11. Do you provide a test/sandbox environment for integration development?
+
+12. Can I get a test device or demo unit for development purposes?
+
+13. Is there a certification process required before going live?
+
+14. What is the typical timeline for integration and testing?
+
+15. Do you provide technical support during integration development?
+
+
+TRANSACTION FLOW:
+-----------------
+16. How does the transaction flow work between POS and Speedpoint?
+    - Does my POS send the amount to the device?
+    - Does the device return approval codes automatically?
+    - Can I retrieve transaction details programmatically?
+
+17. Can the device operate in offline mode if internet connection is lost?
+
+18. How are failed transactions handled?
+
+19. Can I query transaction history from the device?
+
+20. How do I handle refunds and voids through the integrated system?
+
+
+MERCHANT ACCOUNT REQUIREMENTS:
+-------------------------------
+21. What are the requirements to open an FNB merchant account?
+
+22. What are the commission rates for card transactions?
+
+23. What is the settlement period? (Next-day settlement mentioned)
+
+24. Are there monthly fees for the merchant account?
+
+25. What types of cards are supported?
+    - Visa?
+    - Mastercard?
+    - American Express?
+    - Contactless payments (tap)?
+    - Mobile wallets (Apple Pay, Samsung Pay, etc.)?
+
+
+SECURITY & COMPLIANCE:
+----------------------
+26. What security certifications do the devices have?
+
+27. Is PCI DSS compliance handled by the device, or do I need separate 
+    certification for my POS software?
+
+28. How is card data encrypted during transmission?
+
+29. Does the device store any sensitive card information?
+
+30. What are the security requirements for my POS system?
+
+
+SUPPORT & MAINTENANCE:
+----------------------
+31. What technical support is available after integration?
+
+32. Is there a dedicated support line for integrated POS systems?
+
+33. What happens if the device malfunctions?
+    - Repair turnaround time?
+    - Replacement device availability?
+
+34. Are software/firmware updates automatic?
+
+35. Who is responsible for device maintenance in the outright purchase model?
+
+
+ADDITIONAL FEATURES:
+--------------------
+36. Can the device print custom receipts with my business branding?
+
+37. Does the device support multiple payment methods in one transaction?
+
+38. Can I integrate loyalty programs or discount codes through the device?
+
+39. Does the device support tipping functionality?
+
+40. Can I access real-time reporting through an online portal?
+
+
+ALTERNATIVES TO CONSIDER:
+-------------------------
+41. If direct device integration is not available, what alternatives do you 
+    recommend?
+    - PayWeb API?
+    - PayPoint manual processing?
+    - Third-party integration partners?
+
+42. Do you work with any third-party payment gateway providers that offer 
+    better API integration for custom POS systems?
+
+
+================================================================================
+INTEGRATION APPROACH (BASED ON ANSWERS)
+================================================================================
+
+IF FNB SUPPORTS DIRECT DEVICE INTEGRATION:
+- Purchase Speedpoint device (R1,999.00)
+- Obtain ECR integration documentation
+- Implement serial/USB communication in VB.NET POS
+- Test in sandbox environment
+- Deploy to production
+
+IF FNB DOES NOT SUPPORT DIRECT INTEGRATION:
+- Consider alternative providers:
+  * Yoco (known for developer-friendly APIs)
+  * iKhokha (good custom integration support)
+  * PayGate/PayFast (payment gateway with FNB support)
+- Or use semi-integrated approach (manual entry)
+
+================================================================================
+TECHNICAL REQUIREMENTS FOR OUR POS SYSTEM
+================================================================================
+
+Hardware:
+- Windows PC with available USB or Serial port
+- FNB Speedpoint device
+- USB cable (usually included with device)
+
+Software:
+- VB.NET POS system (already developed)
+- Serial port communication library (System.IO.Ports)
+- FNB SDK/Driver (to be provided by FNB)
+
+Network:
+- Internet connection for device (for transaction processing)
+- Local connection between POS and device (USB/Serial)
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Call FNB Business Banking: 087 575 9404
+2. Ask to speak with Merchant Services - Integration Department
+3. Go through the questions above
+4. Request all technical documentation
+5. Confirm integration is possible before purchasing device
+6. If approved, purchase device and begin integration
+7. Schedule follow-up with FNB technical support for integration assistance
+
+================================================================================
+NOTES
+================================================================================
+
+- Device price: R1,999.00 (Speedpoint with printer)
+- Cheaper option: R699.00 (Speedee without printer)
+- 12-month warranty included
+- Next-day settlement for FNB customers
+- Point-to-Point Encryption (P2PE) for security
+- No replacement device during repairs with outright purchase model
+- Rental model still available if preferred (includes replacements)
+
+================================================================================
+END OF DOCUMENT
+================================================================================
