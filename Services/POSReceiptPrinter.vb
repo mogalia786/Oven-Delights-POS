@@ -96,12 +96,19 @@ Public Class POSReceiptPrinter
                 {"BranchID", branchID}
             }
 
-            ' Set printer
+            ' Print to slip printer (customer copy)
             _printDocument.PrinterSettings.PrinterName = printerName
-            
-            ' Print
             _currentLine = 0
             _printDocument.Print()
+            
+            ' Print to network printer (kitchen/production copy)
+            Dim networkPrinter As String = GetNetworkPrinterIP(branchID)
+            If Not String.IsNullOrEmpty(networkPrinter) Then
+                _printDocument.PrinterSettings.PrinterName = networkPrinter
+                _currentLine = 0
+                _printDocument.Print()
+            End If
+            
             Return True
 
         Catch ex As Exception
@@ -152,7 +159,21 @@ Public Class POSReceiptPrinter
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                Dim cmd As New SqlCommand("SELECT TOP 1 PrinterName FROM ContinuousPrinterConfig WHERE BranchID = @BranchID AND IsActive = 1", conn)
+                Dim cmd As New SqlCommand("SELECT TOP 1 PrinterName FROM PrinterConfig WHERE BranchID = @BranchID", conn)
+                cmd.Parameters.AddWithValue("@BranchID", branchID)
+                Dim result = cmd.ExecuteScalar()
+                Return If(result IsNot Nothing, result.ToString(), "")
+            End Using
+        Catch ex As Exception
+            Return ""
+        End Try
+    End Function
+    
+    Private Function GetNetworkPrinterIP(branchID As Integer) As String
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim cmd As New SqlCommand("SELECT TOP 1 PrinterIPAddress FROM PrinterConfig WHERE BranchID = @BranchID AND IsNetworkPrinter = 1", conn)
                 cmd.Parameters.AddWithValue("@BranchID", branchID)
                 Dim result = cmd.ExecuteScalar()
                 Return If(result IsNot Nothing, result.ToString(), "")

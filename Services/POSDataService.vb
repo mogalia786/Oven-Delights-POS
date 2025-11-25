@@ -42,7 +42,7 @@ Public Class POSDataService
                 AND (pr.BranchID IS NULL OR pr.BranchID = @BranchID)
                 AND pr.EffectiveFrom <= GETDATE()
                 AND (pr.EffectiveTo IS NULL OR pr.EffectiveTo >= GETDATE())
-            LEFT JOIN dbo.RetailStock s ON p.ProductID = s.ProductID 
+            LEFT JOIN {GetTableName("Retail_Stock")} s ON p.ProductID = s.ProductID 
                 AND s.BranchID = @BranchID
             WHERE p.IsActive = 1 
                 AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
@@ -67,25 +67,30 @@ Public Class POSDataService
     Public Function SearchProducts(searchTerm As String, branchId As Integer) As DataTable
         Dim dt As New DataTable()
         
-        Dim sql As String = $"
+        Dim sql As String = "
             SELECT TOP 50
                 p.ProductID,
-                p.SKU,
+                p.Code,
+                p.ProductCode,
                 p.Name AS ProductName,
-                p.Category,
+                p.Description,
+                p.SKU,
                 p.ProductID AS VariantID,
-                ISNULL(p.ExternalBarcode, p.SKU) AS Barcode,
-                ISNULL(pr.SellingPrice, 0) AS SellingPrice,
-                ISNULL(s.Quantity, 0) AS QtyOnHand
-            FROM {GetTableName("Retail_Product")} p
-            LEFT JOIN {GetTableName("Retail_Price")} pr ON p.ProductID = pr.ProductID 
-                AND (pr.BranchID IS NULL OR pr.BranchID = @BranchID)
-            LEFT JOIN dbo.RetailStock s ON p.ProductID = s.ProductID 
-                AND s.BranchID = @BranchID
+                ISNULL(p.Barcode, p.SKU) AS Barcode,
+                ISNULL(
+                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
+                     WHERE ProductID = p.ProductID AND BranchID = @BranchID 
+                     ORDER BY EffectiveFrom DESC),
+                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
+                     WHERE ProductID = p.ProductID AND BranchID IS NULL 
+                     ORDER BY EffectiveFrom DESC)
+                ) AS SellingPrice,
+                ISNULL(p.CurrentStock, 0) AS QtyOnHand
+            FROM Demo_Retail_Product p
             WHERE p.IsActive = 1 
-                AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
-                AND (p.ProductType IN ('External', 'Internal') OR p.ProductType IS NULL)
-                AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.ExternalBarcode, p.SKU) LIKE @Search)
+                AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+                AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
+                AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.Barcode, p.SKU) LIKE @Search OR p.Code LIKE @Search OR p.ProductCode LIKE @Search)
             ORDER BY p.Name"
 
         Using conn As New SqlConnection(_connectionString)
@@ -151,9 +156,9 @@ Public Class POSDataService
                             cmd.ExecuteNonQuery()
                         End Using
 
-                        ' Update stock (using RetailStock with ProductID)
-                        Dim sqlStock As String = "
-                            UPDATE dbo.RetailStock
+                        ' Update stock (using Demo_Retail_Stock with ProductID)
+                        Dim sqlStock As String = $"
+                            UPDATE {GetTableName("Retail_Stock")}
                             SET Quantity = Quantity - @Quantity,
                                 LastUpdated = GETDATE()
                             WHERE ProductID = @ProductID AND BranchID = @BranchID"

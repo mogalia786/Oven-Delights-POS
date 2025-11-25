@@ -511,6 +511,8 @@ Public Class POSMainForm
                 WHERE drp.IsActive = 1
                   AND ISNULL(stock.QtyOnHand, 0) > 0
                   AND ISNULL(price.SellingPrice, 0) > 0
+                  AND (drp.ProductType = 'External' OR drp.ProductType = 'Internal')
+                  AND drp.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
                   AND (drp.SKU LIKE @Search + '%' OR drp.Name LIKE '%' + @Search + '%')
                 ORDER BY drp.SKU"
 

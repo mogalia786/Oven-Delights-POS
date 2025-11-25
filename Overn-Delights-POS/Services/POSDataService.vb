@@ -84,7 +84,8 @@ Public Class POSDataService
                 AND s.BranchID = @BranchID
             WHERE p.IsActive = 1 
                 AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
-                AND (p.ProductType IN ('External', 'Internal') OR p.ProductType IS NULL)
+                AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
+                AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
                 AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.ExternalBarcode, p.SKU) LIKE @Search)
             ORDER BY p.Name"
 

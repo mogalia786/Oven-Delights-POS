@@ -140,127 +140,133 @@ Public Class PaymentTenderForm
         
         ' Ensure form is visible and properly sized
         Me.WindowState = FormWindowState.Normal
-        Me.Size = New Size(1200, 900)
+        Me.Size = New Size(1200, 700)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Use actual form dimensions
         Dim formWidth = 1200
-        Dim formHeight = 900
+        Dim formHeight = 700
         
-        ' Header with Iron Man theme - centered
+        ' Header with Iron Man theme - centered and compact
         Dim pnlHeader As New Panel With {
             .Dock = DockStyle.Top,
-            .Height = 120,
-            .BackColor = Color.Transparent
+            .Height = 140,
+            .BackColor = Color.Transparent,
+            .Padding = New Padding(20, 15, 20, 15)
         }
+        
         Dim lblTitle As New Label With {
             .Text = "💳 SELECT PAYMENT METHOD",
-            .Font = New Font("Segoe UI", 48, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 36, FontStyle.Bold),
             .ForeColor = _ironGold,
-            .AutoSize = True,
+            .AutoSize = False,
+            .Width = formWidth - 40,
+            .Height = 60,
             .TextAlign = ContentAlignment.MiddleCenter
         }
-        lblTitle.Location = New Point((formWidth - lblTitle.PreferredWidth) \ 2, 20)
+        lblTitle.Location = New Point(20, 15)
         
         Dim lblAmount As New Label With {
             .Text = $"Total: R {_totalAmount:N2}",
-            .Font = New Font("Segoe UI", 36, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 32, FontStyle.Bold),
             .ForeColor = _ironRed,
-            .AutoSize = True,
+            .AutoSize = False,
+            .Width = formWidth - 40,
+            .Height = 50,
             .TextAlign = ContentAlignment.MiddleCenter
         }
-        lblAmount.Location = New Point((formWidth - lblAmount.PreferredWidth) \ 2, 75)
+        lblAmount.Location = New Point(20, 80)
         pnlHeader.Controls.AddRange({lblTitle, lblAmount})
         
-        ' Grid layout for tender buttons (5 vertical rectangles in 1 row)
+        ' Grid layout for tender buttons (5 horizontal rectangles in 1 row)
         Dim pnlButtons As New Panel With {
-            .Location = New Point(80, 120),
-            .Size = New Size(formWidth - 160, formHeight - 120 - 120),
+            .Location = New Point(40, 150),
+            .Size = New Size(formWidth - 80, 380),
             .BackColor = Color.Transparent
         }
         
-        Dim gap As Integer = 30
+        Dim gap As Integer = 20
         Dim totalGaps = gap * 4 ' 4 gaps between 5 buttons
-        Dim availableWidth = formWidth - 160 - totalGaps ' Subtract padding and gaps
+        Dim availableWidth = formWidth - 80 - totalGaps ' Subtract padding and gaps
         Dim buttonWidth = availableWidth \ 5
-        Dim buttonHeight = formHeight - 120 - 120 - 40 ' Form - header - cancel - padding
+        Dim buttonHeight = 380 ' Fixed height for better proportions
         Dim buttonSize As New Size(buttonWidth, buttonHeight)
         
-        ' Helper function to create tall vertical tender button
+        ' Helper function to create professional tender button
         Dim CreateTenderButton = Function(text As String, icon As String, bgColor As Color, bgColorDark As Color, xPos As Integer, clickHandler As Action) As Button
             Dim btn As New Button With {
                 .Size = buttonSize,
-                .Location = New Point(xPos, 20),
+                .Location = New Point(xPos, 0),
                 .BackColor = bgColor,
                 .ForeColor = Color.White,
                 .FlatStyle = FlatStyle.Flat,
                 .Cursor = Cursors.Hand,
-                .Font = New Font("Segoe UI", 32, FontStyle.Bold)
+                .Font = New Font("Segoe UI", 24, FontStyle.Bold)
             }
-            btn.FlatAppearance.BorderSize = 3
-            btn.FlatAppearance.BorderColor = bgColor
+            btn.FlatAppearance.BorderSize = 2
+            btn.FlatAppearance.BorderColor = Color.White
             
-            ' Add icon label - centered vertically in top half
+            ' Add icon label - centered in upper portion
             Dim lblIcon As New Label With {
                 .Text = icon,
-                .Font = New Font("Segoe UI", 120),
+                .Font = New Font("Segoe UI", 80),
                 .ForeColor = Color.White,
                 .BackColor = Color.Transparent,
                 .AutoSize = True,
                 .TextAlign = ContentAlignment.MiddleCenter
             }
-            lblIcon.Location = New Point((buttonSize.Width - lblIcon.PreferredWidth) \ 2, (buttonSize.Height \ 2) - 150)
+            lblIcon.Location = New Point((buttonSize.Width - lblIcon.PreferredWidth) \ 2, 80)
             btn.Controls.Add(lblIcon)
             
             ' Add text label - centered below icon
             Dim lblText As New Label With {
                 .Text = text,
-                .Font = New Font("Segoe UI", 32, FontStyle.Bold),
+                .Font = New Font("Segoe UI", 24, FontStyle.Bold),
                 .ForeColor = Color.White,
                 .BackColor = Color.Transparent,
                 .AutoSize = True,
                 .TextAlign = ContentAlignment.MiddleCenter
             }
-            lblText.Location = New Point((buttonSize.Width - lblText.PreferredWidth) \ 2, (buttonSize.Height \ 2) + 50)
+            lblText.Location = New Point((buttonSize.Width - lblText.PreferredWidth) \ 2, 240)
             btn.Controls.Add(lblText)
             
             AddHandler btn.Click, Sub() clickHandler()
             AddHandler btn.MouseEnter, Sub()
                 btn.BackColor = bgColorDark
                 btn.FlatAppearance.BorderColor = _ironGold
-                btn.FlatAppearance.BorderSize = 5
+                btn.FlatAppearance.BorderSize = 4
             End Sub
             AddHandler btn.MouseLeave, Sub()
                 btn.BackColor = bgColor
-                btn.FlatAppearance.BorderColor = bgColor
-                btn.FlatAppearance.BorderSize = 3
+                btn.FlatAppearance.BorderColor = Color.White
+                btn.FlatAppearance.BorderSize = 2
             End Sub
             
             Return btn
         End Function
         
-        ' Create 5 tall vertical buttons in a row
-        Dim btnCash = CreateTenderButton("CASH", "💵", _tenderCash, _tenderCashDark, 80, Sub() ProcessCashPayment())
-        Dim btnCard = CreateTenderButton("CARD", "💳", _tenderCard, _tenderCardDark, 80 + (buttonSize.Width + gap), Sub() ProcessCardPayment())
-        Dim btnEFT = CreateTenderButton("EFT", "🏦", _tenderEFT, _tenderEFTDark, 80 + (buttonSize.Width + gap) * 2, Sub() ProcessEFTPayment())
-        Dim btnManual = CreateTenderButton("MANUAL", "✍️", _tenderManual, _tenderManualDark, 80 + (buttonSize.Width + gap) * 3, Sub() ProcessManualPayment())
-        Dim btnSplit = CreateTenderButton("SPLIT", "💵💳", _tenderSplit, _tenderSplitDark, 80 + (buttonSize.Width + gap) * 4, Sub() ProcessSplitPayment())
+        ' Create 5 professional buttons in a row
+        Dim btnCash = CreateTenderButton("CASH", "💵", _tenderCash, _tenderCashDark, 0, Sub() ProcessCashPayment())
+        Dim btnCard = CreateTenderButton("CARD", "💳", _tenderCard, _tenderCardDark, buttonSize.Width + gap, Sub() ProcessCardPayment())
+        Dim btnEFT = CreateTenderButton("EFT", "🏦", _tenderEFT, _tenderEFTDark, (buttonSize.Width + gap) * 2, Sub() ProcessEFTPayment())
+        Dim btnManual = CreateTenderButton("MANUAL", "✍️", _tenderManual, _tenderManualDark, (buttonSize.Width + gap) * 3, Sub() ProcessManualPayment())
+        Dim btnSplit = CreateTenderButton("SPLIT", "💵💳", _tenderSplit, _tenderSplitDark, (buttonSize.Width + gap) * 4, Sub() ProcessSplitPayment())
         
         pnlButtons.Controls.AddRange({btnCash, btnCard, btnEFT, btnManual, btnSplit})
         
-        ' Cancel button at bottom - full width
-        Dim pnlBottom As New Panel With {.Dock = DockStyle.Bottom, .Height = 100, .BackColor = Color.Transparent, .Padding = New Padding(80, 10, 80, 10)}
+        ' Cancel button at bottom - full width, more compact
+        Dim pnlBottom As New Panel With {.Dock = DockStyle.Bottom, .Height = 90, .BackColor = Color.Transparent, .Padding = New Padding(40, 10, 40, 10)}
         Dim btnCancel As New Button With {
             .Text = "✖ CANCEL",
             .Dock = DockStyle.Fill,
             .BackColor = _ironRed,
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 28, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
-        btnCancel.FlatAppearance.BorderSize = 3
-        btnCancel.FlatAppearance.BorderColor = _ironRed
+        btnCancel.FlatAppearance.BorderSize = 2
+        btnCancel.FlatAppearance.BorderColor = Color.White
         AddHandler btnCancel.Click, Sub() Me.DialogResult = DialogResult.Cancel
         AddHandler btnCancel.MouseEnter, Sub()
             btnCancel.BackColor = _ironRedDark
@@ -269,8 +275,8 @@ Public Class PaymentTenderForm
         End Sub
         AddHandler btnCancel.MouseLeave, Sub()
             btnCancel.BackColor = _ironRed
-            btnCancel.FlatAppearance.BorderColor = _ironRed
-            btnCancel.FlatAppearance.BorderSize = 3
+            btnCancel.FlatAppearance.BorderColor = Color.White
+            btnCancel.FlatAppearance.BorderSize = 2
         End Sub
         pnlBottom.Controls.Add(btnCancel)
         
@@ -894,6 +900,7 @@ Public Class PaymentTenderForm
                         invoiceNumber = GenerateInvoiceNumber(conn, transaction)
                         Dim salesID = InsertSale(conn, transaction, invoiceNumber)
                         InsertInvoiceLineItems(conn, transaction, salesID, invoiceNumber)
+                        UpdateStock(conn, transaction)
                         PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
                         
                         ' If this is an order collection, update order status to Delivered
@@ -920,6 +927,14 @@ Public Class PaymentTenderForm
             Me.DialogResult = DialogResult.Cancel
             Me.Close()
             Return
+        End Try
+        
+        ' PRINT TO DEFAULT PRINTER BEFORE SHOWING RECEIPT
+        Try
+            PrintReceiptToDefaultPrinter(invoiceNumber, saleDateTime, changeAmount)
+        Catch ex As Exception
+            ' Don't block the sale if printing fails
+            MessageBox.Show($"Print error: {ex.Message}{vbCrLf}Receipt will be displayed on screen.", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End Try
         
         ' Now show the receipt with actual invoice number
@@ -1270,6 +1285,7 @@ Public Class PaymentTenderForm
         Dim insertSql = "INSERT INTO Demo_Sales (SaleNumber, InvoiceNumber, SaleDate, CashierID, BranchID, TillPointID, Subtotal, TaxAmount, TotalAmount, PaymentMethod, CashAmount, CardAmount, SaleType, ReferenceNumber) 
                                 VALUES (@SaleNumber, @InvoiceNumber, @SaleDate, @CashierID, @BranchID, @TillPointID, @Subtotal, @TaxAmount, @TotalAmount, @PaymentMethod, @CashAmount, @CardAmount, @SaleType, @ReferenceNumber);
                                 SELECT CAST(SCOPE_IDENTITY() AS INT)"
+        Dim salesID As Integer
         Using cmd As New SqlCommand(insertSql, conn, transaction)
             cmd.Parameters.AddWithValue("@SaleNumber", invoiceNumber)
             cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
@@ -1285,9 +1301,39 @@ Public Class PaymentTenderForm
             cmd.Parameters.AddWithValue("@CardAmount", _cardAmount)
             cmd.Parameters.AddWithValue("@SaleType", saleType)
             cmd.Parameters.AddWithValue("@ReferenceNumber", referenceNumber)
-            Return CInt(cmd.ExecuteScalar())
+            salesID = CInt(cmd.ExecuteScalar())
         End Using
+        
+        ' Track in DailySales for reporting
+        InsertDailySale(conn, transaction, invoiceNumber, saleType)
+        
+        Return salesID
     End Function
+    
+    Private Sub InsertDailySale(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String, saleType As String)
+        Try
+            Dim tillNumber As String = GetTillNumber()
+            Dim itemCount As Integer = _cartItems.Rows.Count
+            
+            Dim sql = "INSERT INTO DailySales (SaleDate, BranchID, TillNumber, CashierID, CashierName, InvoiceNumber, SaleType, TotalAmount, PaymentMethod, ItemCount) 
+                      VALUES (CAST(GETDATE() AS DATE), @BranchID, @TillNumber, @CashierID, @CashierName, @InvoiceNumber, @SaleType, @TotalAmount, @PaymentMethod, @ItemCount)"
+            
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                cmd.Parameters.AddWithValue("@TillNumber", tillNumber)
+                cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                cmd.Parameters.AddWithValue("@CashierName", _cashierName)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                cmd.Parameters.AddWithValue("@SaleType", saleType)
+                cmd.Parameters.AddWithValue("@TotalAmount", _totalAmount)
+                cmd.Parameters.AddWithValue("@PaymentMethod", _paymentMethod)
+                cmd.Parameters.AddWithValue("@ItemCount", itemCount)
+                cmd.ExecuteNonQuery()
+            End Using
+        Catch ex As Exception
+            ' Don't fail the sale if daily tracking fails
+        End Try
+    End Sub
     
     Private Sub InsertInvoiceLineItems(conn As SqlConnection, transaction As SqlTransaction, salesID As Integer, invoiceNumber As String)
         ' Write to POS_InvoiceLines
@@ -1330,7 +1376,7 @@ Public Class PaymentTenderForm
     End Sub
     
     Private Sub UpdateStock(conn As SqlConnection, transaction As SqlTransaction)
-        Dim sql = "UPDATE Demo_Retail_Stock SET QtyOnHand = QtyOnHand - @Quantity WHERE StockID = @ProductID AND BranchID = @BranchID"
+        Dim sql = "UPDATE Demo_Retail_Product SET CurrentStock = CurrentStock - @Quantity WHERE ProductID = @ProductID AND BranchID = @BranchID"
         For Each row As DataRow In _cartItems.Rows
             Using cmd As New SqlCommand(sql, conn, transaction)
                 cmd.Parameters.AddWithValue("@Quantity", row("Qty"))
@@ -1496,4 +1542,128 @@ Public Class PaymentTenderForm
             Return 0D
         End Try
     End Function
+    
+    ''' <summary>
+    ''' Print receipt to default printer (Epson thermal slip printer - 80mm)
+    ''' </summary>
+    Private Sub PrintReceiptToDefaultPrinter(invoiceNumber As String, saleDateTime As DateTime, changeAmount As Decimal)
+        Dim printDoc As New Printing.PrintDocument()
+        
+        ' Configure for 80mm thermal printer (Epson)
+        printDoc.DefaultPageSettings.PaperSize = New Printing.PaperSize("80mm", 302, 3000) ' 80mm width, variable height
+        
+        ' Store receipt data for printing
+        Dim receiptData As New Dictionary(Of String, Object) From {
+            {"InvoiceNumber", invoiceNumber},
+            {"SaleDateTime", saleDateTime},
+            {"ChangeAmount", changeAmount},
+            {"BranchName", GetBranchName()},
+            {"TillNumber", GetTillNumber()},
+            {"CashierName", GetCashierName()}
+        }
+        
+        AddHandler printDoc.PrintPage, Sub(sender, e)
+            ' Fonts optimized for 80mm thermal printer
+            Dim font As New Font("Courier New", 8)
+            Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+            Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
+            Dim yPos As Single = 5
+            Dim leftMargin As Single = 5
+            Dim centerPos As Single = 140 ' Center for 80mm (302 pixels / 2)
+            
+            ' Store header - centered
+            Dim headerText = "OVEN DELIGHTS"
+            Dim headerSize = e.Graphics.MeasureString(headerText, fontLarge)
+            e.Graphics.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
+            yPos += 22
+            
+            ' Branch info
+            e.Graphics.DrawString(receiptData("BranchName").ToString(), font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Date and time
+            e.Graphics.DrawString(CType(receiptData("SaleDateTime"), DateTime).ToString("dd/MM/yyyy HH:mm:ss"), font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Invoice number
+            e.Graphics.DrawString($"Invoice: {receiptData("InvoiceNumber")}", font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Till and Cashier
+            e.Graphics.DrawString($"Till: {receiptData("TillNumber")}", font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            e.Graphics.DrawString($"Cashier: {receiptData("CashierName")}", font, Brushes.Black, leftMargin, yPos)
+            yPos += 18
+            
+            ' Separator
+            e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Column headers
+            e.Graphics.DrawString("Item              Qty  Price  Total", fontBold, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Line items
+            For Each row As DataRow In _cartItems.Rows
+                Dim itemName = row("Product").ToString()
+                If itemName.Length > 17 Then itemName = itemName.Substring(0, 14) & "..."
+                
+                Dim qty = CDec(row("Qty"))
+                Dim price = CDec(row("Price"))
+                Dim lineTotal = CDec(row("Total"))
+                
+                Dim line = String.Format("{0,-17} {1,3} {2,5:N2} {3,6:N2}", itemName, qty, price, lineTotal)
+                e.Graphics.DrawString(line, font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+            Next
+            
+            ' Separator
+            e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Totals
+            e.Graphics.DrawString($"Subtotal:                 R {_subtotal:N2}", font, Brushes.Black, leftMargin, yPos)
+            yPos += 14
+            e.Graphics.DrawString($"Tax (15%):                R {_taxAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+            yPos += 14
+            e.Graphics.DrawString($"TOTAL:                    R {_totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+            yPos += 18
+            
+            ' Payment info
+            e.Graphics.DrawString($"Payment: {_paymentMethod}", font, Brushes.Black, leftMargin, yPos)
+            yPos += 14
+            
+            If _paymentMethod = "CASH" OrElse _paymentMethod = "SPLIT" Then
+                e.Graphics.DrawString($"Cash Tendered:            R {_cashAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                If changeAmount > 0 Then
+                    e.Graphics.DrawString($"CHANGE:                   R {changeAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                End If
+            End If
+            
+            If _paymentMethod = "SPLIT" Then
+                e.Graphics.DrawString($"Card Amount:              R {_cardAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+            End If
+            
+            yPos += 10
+            e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+            yPos += 15
+            
+            ' Footer - centered
+            Dim footer1 = "Thank you for your purchase!"
+            Dim footer1Size = e.Graphics.MeasureString(footer1, font)
+            e.Graphics.DrawString(footer1, font, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
+            yPos += 14
+            
+            Dim footer2 = "Please come again!"
+            Dim footer2Size = e.Graphics.MeasureString(footer2, font)
+            e.Graphics.DrawString(footer2, font, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
+            yPos += 20
+        End Sub
+        
+        ' Print to default printer
+        printDoc.Print()
+    End Sub
 End Class

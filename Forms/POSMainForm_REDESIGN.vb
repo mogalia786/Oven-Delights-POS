@@ -51,7 +51,7 @@ Public Class POSMainForm_REDESIGN
     Private _messageTimer As Timer
     Private _currentMessageIndex As Integer = 0
     Private _lblRotatingMessage As Label
-    Private Const IDLE_TIMEOUT_MS As Integer = 60000 ' 60 seconds = 1 minute
+    Private Const IDLE_TIMEOUT_MS As Integer = 120000 ' 120 seconds = 2 minutes
 
     ' Iron Man Theme Color Palette (from pos_styles.css)
     Private _ironRed As Color = ColorTranslator.FromHtml("#C1272D")
@@ -1014,6 +1014,7 @@ Public Class POSMainForm_REDESIGN
             End If
 
             Dim productCount = 0
+            Dim cardIndex = 0
             For Each row As DataRow In filteredRows
                 Dim price = If(IsDBNull(row("SellingPrice")), 0D, CDec(row("SellingPrice")))
                 Dim stock = If(IsDBNull(row("QtyOnHand")), 0D, CDec(row("QtyOnHand")))
@@ -1027,8 +1028,26 @@ Public Class POSMainForm_REDESIGN
                     stock,
                     reorderLevel
                 )
+                
+                ' Start invisible for smooth fade-in
+                card.Visible = False
                 flpProducts.Controls.Add(card)
+                
+                ' Animate fade-in with staggered delay
+                Dim currentIndex = cardIndex
+                Dim timer As New Timer With {.Interval = 20 + (currentIndex * 15), .Tag = card}
+                AddHandler timer.Tick, Sub(s, ev)
+                    Dim t = CType(s, Timer)
+                    Dim c = CType(t.Tag, Panel)
+                    c.Visible = True
+                    AnimateFadeIn(c)
+                    t.Stop()
+                    t.Dispose()
+                End Sub
+                timer.Start()
+                
                 productCount += 1
+                cardIndex += 1
             Next
 
             If productCount = 0 Then
@@ -4241,9 +4260,10 @@ Public Class POSMainForm_REDESIGN
                     Dim productName = row("ProductName").ToString()
                     Dim price = If(IsDBNull(row("SellingPrice")), 0D, CDec(row("SellingPrice")))
                     Dim stock = If(IsDBNull(row("QtyOnHand")), 0D, CDec(row("QtyOnHand")))
-                    Dim productCode = row("ProductCode").ToString()
+                    Dim productCode = If(IsDBNull(row("ItemCode")), row("SKU").ToString(), row("ItemCode").ToString())
+                    Dim barcode = If(IsDBNull(row("Barcode")), productCode, row("Barcode").ToString())
                     
-                    Dim btn = CreateProductTileNew(productId, productCode, productName, price, stock)
+                    Dim btn = CreateProductTileNew(productId, productCode, productName, price, stock, barcode)
                     flpProducts.Controls.Add(btn)
                 Next
             End If
@@ -4323,7 +4343,7 @@ Public Class POSMainForm_REDESIGN
         Return btn
     End Function
 
-    Private Function CreateProductTileNew(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal) As Panel
+    Private Function CreateProductTileNew(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal, Optional barcode As String = "") As Panel
         ' Create panel for product tile - WHITE background with DARK BLUE text
         Dim pnl As New Panel With {
             .Size = New Size(220, 160),
@@ -4344,6 +4364,16 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.White
         }
         
+        ' Barcode (top right, small, gray)
+        Dim lblBarcode As New Label With {
+            .Text = If(String.IsNullOrEmpty(barcode), "", $"🔖 {barcode}"),
+            .Font = New Font("Segoe UI", 8, FontStyle.Regular),
+            .ForeColor = Color.Gray,
+            .Location = New Point(8, 26),
+            .AutoSize = True,
+            .BackColor = Color.White
+        }
+        
         ' Product Name (center, wrapped)
         Dim lblName As New Label With {
             .Text = productName,
@@ -4355,39 +4385,56 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.White
         }
         
-        ' Price (bottom, large, green color)
+        ' Price (bottom left, large, green color)
         Dim lblPrice As New Label With {
             .Text = $"R {price:N2}",
-            .Font = New Font("Segoe UI", 20, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
             .ForeColor = _green,
             .Location = New Point(8, 115),
-            .Size = New Size(204, 35),
-            .TextAlign = ContentAlignment.MiddleCenter,
+            .Size = New Size(120, 35),
+            .TextAlign = ContentAlignment.MiddleLeft,
+            .BackColor = Color.White
+        }
+        
+        ' Stock (bottom right, small)
+        Dim lblStock As New Label With {
+            .Text = $"Stock: {stock:N0}",
+            .Font = New Font("Segoe UI", 10, FontStyle.Regular),
+            .ForeColor = If(stock > 0, _darkBlue, Color.Red),
+            .Location = New Point(130, 120),
+            .Size = New Size(82, 30),
+            .TextAlign = ContentAlignment.MiddleRight,
             .BackColor = Color.White
         }
         
         ' Add labels to panel
-        pnl.Controls.AddRange({lblCode, lblName, lblPrice})
+        pnl.Controls.AddRange({lblCode, lblBarcode, lblName, lblPrice, lblStock})
         
         ' Click handlers
         AddHandler pnl.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         AddHandler lblCode.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
+        AddHandler lblBarcode.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         AddHandler lblName.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         AddHandler lblPrice.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
+        AddHandler lblStock.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         
         ' Hover effects (light blue on hover)
         AddHandler pnl.MouseEnter, Sub()
             Dim hoverColor = ColorTranslator.FromHtml("#E3F2FD")
             pnl.BackColor = hoverColor
             lblCode.BackColor = hoverColor
+            lblBarcode.BackColor = hoverColor
             lblName.BackColor = hoverColor
             lblPrice.BackColor = hoverColor
+            lblStock.BackColor = hoverColor
         End Sub
         AddHandler pnl.MouseLeave, Sub()
             pnl.BackColor = Color.White
             lblCode.BackColor = Color.White
+            lblBarcode.BackColor = Color.White
             lblName.BackColor = Color.White
             lblPrice.BackColor = Color.White
+            lblStock.BackColor = Color.White
         End Sub
         
         Return pnl
@@ -4543,5 +4590,31 @@ Public Class POSMainForm_REDESIGN
         
         ' Show modal
         modalForm.ShowDialog(Me)
+    End Sub
+
+    ''' <summary>
+    ''' Smooth fade-in animation for product cards
+    ''' </summary>
+    Private Sub AnimateFadeIn(control As Control)
+        ' Start with low opacity
+        Dim opacity As Double = 0.0
+        Dim fadeTimer As New Timer With {.Interval = 15}
+        
+        AddHandler fadeTimer.Tick, Sub(s, ev)
+            opacity += 0.15
+            If opacity >= 1.0 Then
+                opacity = 1.0
+                fadeTimer.Stop()
+                fadeTimer.Dispose()
+            End If
+            
+            ' Simulate opacity by adjusting control visibility
+            ' WinForms doesn't support true opacity on controls, so we use a quick fade effect
+            If opacity < 1.0 Then
+                control.BackColor = Color.FromArgb(CInt(255 * opacity), control.BackColor)
+            End If
+        End Sub
+        
+        fadeTimer.Start()
     End Sub
 End Class

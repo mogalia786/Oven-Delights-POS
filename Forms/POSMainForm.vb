@@ -497,22 +497,26 @@ Public Class POSMainForm
 
         Try
             Dim sql = "
-                SELECT DISTINCT
-                    drp.ProductID,
-                    drp.SKU AS ItemCode,
-                    drp.Name AS ProductName,
-                    ISNULL(price.SellingPrice, 0) AS SellingPrice,
-                    ISNULL(stock.QtyOnHand, 0) AS QtyOnHand,
-                    drp.Category AS CategoryName
-                FROM Demo_Retail_Product drp
-                LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
-                LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
-                LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
-                WHERE drp.IsActive = 1
-                  AND ISNULL(stock.QtyOnHand, 0) > 0
-                  AND ISNULL(price.SellingPrice, 0) > 0
-                  AND (drp.SKU LIKE @Search + '%' OR drp.Name LIKE '%' + @Search + '%')
-                ORDER BY drp.SKU"
+                SELECT 
+                    p.ProductID,
+                    p.SKU AS ItemCode,
+                    p.Name AS ProductName,
+                    ISNULL(p.Barcode, p.SKU) AS Barcode,
+                    ISNULL(
+                        (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
+                         WHERE ProductID = p.ProductID AND BranchID = @BranchID 
+                         ORDER BY EffectiveFrom DESC),
+                        (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
+                         WHERE ProductID = p.ProductID AND BranchID IS NULL 
+                         ORDER BY EffectiveFrom DESC)
+                    ) AS SellingPrice,
+                    ISNULL(p.CurrentStock, 0) AS QtyOnHand
+                FROM Demo_Retail_Product p
+                WHERE p.IsActive = 1
+                  AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+                  AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
+                  AND (p.SKU LIKE '%' + @Search + '%' OR p.Name LIKE '%' + @Search + '%' OR ISNULL(p.Barcode, '') LIKE '%' + @Search + '%')
+                ORDER BY p.Name"
 
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()

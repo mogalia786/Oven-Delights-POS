@@ -61,9 +61,8 @@ Public Class CategoryNavigationService
                 sc.DisplayOrder,
                 COUNT(DISTINCT p.ProductID) AS ProductCount
             FROM SubCategories sc
-            LEFT JOIN Demo_Retail_Product p ON p.SubCategoryID = sc.SubCategoryID 
+            INNER JOIN Demo_Retail_Product p ON p.SubCategoryID = sc.SubCategoryID 
                 AND p.IsActive = 1
-                AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
                 AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
             WHERE sc.CategoryID = @CategoryID
               AND sc.IsActive = 1
@@ -92,13 +91,14 @@ Public Class CategoryNavigationService
         Dim sql As String = "
             SELECT 
                 p.ProductID,
+                p.SKU AS ItemCode,
                 p.Code,
                 p.ProductCode,
                 p.Name AS ProductName,
                 p.Description,
                 p.SKU,
                 p.ProductID AS VariantID,
-                ISNULL(p.ExternalBarcode, p.SKU) AS Barcode,
+                ISNULL(p.Barcode, p.SKU) AS Barcode,
                 ISNULL(
                     (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
                      WHERE ProductID = p.ProductID AND BranchID = @BranchID 
@@ -115,18 +115,16 @@ Public Class CategoryNavigationService
                      WHERE ProductID = p.ProductID AND BranchID IS NULL 
                      ORDER BY EffectiveFrom DESC)
                 ) AS CostPrice,
-                ISNULL(s.Quantity, 0) AS QtyOnHand,
+                ISNULL(p.CurrentStock, 0) AS QtyOnHand,
+                0 AS ReorderLevel,
                 c.CategoryName,
                 sc.SubCategoryName
             FROM Demo_Retail_Product p
             INNER JOIN Categories c ON c.CategoryID = p.CategoryID
             INNER JOIN SubCategories sc ON sc.SubCategoryID = p.SubCategoryID
-            LEFT JOIN dbo.RetailStock s ON s.ProductID = p.ProductID 
-                AND s.BranchID = @BranchID
             WHERE p.CategoryID = @CategoryID
               AND p.SubCategoryID = @SubCategoryID
               AND p.IsActive = 1
-              AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
               AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
             ORDER BY p.Name"
 

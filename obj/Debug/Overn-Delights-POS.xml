@@ -68,6 +68,16 @@ Overn-Delights-POS
  Get categories for filtering
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.AnimateFadeIn(System.Windows.Forms.Control)">
+ <summary>
+ Smooth fade-in animation for product cards
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptToDefaultPrinter(System.String,System.DateTime,System.Decimal)">
+ <summary>
+ Print receipt to default printer (Epson thermal slip printer - 80mm)
+ </summary>
+</member>
 <member name="T:Overn_Delights_POS.ResponsiveHelper">
  <summary>
  Universal responsive scaling helper for all forms and dialogs
