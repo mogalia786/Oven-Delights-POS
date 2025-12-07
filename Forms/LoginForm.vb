@@ -228,7 +228,71 @@ Public Class LoginForm
                                         MessageBox.Show("Till Point not configured!" & vbCrLf & vbCrLf & "Please click 'Setup Till Point' button to configure this terminal.", "Till Point Required", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                                         Return
                                     End If
+                                    
+                                    ' DAY END CONTROL: Check if previous day is complete for all tills
+                                    Try
+                                        Dim dayEndService As New DayEndService()
+                                        Dim incompleteTills As New List(Of String)
+                                        
+                                        If Not dayEndService.CheckPreviousDayComplete(incompleteTills) Then
+                                            ' Previous day not complete - BLOCK ALL USERS
+                                            Dim msg = "❌ LOGIN BLOCKED ❌" & vbCrLf & vbCrLf &
+                                                     "Day-end not completed for previous day." & vbCrLf & vbCrLf &
+                                                     "Incomplete Tills:" & vbCrLf &
+                                                     String.Join(vbCrLf, incompleteTills.Select(Function(t) "  • " & t)) & vbCrLf & vbCrLf &
+                                                     "⚠️ SECURITY ALERT ⚠️" & vbCrLf &
+                                                     "All tills must complete day-end before next day." & vbCrLf & vbCrLf &
+                                                     "Administrator must reset in ERP System:" & vbCrLf &
+                                                     "Administration > Reset Day End"
+                                            
+                                            MessageBox.Show(msg, "Login Blocked - Day End Incomplete", MessageBoxButtons.OK, MessageBoxIcon.Stop)
+                                            Return
+                                        End If
+                                        
+                                        ' Check if THIS till already completed day-end for TODAY
+                                        If dayEndService.IsTodayDayEndComplete(Me.TillPointID) Then
+                                            MessageBox.Show("Day-end already completed for this till today." & vbCrLf & "You cannot log in again today.", "Day End Complete", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                            Return
+                                        End If
+                                        
+                                        ' Initialize today's day-end record
+                                        dayEndService.InitializeTodayDayEnd(Me.TillPointID, userID, userFullName)
+                                        
+                                    Catch ex As Exception
+                                        MessageBox.Show($"Day-end check failed: {ex.Message}" & vbCrLf & "Please contact support.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                                        Return
+                                    End Try
 
+                                    ' Load product cache for this branch
+                                    Try
+                                        Dim loadingMsg = "Loading products into cache..."
+                                        Me.Cursor = Cursors.WaitCursor
+                                        
+                                        ' Show loading message
+                                        Dim lblLoading As New Label With {
+                                            .Text = loadingMsg,
+                                            .ForeColor = Color.White,
+                                            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+                                            .AutoSize = True,
+                                            .Location = New Point(20, Me.Height - 60)
+                                        }
+                                        Me.Controls.Add(lblLoading)
+                                        lblLoading.BringToFront()
+                                        Application.DoEvents()
+                                        
+                                        ' Load cache
+                                        ProductCacheService.Instance.LoadCache(userBranchID)
+                                        
+                                        ' Remove loading message
+                                        Me.Controls.Remove(lblLoading)
+                                        Me.Cursor = Cursors.Default
+                                        
+                                        Debug.WriteLine($"Cache loaded: {ProductCacheService.Instance.ProductCount} products")
+                                    Catch ex As Exception
+                                        Me.Cursor = Cursors.Default
+                                        MessageBox.Show($"Warning: Failed to load product cache: {ex.Message}" & vbCrLf & "POS may run slower.", "Cache Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                    End Try
+                                    
                                     ' Super Administrator: Show branch selection dialog
                                     If roleName = "Super Administrator" Then
 

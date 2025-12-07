@@ -42,14 +42,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Overn-Delights-POS.exe" size="384448">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Overn-Delights-POS.exe" size="440256">
       <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>V24wQfODWfWIQDfYyISrB+MDS1KfR3fBZWZ8LbE4A6w=</dsig:DigestValue>
+        <dsig:DigestValue>CnWcycGgilzyKaPZ3zQsnoCT5rw/LV51KdDt9PMQhDI=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>

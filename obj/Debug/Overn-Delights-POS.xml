@@ -48,6 +48,77 @@ Overn-Delights-POS
  Search products across all categories by name or code
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.DayEndService.CheckPreviousDayComplete(System.Collections.Generic.List{System.String}@)">
+ <summary>
+ Check if all tills completed day-end for previous business day
+ Returns True if all complete, False if any incomplete
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.IsTodayDayEndComplete(System.Int32)">
+ <summary>
+ Check if current till has already completed day-end for today
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.InitializeTodayDayEnd(System.Int32,System.Int32,System.String)">
+ <summary>
+ Create or update day-end record for today
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.CompleteDayEnd(System.Int32,System.Int32,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.String)">
+ <summary>
+ Complete day-end for current till
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.SupervisorResetPreviousDay(System.Int32,System.String)">
+ <summary>
+ Supervisor override: Reset incomplete day-ends for previous day
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.GetDayEndSummary(System.Int32,System.DateTime)">
+ <summary>
+ Get day-end summary for a specific date and till
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintDualReceipt(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Print receipt to both thermal slip printer (default) and continuous network printer
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToThermalPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Print to thermal slip printer (80mm Epson)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToContinuousPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Print to continuous network printer with XY field positioning from database
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.GetContinuousPrinterConfig">
+ <summary>
+ Get continuous printer configuration from database (uses existing PrinterConfig table)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.GetFieldPositions">
+ <summary>
+ Get field positions from database (uses existing ReceiptTemplateConfig table)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.GetFieldValue(System.String,System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Get field value from receipt data
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintLineItems(System.Drawing.Graphics,System.Data.DataTable,System.Data.DataTable)">
+ <summary>
+ Print line items dynamically on continuous printer
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.MillimetersToHundredthsOfInch(System.Int32)">
+ <summary>
+ Convert millimeters to hundredths of an inch (for PrintDocument)
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.POSDataService.GetProductsWithStock(System.Int32)">
  <summary>
  Get all products with prices and stock for a branch
@@ -68,14 +139,95 @@ Overn-Delights-POS
  Get categories for filtering
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.ProductCacheService.LoadCache(System.Int32)">
+ <summary>
+ Load all products and categories into memory for the current branch
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetCategories">
+ <summary>
+ Get all categories
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetSubcategories(System.Int32)">
+ <summary>
+ Get subcategories for a category
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductsByCategory(System.Int32)">
+ <summary>
+ Get products by category
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductsBySubcategory(System.Int32)">
+ <summary>
+ Get products by subcategory
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductByBarcode(System.String)">
+ <summary>
+ Search products by barcode
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductBySKU(System.String)">
+ <summary>
+ Search products by SKU
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.SearchProducts(System.String)">
+ <summary>
+ Search products by name
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetAllProducts">
+ <summary>
+ Get all products
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.UpdateProductStock(System.Int32,System.Decimal)">
+ <summary>
+ Update stock quantity for a product (after sale)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.RefreshCache">
+ <summary>
+ Refresh cache from database
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.ClearCache">
+ <summary>
+ Clear cache
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.AnimateFadeIn(System.Windows.Forms.Control)">
  <summary>
  Smooth fade-in animation for product cards
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptToDefaultPrinter(System.String,System.DateTime,System.Decimal)">
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintOrderReceiptToThermalPrinter(System.String,System.Decimal,System.Decimal)">
  <summary>
- Print receipt to default printer (Epson thermal slip printer - 80mm)
+ Print order receipt to thermal printer (80mm)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintCollectionReceiptToThermalPrinter(System.String,System.Decimal,System.Decimal,System.Decimal,System.String,System.Decimal,System.Decimal,System.Decimal)">
+ <summary>
+ Print order collection receipt to thermal printer (80mm)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PerformDayEnd(System.Decimal)">
+ <summary>
+ Public method to perform day-end from cash-up dialog
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptDual(System.String,System.DateTime,System.Decimal)">
+ <summary>
+ Print receipt to thermal slip printer ONLY (default printer)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptToDefaultPrinter_OLD(System.String,System.DateTime,System.Decimal)">
+ <summary>
+ LEGACY: Print receipt to default printer (Epson thermal slip printer - 80mm)
+ This method is kept for reference but replaced by PrintReceiptDual
  </summary>
 </member>
 <member name="T:Overn_Delights_POS.ResponsiveHelper">

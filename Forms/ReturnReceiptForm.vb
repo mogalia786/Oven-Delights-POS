@@ -284,7 +284,87 @@ Public Class ReturnReceiptForm
     End Sub
 
     Private Sub PrintReceipt()
-        ' TODO: Implement actual printing
-        MessageBox.Show("Print functionality will be implemented here.", "Print", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        Try
+            Dim printDoc As New Printing.PrintDocument()
+            printDoc.DefaultPageSettings.PaperSize = New Printing.PaperSize("80mm", 315, 1200) ' 80mm thermal
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim font As New Font("Courier New", 8)
+                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim leftMargin As Integer = 10
+                Dim yPos As Integer = 10
+                
+                ' Header
+                e.Graphics.DrawString("OVEN DELIGHTS", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("RETURN RECEIPT", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Return details
+                e.Graphics.DrawString($"Return #: {_returnNumber}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Date: {_returnDate:dd/MM/yyyy HH:mm}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Original Invoice: {_invoiceNumber}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Customer: {_customerName}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Return reason
+                e.Graphics.DrawString("REASON FOR RETURN:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString(_reason, font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Items
+                e.Graphics.DrawString("RETURNED ITEMS:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                For Each item In _returnItems
+                    e.Graphics.DrawString($"{item.QtyReturned:0.00} x {item.ProductName}", font, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString($"    @ R{item.UnitPrice:N2} = R{item.LineTotal:N2}", font, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                Next
+                
+                yPos += 5
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Totals
+                Dim subtotal = Math.Round(_totalReturn / 1.15D, 2)
+                Dim vat = Math.Round(_totalReturn - subtotal, 2)
+                
+                e.Graphics.DrawString($"Subtotal (excl VAT):  R {subtotal:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"VAT (15%):            R {vat:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"TOTAL REFUND:         R {_totalReturn:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 20
+                
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("Thank you", font, Brushes.Black, leftMargin, yPos)
+            End Sub
+            
+            ' Show preview first
+            Dim previewDialog As New PrintPreviewDialog()
+            previewDialog.Document = printDoc
+            previewDialog.Width = 400
+            previewDialog.Height = 600
+            
+            If previewDialog.ShowDialog() = DialogResult.OK Then
+                ' Print to default printer
+                printDoc.Print()
+            End If
+            
+        Catch ex As Exception
+            MessageBox.Show($"Print error: {ex.Message}", "Print Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 End Class

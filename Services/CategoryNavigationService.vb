@@ -28,10 +28,10 @@ Public Class CategoryNavigationService
             FROM Categories c
             LEFT JOIN Demo_Retail_Product p ON p.CategoryID = c.CategoryID 
                 AND p.IsActive = 1
-                AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+                AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'pest control')
                 AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
             WHERE c.IsActive = 1
-              AND LOWER(c.CategoryName) NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+              AND LOWER(c.CategoryName) NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'pest control')
             GROUP BY c.CategoryID, c.CategoryName, c.DisplayOrder
             HAVING COUNT(DISTINCT p.ProductID) > 0
             ORDER BY c.DisplayOrder, c.CategoryName"
@@ -175,7 +175,7 @@ Public Class CategoryNavigationService
             LEFT JOIN dbo.RetailStock s ON s.ProductID = p.ProductID 
                 AND s.BranchID = @BranchID
             WHERE p.IsActive = 1
-              AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+              AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'pest control')
               AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
               AND (
                   p.Name LIKE @Search 

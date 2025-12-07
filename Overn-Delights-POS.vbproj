@@ -15,7 +15,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <IsWebBootstrapper>false</IsWebBootstrapper>
-    <PublishUrl>G:\Oven Delights POS Install\</PublishUrl>
+    <PublishUrl>C:\Users\mogal\Desktop\ODPOS_V2\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
@@ -125,8 +125,11 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Services\CategoryNavigationService.vb" />
+    <Compile Include="Services\DayEndService.vb" />
+    <Compile Include="Services\DualReceiptPrinter.vb" />
     <Compile Include="Services\POSDataService.vb" />
     <Compile Include="Services\POSReceiptPrinter.vb" />
+    <Compile Include="Services\ProductCacheService.vb" />
     <Compile Include="Forms\LoginForm.vb">
       <SubType>Form</SubType>
     </Compile>

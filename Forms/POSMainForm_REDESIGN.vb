@@ -51,7 +51,7 @@ Public Class POSMainForm_REDESIGN
     Private _messageTimer As Timer
     Private _currentMessageIndex As Integer = 0
     Private _lblRotatingMessage As Label
-    Private Const IDLE_TIMEOUT_MS As Integer = 120000 ' 120 seconds = 2 minutes
+    Private Const IDLE_TIMEOUT_MS As Integer = 300000 ' 300 seconds = 5 minutes
 
     ' Iron Man Theme Color Palette (from pos_styles.css)
     Private _ironRed As Color = ColorTranslator.FromHtml("#C1272D")
@@ -289,7 +289,8 @@ Public Class POSMainForm_REDESIGN
         }
         btnScan.FlatAppearance.BorderSize = 0
         AddHandler btnScan.Click, Sub()
-                                      txtBarcodeScanner.Focus()
+                                      txtSearch.Clear()
+                                      txtSearch.Focus()
                                   End Sub
 
         ' Search textbox (accepts keyboard and touch input) - smaller width
@@ -317,6 +318,15 @@ Public Class POSMainForm_REDESIGN
             If txtSearch.Text.Contains("Search by code") Then
                 txtSearch.Text = ""
                 txtSearch.ForeColor = Color.Black
+            ElseIf e.KeyCode = Keys.Enter Then
+                ' When Enter is pressed, try to add the product by code/barcode
+                e.SuppressKeyPress = True
+                Dim searchCode = txtSearch.Text.Trim()
+                If Not String.IsNullOrWhiteSpace(searchCode) Then
+                    ProcessBarcodeScan(searchCode)
+                    txtSearch.Clear()
+                    txtSearch.Focus()
+                End If
             End If
         End Sub
         
@@ -747,6 +757,10 @@ Public Class POSMainForm_REDESIGN
         ' Run refresh in background
         Dim refreshTask = Task.Run(Sub()
                                        Try
+                                           ' CRITICAL: Refresh the ProductCacheService from database first!
+                                           ProductCacheService.Instance.RefreshCache()
+                                           
+                                           ' Then reload local cache from refreshed service
                                            LoadAllProductsToCache()
 
                                            ' Update UI on main thread
@@ -788,6 +802,9 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub LoadAllProductsToCache()
         Try
+            ' Use ProductCacheService for instant performance - NO DATABASE QUERY!
+            Dim cachedProducts = ProductCacheService.Instance.GetAllProducts()
+            
             _allProducts.Clear()
             _allProducts.Columns.Clear()
             _allProducts.Columns.Add("ProductID", GetType(Integer))
@@ -798,31 +815,22 @@ Public Class POSMainForm_REDESIGN
             _allProducts.Columns.Add("ReorderLevel", GetType(Decimal))
             _allProducts.Columns.Add("Category", GetType(String))
 
-            ' Query the view - simple and fast!
-            Dim sql = "
-                SELECT 
-                    ProductID,
-                    ItemCode,
-                    ProductName,
-                    ISNULL(SellingPrice, 0) AS SellingPrice,
-                    ISNULL(QtyOnHand, 0) AS QtyOnHand,
-                    ISNULL(ReorderLevel, 5) AS ReorderLevel,
-                    Category
-                FROM vw_POS_Products
-                WHERE BranchID = @BranchID
-                ORDER BY ProductName"
-
-            Using conn As New SqlConnection(_connectionString)
-                conn.Open()
-                Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
-                    Using adapter As New SqlDataAdapter(cmd)
-                        adapter.Fill(_allProducts)
-                    End Using
-                End Using
-            End Using
+            ' Copy from cache to local DataTable (instant - no DB query!)
+            For Each product In cachedProducts
+                _allProducts.Rows.Add(
+                    product.ProductID,
+                    product.SKU,
+                    product.Name,
+                    product.SellingPrice,
+                    product.QtyOnHand,
+                    5, ' Default reorder level
+                    product.CategoryName
+                )
+            Next
+            
+            Debug.WriteLine($"[CACHE] Loaded {_allProducts.Rows.Count} products from cache (instant)")
         Catch ex As Exception
-            MessageBox.Show($"Error caching products: {ex.Message}{vbCrLf}{vbCrLf}Make sure to run the SQL script: Create_POS_ProductView.sql", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Error loading products from cache: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
@@ -864,18 +872,84 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub RepositionControls()
-        ' Reposition cashier label to stay centered
-        For Each ctrl As Control In pnlTop.Controls
-            If TypeOf ctrl Is Label AndAlso ctrl.Text.Contains("Till:") Then
-                ctrl.Left = (pnlTop.Width \ 2) - (ctrl.Width \ 2)
-                Exit For
+        If Me.WindowState = FormWindowState.Minimized Then Return
+        
+        Try
+            Me.SuspendLayout()
+            
+            ' Responsive font sizes based on screen width
+            Dim baseFontSize As Single = If(Me.Width > 1600, 12, If(Me.Width > 1200, 10, 9))
+            
+            ' Adjust category panel width (responsive)
+            If pnlCategories IsNot Nothing AndAlso pnlCategories.Parent IsNot Nothing Then
+                Dim categoryWidth = CInt(Me.Width * 0.15) ' 15% of screen width
+                pnlCategories.Parent.Width = Math.Max(180, Math.Min(250, categoryWidth))
             End If
-        Next
+            
+            ' Adjust cart panel width (responsive)
+            If pnlCart IsNot Nothing Then
+                Dim cartWidth = CInt(Me.Width * 0.25) ' 25% of screen width
+                pnlCart.Width = Math.Max(300, Math.Min(450, cartWidth))
+            End If
+            
+            ' Adjust product button sizes
+            If flpProducts IsNot Nothing Then
+                Dim buttonWidth = CInt((flpProducts.Width - 40) / 4) ' 4 columns with spacing
+                buttonWidth = Math.Max(120, Math.Min(200, buttonWidth))
+                
+                For Each ctrl As Control In flpProducts.Controls
+                    If TypeOf ctrl Is Button Then
+                        ctrl.Size = New Size(buttonWidth, CInt(buttonWidth * 0.8))
+                        ctrl.Font = New Font("Segoe UI", baseFontSize, FontStyle.Bold)
+                    End If
+                Next
+            End If
+            
+            ' Adjust category button sizes
+            If pnlCategories IsNot Nothing Then
+                For Each ctrl As Control In pnlCategories.Controls
+                    If TypeOf ctrl Is Button Then
+                        ctrl.Width = pnlCategories.Width - 20
+                        ctrl.Font = New Font("Segoe UI", baseFontSize, FontStyle.Bold)
+                    End If
+                Next
+            End If
+            
+            ' Adjust DataGridView font
+            If dgvCart IsNot Nothing Then
+                dgvCart.Font = New Font("Segoe UI", baseFontSize)
+                dgvCart.RowTemplate.Height = CInt(baseFontSize * 3)
+            End If
+            
+            ' Adjust total labels
+            If lblTotal IsNot Nothing Then
+                lblTotal.Font = New Font("Segoe UI", baseFontSize + 6, FontStyle.Bold)
+            End If
+            If lblSubtotal IsNot Nothing Then
+                lblSubtotal.Font = New Font("Segoe UI", baseFontSize + 2)
+            End If
+            If lblTax IsNot Nothing Then
+                lblTax.Font = New Font("Segoe UI", baseFontSize + 2)
+            End If
+            
+            ' Reposition cashier label to stay centered
+            For Each ctrl As Control In pnlTop.Controls
+                If TypeOf ctrl Is Label AndAlso ctrl.Text.Contains("Till:") Then
+                    ctrl.Left = (pnlTop.Width \ 2) - (ctrl.Width \ 2)
+                    Exit For
+                End If
+            Next
 
-        ' Reposition idle screen if visible
-        If _idleOverlay IsNot Nothing AndAlso _idleOverlay.Visible Then
-            ShowIdleScreen()
-        End If
+            ' Reposition idle screen if visible
+            If _idleOverlay IsNot Nothing AndAlso _idleOverlay.Visible Then
+                ShowIdleScreen()
+            End If
+            
+        Catch ex As Exception
+            ' Ignore layout errors during resize
+        Finally
+            Me.ResumeLayout()
+        End Try
     End Sub
 
     Private Sub ShowWelcomeMessage()
@@ -1161,6 +1235,11 @@ Public Class POSMainForm_REDESIGN
         End If
 
         CalculateTotals()
+        
+        ' Auto-focus barcode scanner for next scan
+        If txtBarcodeScanner IsNot Nothing Then
+            txtBarcodeScanner.Focus()
+        End If
     End Sub
 
     Private Sub CalculateTotals()
@@ -1184,7 +1263,7 @@ Public Class POSMainForm_REDESIGN
         pnlShortcuts.Controls.Clear()
 
         Dim shortcuts As New List(Of Tuple(Of String, String, Action)) From {
-            Tuple.Create("F1", "👁️ View", CType(Sub() ViewOrders(), Action)),
+            Tuple.Create("F1", "💰 Sale", CType(Sub() SaleMode(), Action)),
             Tuple.Create("F2", "⏸️ Hold", CType(Sub() HoldSale(), Action)),
             Tuple.Create("F3", "🔍 Code", CType(Sub() ShowNumpad(), Action)),
             Tuple.Create("F4", "⌨️ Name", CType(Sub() ToggleKeyboard(), Action)),
@@ -1246,12 +1325,11 @@ Public Class POSMainForm_REDESIGN
                     ISNULL(price.SellingPrice, 0) AS SellingPrice,
                     ISNULL(stock.QtyOnHand, 0) AS QtyOnHand
                 FROM Demo_Retail_Product drp
-                LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
+                LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID AND drv.Barcode = @ItemCode
                 LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
                 LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
-                WHERE drp.SKU = @ItemCode
+                WHERE (drp.SKU = @ItemCode OR drv.Barcode = @ItemCode)
                   AND drp.IsActive = 1
-                  AND ISNULL(stock.QtyOnHand, 0) > 0
                   AND ISNULL(price.SellingPrice, 0) > 0"
 
             Using conn As New SqlConnection(_connectionString)
@@ -1291,7 +1369,7 @@ Public Class POSMainForm_REDESIGN
 
     Protected Overrides Function ProcessCmdKey(ByRef msg As Message, keyData As Keys) As Boolean
         Select Case keyData
-            Case Keys.F1 : ViewOrders() : Return True
+            Case Keys.F1 : SaleMode() : Return True
             Case Keys.F2 : HoldSale() : Return True
             Case Keys.F3 : ShowNumpad() : Return True
             Case Keys.F4 : ToggleKeyboard() : Return True
@@ -2370,6 +2448,11 @@ Public Class POSMainForm_REDESIGN
         If _currentView = "categories" AndAlso flpProducts.Controls.Count = 0 Then
             ShowCategories()
         End If
+        
+        ' Auto-focus barcode scanner for immediate scanning
+        If txtBarcodeScanner IsNot Nothing Then
+            txtBarcodeScanner.Focus()
+        End If
     End Sub
 
     Private Sub RotateMessage(sender As Object, e As EventArgs)
@@ -2999,21 +3082,23 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.White
         }
 
-        ' Print button
-        Dim btnPrint As New Button With {
-            .Text = "🖨️ PRINT",
+        ' Day End button (replaces Print)
+        Dim btnDayEnd As New Button With {
+            .Text = "📊 DAY END",
             .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .Size = New Size(150, 50),
             .Location = New Point(30, 15),
-            .BackColor = _lightBlue,
+            .BackColor = _orange,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
-        btnPrint.FlatAppearance.BorderSize = 0
-        AddHandler btnPrint.Click, Sub()
-                                       PrintCashUpReport(transactions, subtotal, tax, total, totalCash, totalCard, totalReturns, totalReturnAmount, firstSale, lastSale, cashFloat, totalOrderCash, totalOrderCard, totalCashInTill)
-                                   End Sub
+        btnDayEnd.FlatAppearance.BorderSize = 0
+        AddHandler btnDayEnd.Click, Sub()
+                                        cashUpForm.Close()
+                                        ' Call the day end function directly
+                                        PerformDayEnd(totalCashInTill)
+                                    End Sub
 
         ' Close button
         Dim btnClose As New Button With {
@@ -3047,7 +3132,7 @@ Public Class POSMainForm_REDESIGN
                                         Me.Close()
                                     End Sub
 
-        pnlButtons.Controls.AddRange({btnPrint, btnClose, btnLogout})
+        pnlButtons.Controls.AddRange({btnDayEnd, btnClose, btnLogout})
 
         cashUpForm.Controls.AddRange({pnlHeader, pnlContent, pnlButtons})
         cashUpForm.ShowDialog()
@@ -3403,13 +3488,14 @@ Public Class POSMainForm_REDESIGN
                 Return
             End If
 
-            ' Calculate totals
-            Dim subtotal As Decimal = 0
+            ' Calculate totals - cart prices are VAT-INCLUSIVE
+            Dim total As Decimal = 0
             For Each row As DataRow In _cartItems.Rows
-                subtotal += CDec(row("Total"))
+                total += CDec(row("Total"))
             Next
-            Dim tax = subtotal * 0.15D
-            Dim total = subtotal + tax
+            ' Extract VAT from inclusive price
+            Dim subtotal = Math.Round(total / 1.15D, 2)
+            Dim tax = Math.Round(total - subtotal, 2)
 
             ' Show order dialog to get customer details (with new fields: Colour, Picture, Amend Total)
             Using orderDialog As New CustomerOrderDialog(_branchID, _tillPointID, _cashierID, _cashierName, _cartItems, subtotal, tax, total)
@@ -3471,6 +3557,30 @@ Public Class POSMainForm_REDESIGN
         If lblBreadcrumb IsNot Nothing Then
             lblBreadcrumb.ForeColor = _ironGold
         End If
+    End Sub
+    
+    ' F1 - Sale Mode (exit order mode and show categories)
+    Private Sub SaleMode()
+        Try
+            ' Exit order mode if active
+            If _isOrderMode Then
+                ExitOrderMode()
+            End If
+            
+            ' Clear cart
+            _cartItems.Clear()
+            CalculateTotals()
+            
+            ' Show categories screen
+            ShowCategories()
+            
+            ' Update breadcrumb
+            lblBreadcrumb.Text = "Categories"
+            lblBreadcrumb.ForeColor = _ironGold
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error entering sale mode: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
     Private Function CreateOrderInDatabase(customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, specialInstructions As String, depositAmount As Decimal, totalAmount As Decimal, Optional colour As String = "", Optional picture As String = "") As String
@@ -3660,20 +3770,30 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine("       COLLECTING YOUR ORDER")
             receipt.AppendLine("========================================")
             
-            ' Print to continuous printer
-            Try
-                Dim printer As New POSReceiptPrinter()
-                Dim success = printer.PrintOrderReceipt(orderNumber, customerName, customerSurname, customerPhone, readyDate, readyTime, collectionDay, specialInstructions, depositPaid, totalAmount, colour, picture, _cartItems, _branchID, _cashierName)
-                If success Then
-                    MessageBox.Show("Order receipt printed successfully!", "Print", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                Else
-                    ' Fallback: Show receipt in message box if printer fails
-                    MessageBox.Show(receipt.ToString(), "Order Receipt", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                End If
-            Catch ex As Exception
-                ' Fallback: Show receipt in message box if printer error
-                MessageBox.Show(receipt.ToString(), "Order Receipt", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            End Try
+            ' STEP 1: Show preview first
+            Dim previewResult = MessageBox.Show(receipt.ToString() & vbCrLf & vbCrLf & "Print this receipt?", 
+                                                "Order Receipt Preview", 
+                                                MessageBoxButtons.YesNo, 
+                                                MessageBoxIcon.Question)
+            
+            If previewResult = DialogResult.Yes Then
+                ' STEP 2: Print to thermal slip printer (default POS printer) first
+                Try
+                    PrintOrderReceiptToThermalPrinter(orderNumber, depositPaid, totalAmount)
+                Catch ex As Exception
+                    MessageBox.Show($"Thermal printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                End Try
+                
+                ' STEP 3: Then print to continuous feeder printer
+                Try
+                    Dim printer As New POSReceiptPrinter()
+                    printer.PrintOrderReceipt(orderNumber, customerName, customerSurname, customerPhone, readyDate, readyTime, collectionDay, specialInstructions, depositPaid, totalAmount, colour, picture, _cartItems, _branchID, _cashierName)
+                Catch ex As Exception
+                    MessageBox.Show($"Continuous printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                End Try
+                
+                MessageBox.Show("Order receipt printed!", "Print Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
             
         Catch ex As Exception
             MessageBox.Show($"Error printing receipt: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -3982,6 +4102,36 @@ Public Class POSMainForm_REDESIGN
     
     Private Sub PrintCollectionReceipt(orderNumber As String, balancePaid As Decimal, depositPaid As Decimal, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, changeAmount As Decimal)
         Try
+            ' PRINT TO THERMAL PRINTER FIRST
+            PrintCollectionReceiptToThermalPrinter(orderNumber, balancePaid, depositPaid, totalAmount, paymentMethod, cashAmount, cardAmount, changeAmount)
+            
+            ' THEN PRINT TO CONTINUOUS PRINTER (with XY coordinates from database)
+            Try
+                MessageBox.Show("DEBUG: About to print to continuous printer", "DEBUG", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Dim dualPrinter As New DualReceiptPrinter(_connectionString, _branchID)
+                Dim receiptData As New Dictionary(Of String, Object) From {
+                    {"InvoiceNumber", orderNumber},
+                    {"SaleDateTime", DateTime.Now},
+                    {"ChangeAmount", changeAmount},
+                    {"BranchName", GetBranchName()},
+                    {"TillNumber", "N/A"},
+                    {"CashierName", _cashierName},
+                    {"PaymentMethod", paymentMethod},
+                    {"CashAmount", cashAmount},
+                    {"CardAmount", cardAmount},
+                    {"Subtotal", totalAmount - (totalAmount * 0.15D)},
+                    {"TaxAmount", totalAmount * 0.15D},
+                    {"TotalAmount", totalAmount}
+                }
+                ' Create empty cart items for collection (no items to show)
+                Dim emptyCart As New DataTable()
+                dualPrinter.PrintToContinuousPrinter(receiptData, emptyCart)
+                MessageBox.Show("DEBUG: Continuous printer call completed", "DEBUG", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Catch ex As Exception
+                ' Don't block collection if continuous printer fails
+                MessageBox.Show($"Continuous printer error: {ex.Message}", "Continuous Printer Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            End Try
+
             ' Create modern receipt display
             Dim receiptForm As New Form With {
                 .Text = "Collection Receipt",
@@ -3990,14 +4140,14 @@ Public Class POSMainForm_REDESIGN
                 .FormBorderStyle = FormBorderStyle.None,
                 .BackColor = Color.White
             }
-            
+
             ' Header
             Dim pnlHeader As New Panel With {
                 .Dock = DockStyle.Top,
                 .Height = 80,
                 .BackColor = _green
             }
-            
+
             Dim lblHeader As New Label With {
                 .Text = "✓ ORDER COLLECTED",
                 .Font = New Font("Segoe UI", 24, FontStyle.Bold),
@@ -4006,7 +4156,7 @@ Public Class POSMainForm_REDESIGN
                 .Dock = DockStyle.Fill
             }
             pnlHeader.Controls.Add(lblHeader)
-            
+
             ' Receipt content
             Dim txtReceipt As New TextBox With {
                 .Multiline = True,
@@ -4017,7 +4167,7 @@ Public Class POSMainForm_REDESIGN
                 .Size = New Size(440, 450),
                 .BackColor = Color.White
             }
-            
+
             Dim receipt As New System.Text.StringBuilder()
             receipt.AppendLine("================================")
             receipt.AppendLine("   ORDER COLLECTION RECEIPT")
@@ -4047,9 +4197,9 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine("================================")
             receipt.AppendLine("      Thank you!")
             receipt.AppendLine("================================")
-            
+
             txtReceipt.Text = receipt.ToString()
-            
+
             ' Close button
             Dim btnClose As New Button With {
                 .Text = "✓ CLOSE",
@@ -4063,15 +4213,15 @@ Public Class POSMainForm_REDESIGN
             }
             btnClose.FlatAppearance.BorderSize = 0
             AddHandler btnClose.Click, Sub() receiptForm.Close()
-            
+
             receiptForm.Controls.AddRange({pnlHeader, txtReceipt, btnClose})
             receiptForm.ShowDialog()
-            
+
         Catch ex As Exception
             ShowError("Error", $"Error printing receipt: {ex.Message}")
         End Try
     End Sub
-    
+
     Private Sub ShowError(title As String, message As String)
         ' Create modern error dialog
         Dim errorForm As New Form With {
@@ -4081,14 +4231,14 @@ Public Class POSMainForm_REDESIGN
             .FormBorderStyle = FormBorderStyle.None,
             .BackColor = Color.White
         }
-        
+
         ' Header
         Dim pnlHeader As New Panel With {
             .Dock = DockStyle.Top,
             .Height = 80,
             .BackColor = _red
         }
-        
+
         Dim lblHeader As New Label With {
             .Text = "⚠ " & title.ToUpper(),
             .Font = New Font("Segoe UI", 24, FontStyle.Bold),
@@ -4097,7 +4247,7 @@ Public Class POSMainForm_REDESIGN
             .Dock = DockStyle.Fill
         }
         pnlHeader.Controls.Add(lblHeader)
-        
+
         ' Message
         Dim lblMessage As New Label With {
             .Text = message,
@@ -4107,7 +4257,7 @@ Public Class POSMainForm_REDESIGN
             .Size = New Size(440, 120),
             .TextAlign = ContentAlignment.MiddleCenter
         }
-        
+
         ' OK button
         Dim btnOK As New Button With {
             .Text = "OK",
@@ -4121,7 +4271,7 @@ Public Class POSMainForm_REDESIGN
         }
         btnOK.FlatAppearance.BorderSize = 0
         AddHandler btnOK.Click, Sub() errorForm.Close()
-        
+
         errorForm.Controls.AddRange({pnlHeader, lblMessage, btnOK})
         errorForm.ShowDialog()
     End Sub
@@ -4129,60 +4279,47 @@ Public Class POSMainForm_REDESIGN
     ' ============================================
     ' CATEGORY NAVIGATION METHODS - Iron Man Theme
     ' ============================================
-    
+
     Private Sub Breadcrumb_Click(sender As Object, e As EventArgs)
         ' Clear any search text
         If txtSearch IsNot Nothing Then txtSearch.Text = ""
         If txtSearchByName IsNot Nothing Then txtSearchByName.Text = ""
-        
+
         ' Parse breadcrumb to determine navigation
         Dim breadcrumbText = lblBreadcrumb.Text
-        
-        If breadcrumbText = "Categories" Then
-            ' Already at categories, reload to clear any search
-            ShowCategories()
-            Return
-        ElseIf breadcrumbText.Contains(" > ") Then
-            Dim parts = breadcrumbText.Split(New String() {" > "}, StringSplitOptions.None)
-            
-            If parts.Length = 2 Then
-                ' Currently at subcategories, go back to categories
-                ShowCategories()
-            ElseIf parts.Length = 3 Then
-                ' Currently at products, go back to subcategories
-                ShowSubCategories(_currentCategoryId, _currentCategoryName)
-            End If
-        End If
+
+        ' Always go to categories when clicking breadcrumb
+        ShowCategories()
     End Sub
 
     Private Sub ShowCategories()
         ' Clear search boxes when returning to categories
         If txtSearch IsNot Nothing Then txtSearch.Text = ""
         If txtSearchByName IsNot Nothing Then txtSearchByName.Text = ""
-        
+
         ' Reset idle timer on user activity
         ResetIdleTimer()
-        
+
         _currentView = "categories"
         _currentCategoryId = 0
         _currentCategoryName = ""
         lblBreadcrumb.Text = "Categories"
-        
+
         flpProducts.SuspendLayout()
         flpProducts.Controls.Clear()
-        
+
         Try
             Dim categories = _categoryService.LoadCategories()
-            
+
             For Each row As DataRow In categories.Rows
                 Dim categoryId = CInt(row("CategoryID"))
                 Dim categoryName = row("CategoryName").ToString()
                 Dim productCount = CInt(row("ProductCount"))
-                
+
                 Dim btn = CreateCategoryTile(categoryId, categoryName, productCount)
                 flpProducts.Controls.Add(btn)
             Next
-            
+
         Catch ex As Exception
             MessageBox.Show($"Error loading categories: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
@@ -4192,18 +4329,18 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub ShowSubCategories(categoryId As Integer, categoryName As String)
         ResetIdleTimer() ' Reset on user activity
-        
+
         _currentView = "subcategories"
         _currentCategoryId = categoryId
         _currentCategoryName = categoryName
         lblBreadcrumb.Text = $"Categories > {categoryName}"
-        
+
         flpProducts.SuspendLayout()
         flpProducts.Controls.Clear()
-        
+
         Try
             Dim subcategories = _categoryService.LoadSubCategories(categoryId)
-            
+
             If subcategories.Rows.Count = 0 Then
                 Dim lblNoSubs As New Label With {
                     .Text = $"No subcategories found for {categoryName}",
@@ -4218,12 +4355,12 @@ Public Class POSMainForm_REDESIGN
                     Dim subCategoryId = CInt(row("SubCategoryID"))
                     Dim subCategoryName = row("SubCategoryName").ToString()
                     Dim productCount = CInt(row("ProductCount"))
-                    
+
                     Dim btn = CreateSubCategoryTile(subCategoryId, subCategoryName, productCount)
                     flpProducts.Controls.Add(btn)
                 Next
             End If
-            
+
         Catch ex As Exception
             MessageBox.Show($"Error loading subcategories: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
@@ -4233,18 +4370,18 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub ShowProductsForSubCategory(subCategoryId As Integer, subCategoryName As String)
         ResetIdleTimer() ' Reset on user activity
-        
+
         _currentView = "products"
         _currentSubCategoryId = subCategoryId
         _currentSubCategoryName = subCategoryName
         lblBreadcrumb.Text = $"Categories > {_currentCategoryName} > {subCategoryName}"
-        
+
         flpProducts.SuspendLayout()
         flpProducts.Controls.Clear()
-        
+
         Try
             Dim products = _categoryService.LoadProducts(_currentCategoryId, subCategoryId, _branchID)
-            
+
             If products.Rows.Count = 0 Then
                 Dim lblNoProducts As New Label With {
                     .Text = $"No products found in {subCategoryName}",
@@ -4262,12 +4399,12 @@ Public Class POSMainForm_REDESIGN
                     Dim stock = If(IsDBNull(row("QtyOnHand")), 0D, CDec(row("QtyOnHand")))
                     Dim productCode = If(IsDBNull(row("ItemCode")), row("SKU").ToString(), row("ItemCode").ToString())
                     Dim barcode = If(IsDBNull(row("Barcode")), productCode, row("Barcode").ToString())
-                    
+
                     Dim btn = CreateProductTileNew(productId, productCode, productName, price, stock, barcode)
                     flpProducts.Controls.Add(btn)
                 Next
             End If
-            
+
         Catch ex As Exception
             MessageBox.Show($"Error loading products: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
@@ -4291,21 +4428,21 @@ Public Class POSMainForm_REDESIGN
         }
         btn.FlatAppearance.BorderSize = 2
         btn.FlatAppearance.BorderColor = Color.FromArgb(255, 215, 0)
-        
+
         AddHandler btn.Click, Sub() ShowSubCategories(categoryId, categoryName)
         AddHandler btn.MouseEnter, Sub()
-            btn.BackColor = Color.FromArgb(220, 193, 39, 45)
-            btn.FlatAppearance.BorderSize = 3
-            btn.FlatAppearance.BorderColor = _ironGold
-            btn.Font = New Font("Segoe UI", 17, FontStyle.Bold)
-        End Sub
+                                       btn.BackColor = Color.FromArgb(220, 193, 39, 45)
+                                       btn.FlatAppearance.BorderSize = 3
+                                       btn.FlatAppearance.BorderColor = _ironGold
+                                       btn.Font = New Font("Segoe UI", 17, FontStyle.Bold)
+                                   End Sub
         AddHandler btn.MouseLeave, Sub()
-            btn.BackColor = Color.FromArgb(180, 193, 39, 45)
-            btn.FlatAppearance.BorderSize = 2
-            btn.FlatAppearance.BorderColor = Color.FromArgb(255, 215, 0)
-            btn.Font = New Font("Segoe UI", 16, FontStyle.Bold)
-        End Sub
-        
+                                       btn.BackColor = Color.FromArgb(180, 193, 39, 45)
+                                       btn.FlatAppearance.BorderSize = 2
+                                       btn.FlatAppearance.BorderColor = Color.FromArgb(255, 215, 0)
+                                       btn.Font = New Font("Segoe UI", 16, FontStyle.Bold)
+                                   End Sub
+
         Return btn
     End Function
 
@@ -4325,21 +4462,21 @@ Public Class POSMainForm_REDESIGN
         }
         btn.FlatAppearance.BorderSize = 2
         btn.FlatAppearance.BorderColor = Color.FromArgb(100, 200, 255)
-        
+
         AddHandler btn.Click, Sub() ShowProductsForSubCategory(subCategoryId, subCategoryName)
         AddHandler btn.MouseEnter, Sub()
-            btn.BackColor = Color.FromArgb(220, 0, 150, 255)
-            btn.FlatAppearance.BorderSize = 3
-            btn.FlatAppearance.BorderColor = Color.FromArgb(0, 212, 255)
-            btn.Font = New Font("Segoe UI", 17, FontStyle.Bold)
-        End Sub
+                                       btn.BackColor = Color.FromArgb(220, 0, 150, 255)
+                                       btn.FlatAppearance.BorderSize = 3
+                                       btn.FlatAppearance.BorderColor = Color.FromArgb(0, 212, 255)
+                                       btn.Font = New Font("Segoe UI", 17, FontStyle.Bold)
+                                   End Sub
         AddHandler btn.MouseLeave, Sub()
-            btn.BackColor = Color.FromArgb(180, 0, 150, 255)
-            btn.FlatAppearance.BorderSize = 2
-            btn.FlatAppearance.BorderColor = Color.FromArgb(100, 200, 255)
-            btn.Font = New Font("Segoe UI", 16, FontStyle.Bold)
-        End Sub
-        
+                                       btn.BackColor = Color.FromArgb(180, 0, 150, 255)
+                                       btn.FlatAppearance.BorderSize = 2
+                                       btn.FlatAppearance.BorderColor = Color.FromArgb(100, 200, 255)
+                                       btn.Font = New Font("Segoe UI", 16, FontStyle.Bold)
+                                   End Sub
+
         Return btn
     End Function
 
@@ -4353,7 +4490,7 @@ Public Class POSMainForm_REDESIGN
             .Margin = New Padding(10),
             .BorderStyle = BorderStyle.FixedSingle
         }
-        
+
         ' Product Code (top left, small)
         Dim lblCode As New Label With {
             .Text = productCode,
@@ -4363,7 +4500,7 @@ Public Class POSMainForm_REDESIGN
             .AutoSize = True,
             .BackColor = Color.White
         }
-        
+
         ' Barcode (top right, small, gray)
         Dim lblBarcode As New Label With {
             .Text = If(String.IsNullOrEmpty(barcode), "", $"🔖 {barcode}"),
@@ -4373,7 +4510,7 @@ Public Class POSMainForm_REDESIGN
             .AutoSize = True,
             .BackColor = Color.White
         }
-        
+
         ' Product Name (center, wrapped)
         Dim lblName As New Label With {
             .Text = productName,
@@ -4384,7 +4521,7 @@ Public Class POSMainForm_REDESIGN
             .TextAlign = ContentAlignment.TopCenter,
             .BackColor = Color.White
         }
-        
+
         ' Price (bottom left, large, green color)
         Dim lblPrice As New Label With {
             .Text = $"R {price:N2}",
@@ -4395,7 +4532,7 @@ Public Class POSMainForm_REDESIGN
             .TextAlign = ContentAlignment.MiddleLeft,
             .BackColor = Color.White
         }
-        
+
         ' Stock (bottom right, small)
         Dim lblStock As New Label With {
             .Text = $"Stock: {stock:N0}",
@@ -4406,10 +4543,10 @@ Public Class POSMainForm_REDESIGN
             .TextAlign = ContentAlignment.MiddleRight,
             .BackColor = Color.White
         }
-        
+
         ' Add labels to panel
         pnl.Controls.AddRange({lblCode, lblBarcode, lblName, lblPrice, lblStock})
-        
+
         ' Click handlers
         AddHandler pnl.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         AddHandler lblCode.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
@@ -4417,26 +4554,26 @@ Public Class POSMainForm_REDESIGN
         AddHandler lblName.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         AddHandler lblPrice.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
         AddHandler lblStock.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
-        
+
         ' Hover effects (light blue on hover)
         AddHandler pnl.MouseEnter, Sub()
-            Dim hoverColor = ColorTranslator.FromHtml("#E3F2FD")
-            pnl.BackColor = hoverColor
-            lblCode.BackColor = hoverColor
-            lblBarcode.BackColor = hoverColor
-            lblName.BackColor = hoverColor
-            lblPrice.BackColor = hoverColor
-            lblStock.BackColor = hoverColor
-        End Sub
+                                       Dim hoverColor = ColorTranslator.FromHtml("#E3F2FD")
+                                       pnl.BackColor = hoverColor
+                                       lblCode.BackColor = hoverColor
+                                       lblBarcode.BackColor = hoverColor
+                                       lblName.BackColor = hoverColor
+                                       lblPrice.BackColor = hoverColor
+                                       lblStock.BackColor = hoverColor
+                                   End Sub
         AddHandler pnl.MouseLeave, Sub()
-            pnl.BackColor = Color.White
-            lblCode.BackColor = Color.White
-            lblBarcode.BackColor = Color.White
-            lblName.BackColor = Color.White
-            lblPrice.BackColor = Color.White
-            lblStock.BackColor = Color.White
-        End Sub
-        
+                                       pnl.BackColor = Color.White
+                                       lblCode.BackColor = Color.White
+                                       lblBarcode.BackColor = Color.White
+                                       lblName.BackColor = Color.White
+                                       lblPrice.BackColor = Color.White
+                                       lblStock.BackColor = Color.White
+                                   End Sub
+
         Return pnl
     End Function
 
@@ -4445,7 +4582,7 @@ Public Class POSMainForm_REDESIGN
         ' Show quantity modal (like mockup)
         ShowQuantityModal(productId, productCode, productName, price, stock)
     End Sub
-    
+
     Private Sub ShowQuantityModal(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal)
         ' Create modal form
         Dim modalForm As New Form With {
@@ -4456,7 +4593,7 @@ Public Class POSMainForm_REDESIGN
             .BackColor = _ironDark,
             .ShowInTaskbar = False
         }
-        
+
         ' Title
         Dim lblTitle As New Label With {
             .Text = productName,
@@ -4467,7 +4604,7 @@ Public Class POSMainForm_REDESIGN
             .TextAlign = ContentAlignment.MiddleCenter,
             .BackColor = _ironDark
         }
-        
+
         ' Quantity input
         Dim txtQuantity As New TextBox With {
             .Text = "1",
@@ -4480,18 +4617,18 @@ Public Class POSMainForm_REDESIGN
             .BorderStyle = BorderStyle.FixedSingle,
             .ReadOnly = True
         }
-        
+
         ' Numpad panel
         Dim pnlNumpad As New Panel With {
             .Location = New Point(100, 190),
             .Size = New Size(400, 220),
             .BackColor = _ironDark
         }
-        
+
         ' Create numpad buttons (3x4 grid)
         Dim numbers() As String = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"}
         Dim btnIndex = 0
-        
+
         For row = 0 To 3
             For col = 0 To 2
                 Dim btnText = numbers(btnIndex)
@@ -4508,47 +4645,47 @@ Public Class POSMainForm_REDESIGN
                 }
                 btn.FlatAppearance.BorderSize = 1
                 btn.FlatAppearance.BorderColor = _ironGlow
-                
+
                 AddHandler btn.Click, Sub(s, ev)
-                    Dim clickedBtn = CType(s, Button)
-                    Dim value = clickedBtn.Tag.ToString()
-                    
-                    If value = "C" Then
-                        txtQuantity.Text = "1"
-                    ElseIf value = "⌫" Then
-                        If txtQuantity.Text.Length > 1 Then
-                            txtQuantity.Text = txtQuantity.Text.Substring(0, txtQuantity.Text.Length - 1)
-                        Else
-                            txtQuantity.Text = "1"
-                        End If
-                    Else
-                        If txtQuantity.Text = "1" Then
-                            txtQuantity.Text = value
-                        Else
-                            txtQuantity.Text &= value
-                        End If
-                    End If
-                End Sub
-                
+                                          Dim clickedBtn = CType(s, Button)
+                                          Dim value = clickedBtn.Tag.ToString()
+
+                                          If value = "C" Then
+                                              txtQuantity.Text = "1"
+                                          ElseIf value = "⌫" Then
+                                              If txtQuantity.Text.Length > 1 Then
+                                                  txtQuantity.Text = txtQuantity.Text.Substring(0, txtQuantity.Text.Length - 1)
+                                              Else
+                                                  txtQuantity.Text = "1"
+                                              End If
+                                          Else
+                                              If txtQuantity.Text = "1" Then
+                                                  txtQuantity.Text = value
+                                              Else
+                                                  txtQuantity.Text &= value
+                                              End If
+                                          End If
+                                      End Sub
+
                 AddHandler btn.MouseEnter, Sub(s, ev)
-                    Dim hoverBtn = CType(s, Button)
-                    hoverBtn.BackColor = _ironBlueDark
-                    hoverBtn.FlatAppearance.BorderSize = 2
-                    hoverBtn.FlatAppearance.BorderColor = _ironGold
-                End Sub
-                
+                                               Dim hoverBtn = CType(s, Button)
+                                               hoverBtn.BackColor = _ironBlueDark
+                                               hoverBtn.FlatAppearance.BorderSize = 2
+                                               hoverBtn.FlatAppearance.BorderColor = _ironGold
+                                           End Sub
+
                 AddHandler btn.MouseLeave, Sub(s, ev)
-                    Dim hoverBtn = CType(s, Button)
-                    hoverBtn.BackColor = _ironBlue
-                    hoverBtn.FlatAppearance.BorderSize = 1
-                    hoverBtn.FlatAppearance.BorderColor = _ironGlow
-                End Sub
-                
+                                               Dim hoverBtn = CType(s, Button)
+                                               hoverBtn.BackColor = _ironBlue
+                                               hoverBtn.FlatAppearance.BorderSize = 1
+                                               hoverBtn.FlatAppearance.BorderColor = _ironGlow
+                                           End Sub
+
                 pnlNumpad.Controls.Add(btn)
                 btnIndex += 1
             Next
         Next
-        
+
         ' Action buttons
         Dim btnNo As New Button With {
             .Text = "NO",
@@ -4562,7 +4699,7 @@ Public Class POSMainForm_REDESIGN
         }
         btnNo.FlatAppearance.BorderSize = 0
         AddHandler btnNo.Click, Sub() modalForm.Close()
-        
+
         Dim btnYes As New Button With {
             .Text = "YES",
             .Size = New Size(250, 60),
@@ -4575,19 +4712,19 @@ Public Class POSMainForm_REDESIGN
         }
         btnYes.FlatAppearance.BorderSize = 0
         AddHandler btnYes.Click, Sub()
-            Dim quantity = CInt(txtQuantity.Text)
-            If quantity > 0 Then
-                ' Add to cart multiple times for the quantity (disregard stock)
-                For i = 1 To quantity
-                    AddProductToCart(productId, productCode, productName, price)
-                Next
-                modalForm.Close()
-            End If
-        End Sub
-        
+                                     Dim quantity = CInt(txtQuantity.Text)
+                                     If quantity > 0 Then
+                                         ' Add to cart multiple times for the quantity (disregard stock)
+                                         For i = 1 To quantity
+                                             AddProductToCart(productId, productCode, productName, price)
+                                         Next
+                                         modalForm.Close()
+                                     End If
+                                 End Sub
+
         ' Add all controls
         modalForm.Controls.AddRange({lblTitle, txtQuantity, pnlNumpad, btnNo, btnYes})
-        
+
         ' Show modal
         modalForm.ShowDialog(Me)
     End Sub
@@ -4599,22 +4736,418 @@ Public Class POSMainForm_REDESIGN
         ' Start with low opacity
         Dim opacity As Double = 0.0
         Dim fadeTimer As New Timer With {.Interval = 15}
-        
+
         AddHandler fadeTimer.Tick, Sub(s, ev)
-            opacity += 0.15
-            If opacity >= 1.0 Then
-                opacity = 1.0
-                fadeTimer.Stop()
-                fadeTimer.Dispose()
+                                       opacity += 0.15
+                                       If opacity >= 1.0 Then
+                                           opacity = 1.0
+                                           fadeTimer.Stop()
+                                           fadeTimer.Dispose()
+                                       End If
+
+                                       ' Simulate opacity by adjusting control visibility
+                                       ' WinForms doesn't support true opacity on controls, so we use a quick fade effect
+                                       If opacity < 1.0 Then
+                                           control.BackColor = Color.FromArgb(CInt(255 * opacity), control.BackColor)
+                                       End If
+                                   End Sub
+
+        fadeTimer.Start()
+    End Sub
+
+    ''' <summary>
+    ''' Print order receipt to thermal printer (80mm)
+    ''' </summary>
+    Private Sub PrintOrderReceiptToThermalPrinter(orderNumber As String, depositPaid As Decimal, totalAmount As Decimal)
+        Try
+            Dim printDoc As New Printing.PrintDocument()
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                                               Dim font As New Font("Courier New", 8)
+                                               Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                                               Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
+                                               Dim yPos As Single = 5
+                                               Dim leftMargin As Single = 5
+                                               
+                                               ' Store header - centered
+                                               Dim headerText = "OVEN DELIGHTS"
+                                               Dim headerSize = e.Graphics.MeasureString(headerText, fontLarge)
+                                               e.Graphics.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
+                                               yPos += 22
+                                               
+                                               ' Branch info
+                                               e.Graphics.DrawString(GetBranchName(), font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Date and time
+                                               e.Graphics.DrawString(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Order number
+                                               e.Graphics.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Cashier
+                                               e.Graphics.DrawString($"Cashier: {_cashierName}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 18
+                                               
+                                               ' Separator
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Order header - centered
+                                               Dim orderText = "ORDER RECEIPT"
+                                               Dim orderSize = e.Graphics.MeasureString(orderText, fontBold)
+                                               e.Graphics.DrawString(orderText, fontBold, Brushes.Black, (302 - orderSize.Width) / 2, yPos)
+                                               yPos += 18
+                                               
+                                               ' Separator
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Items
+                                               For Each row As DataRow In _cartItems.Rows
+                                                   Dim product = row("Product").ToString()
+                                                   Dim qty = CDec(row("Qty"))
+                                                   Dim price = CDec(row("Price"))
+                                                   Dim total = CDec(row("Total"))
+                                                   
+                                                   e.Graphics.DrawString($"{qty:0.00} x {product}", font, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                                   e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", font, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                               Next
+                                               
+                                               yPos += 5
+                                               e.Graphics.DrawString("--------------------------------------", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Calculate VAT breakdown (prices are VAT-inclusive)
+                                               Dim subtotalExclVAT = Math.Round(totalAmount / 1.15D, 2)
+                                               Dim vatAmount = Math.Round(totalAmount - subtotalExclVAT, 2)
+                                               
+                                               e.Graphics.DrawString($"Subtotal (excl VAT):  R {subtotalExclVAT:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"VAT (15%):            R {vatAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Total Amount:         R {totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Deposit Paid:         R {depositPaid:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Balance Due:          R {(totalAmount - depositPaid):N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 18
+                                               
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
+                                               ' Footer - centered
+                                               Dim footer1 = "PLEASE BRING THIS RECEIPT"
+                                               Dim footer1Size = e.Graphics.MeasureString(footer1, font)
+                                               e.Graphics.DrawString(footer1, font, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
+                                               yPos += 14
+                                               
+                                               Dim footer2 = "WHEN COLLECTING YOUR ORDER"
+                                               Dim footer2Size = e.Graphics.MeasureString(footer2, font)
+                                               e.Graphics.DrawString(footer2, font, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
+                                           End Sub
+            
+            ' Print to default thermal printer
+            printDoc.Print()
+            
+        Catch ex As Exception
+            Throw New Exception($"Thermal printer error: {ex.Message}")
+        End Try
+    End Sub
+    
+    ''' <summary>
+    ''' Print order collection receipt to thermal printer (80mm)
+    ''' </summary>
+    Private Sub PrintCollectionReceiptToThermalPrinter(orderNumber As String, balancePaid As Decimal, depositPaid As Decimal, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, changeAmount As Decimal)
+        Try
+            Dim printDoc As New Printing.PrintDocument()
+
+            ' Use default printer settings - don't force custom paper size
+
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                                               Dim font As New Font("Courier New", 8)
+                                               Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                                               Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
+                                               Dim yPos As Single = 5
+                                               Dim leftMargin As Single = 5
+
+                                               ' Store header - centered
+                                               Dim headerText = "OVEN DELIGHTS"
+                                               Dim headerSize = e.Graphics.MeasureString(headerText, fontLarge)
+                                               e.Graphics.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
+                                               yPos += 22
+
+                                               ' Branch info
+                                               e.Graphics.DrawString(GetBranchName(), font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Date and time
+                                               e.Graphics.DrawString(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Order number
+                                               e.Graphics.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Cashier
+                                               e.Graphics.DrawString($"Cashier: {_cashierName}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 18
+
+                                               ' Separator
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Collection header - centered
+                                               Dim collectionText = "ORDER COLLECTION"
+                                               Dim collectionSize = e.Graphics.MeasureString(collectionText, fontBold)
+                                               e.Graphics.DrawString(collectionText, fontBold, Brushes.Black, (302 - collectionSize.Width) / 2, yPos)
+                                               yPos += 18
+
+                                               ' Separator
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Payment summary
+                                               e.Graphics.DrawString("PAYMENT SUMMARY:", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               e.Graphics.DrawString($"Order Total:              R {totalAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Deposit Paid:             R {depositPaid:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Balance Paid:             R {balancePaid:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 18
+
+                                               ' Payment method
+                                               e.Graphics.DrawString($"Payment: {paymentMethod}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+
+                                               If cashAmount > 0 Then
+                                                   e.Graphics.DrawString($"Cash:                     R {cashAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                               End If
+
+                                               If cardAmount > 0 Then
+                                                   e.Graphics.DrawString($"Card:                     R {cardAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                               End If
+
+                                               If changeAmount > 0 Then
+                                                   e.Graphics.DrawString($"CHANGE:                   R {changeAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                               End If
+
+                                               yPos += 10
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Footer - centered
+                                               Dim footer1 = "Thank you for your order!"
+                                               Dim footer1Size = e.Graphics.MeasureString(footer1, font)
+                                               e.Graphics.DrawString(footer1, font, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
+                                               yPos += 14
+
+                                               Dim footer2 = "Please come again!"
+                                               Dim footer2Size = e.Graphics.MeasureString(footer2, font)
+                                               e.Graphics.DrawString(footer2, font, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
+                                           End Sub
+
+            ' Print to default thermal printer
+            printDoc.Print()
+
+        Catch ex As Exception
+            ' Don't block the collection if printing fails
+            Console.WriteLine($"Thermal printer error: {ex.Message}")
+        End Try
+    End Sub
+    
+    ''' <summary>
+    ''' Public method to perform day-end from cash-up dialog
+    ''' </summary>
+    Public Sub PerformDayEnd(actualCash As Decimal)
+        Try
+            ' Confirm day-end action
+            Dim confirmMsg = "Are you sure you want to complete Day End?" & vbCrLf & vbCrLf &
+                           "This will:" & vbCrLf &
+                           "1. Print day-end report to slip printer" & vbCrLf &
+                           "2. Lock this till for today" & vbCrLf &
+                           "3. You will NOT be able to log in again today" & vbCrLf & vbCrLf &
+                           "Continue?"
+            
+            Dim result = MessageBox.Show(confirmMsg, "Day End Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+            
+            If result <> DialogResult.Yes Then
+                Return
             End If
             
-            ' Simulate opacity by adjusting control visibility
-            ' WinForms doesn't support true opacity on controls, so we use a quick fade effect
-            If opacity < 1.0 Then
-                control.BackColor = Color.FromArgb(CInt(255 * opacity), control.BackColor)
-            End If
-        End Sub
-        
-        fadeTimer.Start()
+            Me.Cursor = Cursors.WaitCursor
+            
+            ' Get today's sales totals from database
+            Dim totalSales As Decimal = 0
+            Dim totalCash As Decimal = 0
+            Dim totalCard As Decimal = 0
+            Dim totalAccount As Decimal = 0
+            Dim totalRefunds As Decimal = 0
+            
+            Using conn As New SqlClient.SqlConnection(_connectionString)
+                conn.Open()
+                
+                ' Get today's sales summary for this till
+                Dim sql = "
+                    SELECT 
+                        ISNULL(SUM(TotalAmount), 0) AS TotalSales,
+                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Cash' THEN TotalAmount ELSE 0 END), 0) AS TotalCash,
+                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Card' THEN TotalAmount ELSE 0 END), 0) AS TotalCard,
+                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Account' THEN TotalAmount ELSE 0 END), 0) AS TotalAccount,
+                        ISNULL(SUM(CASE WHEN TotalAmount < 0 THEN ABS(TotalAmount) ELSE 0 END), 0) AS TotalRefunds
+                    FROM Sales
+                    WHERE CAST(SaleDate AS DATE) = @Today
+                    AND TillPointID = @TillPointID"
+                
+                Using cmd As New SqlClient.SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@Today", DateTime.Today)
+                    cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
+                    
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            totalSales = CDec(reader("TotalSales"))
+                            totalCash = CDec(reader("TotalCash"))
+                            totalCard = CDec(reader("TotalCard"))
+                            totalAccount = CDec(reader("TotalAccount"))
+                            totalRefunds = CDec(reader("TotalRefunds"))
+                        End If
+                    End Using
+                End Using
+            End Using
+            
+            Dim cashVariance = actualCash - totalCash
+            
+            ' Optional notes
+            Dim notes = InputBox("Enter any notes (optional):", "Day End Notes", "")
+            
+            ' Print day-end report to slip printer
+            PrintDayEndReport(totalSales, totalCash, totalCard, totalAccount, totalRefunds, totalCash, actualCash, cashVariance, notes)
+            
+            ' Complete day-end in database
+            Dim dayEndService As New DayEndService()
+            dayEndService.CompleteDayEnd(
+                _tillPointID,
+                _cashierID,
+                totalSales,
+                totalCash,
+                totalCard,
+                totalAccount,
+                totalRefunds,
+                totalCash,
+                actualCash,
+                notes
+            )
+            
+            Me.Cursor = Cursors.Default
+            
+            ' Show completion message
+            Dim completionMsg = "Day End Completed Successfully!" & vbCrLf & vbCrLf &
+                              $"Total Sales: R {totalSales:N2}" & vbCrLf &
+                              $"Cash Variance: R {cashVariance:N2}" & vbCrLf & vbCrLf &
+                              "Report printed to slip printer." & vbCrLf & vbCrLf &
+                              "You cannot log in again today." & vbCrLf &
+                              "Application will now close."
+            
+            MessageBox.Show(completionMsg, "Day End Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            
+            ' Close application
+            Application.Exit()
+            
+        Catch ex As Exception
+            Me.Cursor = Cursors.Default
+            MessageBox.Show($"Day end failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub PrintDayEndReport(totalSales As Decimal, totalCash As Decimal, totalCard As Decimal,
+                                  totalAccount As Decimal, totalRefunds As Decimal,
+                                  expectedCash As Decimal, actualCash As Decimal, cashVariance As Decimal,
+                                  notes As String)
+        Try
+            ' Create print document for 80mm slip printer
+            Dim printDoc As New Printing.PrintDocument()
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim font As New Font("Courier New", 9, FontStyle.Regular)
+                Dim fontBold As New Font("Courier New", 9, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 12, FontStyle.Bold)
+                Dim y As Single = 10
+                Dim lineHeight As Single = font.GetHeight(e.Graphics)
+                
+                ' Helper function to print centered text
+                Dim PrintCentered = Sub(text As String, fnt As Font)
+                    Dim textWidth = e.Graphics.MeasureString(text, fnt).Width
+                    Dim x = (e.PageBounds.Width - textWidth) / 2
+                    e.Graphics.DrawString(text, fnt, Brushes.Black, x, y)
+                    y += fnt.GetHeight(e.Graphics)
+                End Sub
+                
+                ' Helper function to print left-aligned text
+                Dim PrintLeft = Sub(text As String, fnt As Font)
+                    e.Graphics.DrawString(text, fnt, Brushes.Black, 10, y)
+                    y += fnt.GetHeight(e.Graphics)
+                End Sub
+                
+                ' Header
+                PrintCentered("================================", font)
+                PrintCentered("OVEN DELIGHTS", fontLarge)
+                PrintCentered("DAY END REPORT", fontBold)
+                PrintCentered("================================", font)
+                y += lineHeight
+                
+                ' Till info
+                PrintLeft($"Date: {DateTime.Today:dd/MM/yyyy}", font)
+                PrintLeft($"Till: Till {_tillPointID}", font)
+                PrintLeft($"Cashier: {_cashierName}", font)
+                PrintLeft($"Time: {DateTime.Now:HH:mm:ss}", font)
+                y += lineHeight
+                
+                ' Sales summary
+                PrintCentered("SALES SUMMARY", fontBold)
+                PrintLeft("--------------------------------", font)
+                PrintLeft($"Total Sales:      R {totalSales,10:N2}", font)
+                PrintLeft($"Cash Sales:       R {totalCash,10:N2}", font)
+                PrintLeft($"Card Sales:       R {totalCard,10:N2}", font)
+                PrintLeft($"Account Sales:    R {totalAccount,10:N2}", font)
+                PrintLeft($"Refunds:          R {totalRefunds,10:N2}", font)
+                y += lineHeight
+                
+                ' Cash drawer
+                PrintCentered("CASH DRAWER", fontBold)
+                PrintLeft("--------------------------------", font)
+                PrintLeft($"Expected Cash:    R {expectedCash,10:N2}", font)
+                PrintLeft($"Actual Cash:      R {actualCash,10:N2}", font)
+                PrintLeft($"Variance:         R {cashVariance,10:N2}", fontBold)
+                y += lineHeight
+                
+                ' Notes
+                If Not String.IsNullOrWhiteSpace(notes) Then
+                    PrintLeft("Notes:", fontBold)
+                    PrintLeft(notes, font)
+                    y += lineHeight
+                End If
+                
+                ' Footer
+                PrintCentered("================================", font)
+                PrintCentered("Day End Complete", font)
+                PrintCentered($"{DateTime.Now:dd/MM/yyyy HH:mm:ss}", font)
+                PrintCentered("================================", font)
+            End Sub
+            
+            ' Print
+            printDoc.Print()
+            
+        Catch ex As Exception
+            Throw New Exception("Failed to print day-end report: " & ex.Message, ex)
+        End Try
     End Sub
 End Class

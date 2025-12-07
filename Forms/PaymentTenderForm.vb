@@ -929,9 +929,9 @@ Public Class PaymentTenderForm
             Return
         End Try
         
-        ' PRINT TO DEFAULT PRINTER BEFORE SHOWING RECEIPT
+        ' PRINT TO BOTH THERMAL AND CONTINUOUS PRINTERS BEFORE SHOWING RECEIPT
         Try
-            PrintReceiptToDefaultPrinter(invoiceNumber, saleDateTime, changeAmount)
+            PrintReceiptDual(invoiceNumber, saleDateTime, changeAmount)
         Catch ex As Exception
             ' Don't block the sale if printing fails
             MessageBox.Show($"Print error: {ex.Message}{vbCrLf}Receipt will be displayed on screen.", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
@@ -1544,9 +1544,39 @@ Public Class PaymentTenderForm
     End Function
     
     ''' <summary>
-    ''' Print receipt to default printer (Epson thermal slip printer - 80mm)
+    ''' Print receipt to thermal slip printer ONLY (default printer)
     ''' </summary>
-    Private Sub PrintReceiptToDefaultPrinter(invoiceNumber As String, saleDateTime As DateTime, changeAmount As Decimal)
+    Private Sub PrintReceiptDual(invoiceNumber As String, saleDateTime As DateTime, changeAmount As Decimal)
+        ' Print to thermal slip printer only
+        Dim dualPrinter As New DualReceiptPrinter(_connectionString, _branchID)
+        Dim receiptData As New Dictionary(Of String, Object) From {
+            {"InvoiceNumber", invoiceNumber},
+            {"SaleDateTime", saleDateTime},
+            {"ChangeAmount", changeAmount},
+            {"BranchName", GetBranchName()},
+            {"TillNumber", GetTillNumber()},
+            {"CashierName", GetCashierName()},
+            {"PaymentMethod", _paymentMethod},
+            {"CashAmount", _cashAmount},
+            {"CardAmount", _cardAmount},
+            {"Subtotal", _subtotal},
+            {"TaxAmount", _taxAmount},
+            {"TotalAmount", _totalAmount}
+        }
+        
+        ' Print ONLY to thermal printer (not continuous)
+        Try
+            dualPrinter.PrintToThermalPrinter(receiptData, _cartItems)
+        Catch ex As Exception
+            MessageBox.Show($"Thermal printer error: {ex.Message}", "Printer Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+    End Sub
+    
+    ''' <summary>
+    ''' LEGACY: Print receipt to default printer (Epson thermal slip printer - 80mm)
+    ''' This method is kept for reference but replaced by PrintReceiptDual
+    ''' </summary>
+    Private Sub PrintReceiptToDefaultPrinter_OLD(invoiceNumber As String, saleDateTime As DateTime, changeAmount As Decimal)
         Dim printDoc As New Printing.PrintDocument()
         
         ' Configure for 80mm thermal printer (Epson)

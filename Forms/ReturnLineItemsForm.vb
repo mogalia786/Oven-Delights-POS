@@ -537,6 +537,9 @@ Public Class ReturnLineItemsForm
                         Using receiptForm As New ReturnReceiptForm(returnNumber, DateTime.Now, txtCustomerName.Text, _invoiceNumber, receiptItems, totalReturn, totalTax, txtReason.Text)
                             receiptForm.ShowDialog()
                         End Using
+                        
+                        ' Reprint amended original invoice
+                        ReprintAmendedInvoice(conn)
 
                         ' TODO: Open cash drawer
 
@@ -638,6 +641,21 @@ Public Class ReturnLineItemsForm
         For Each item In _returnItems
             Debug.WriteLine($"Processing return item: {item.ProductName}, ProductID={item.ProductID}, Qty={item.ReturnQty}")
             
+            ' Look up VariantID from Demo_Retail_Variant table
+            Dim variantID As Integer = 0
+            Dim lookupSql = "SELECT TOP 1 VariantID FROM Demo_Retail_Variant WHERE ProductID = @ProductID AND IsActive = 1"
+            Using lookupCmd As New SqlCommand(lookupSql, conn, transaction)
+                lookupCmd.Parameters.AddWithValue("@ProductID", item.ProductID)
+                Dim result = lookupCmd.ExecuteScalar()
+                If result IsNot Nothing Then
+                    variantID = CInt(result)
+                    Debug.WriteLine($"Found VariantID={variantID} for ProductID={item.ProductID}")
+                Else
+                    Debug.WriteLine($"WARNING: No variant found for ProductID={item.ProductID}")
+                    Continue For ' Skip this item if no variant exists
+                End If
+            End Using
+            
             ' Insert return line item
             Dim sql = "
                 INSERT INTO Demo_ReturnDetails (ReturnID, VariantID, ProductName, Quantity, UnitPrice, LineTotal, RestockItem)
@@ -645,7 +663,7 @@ Public Class ReturnLineItemsForm
 
             Using cmd As New SqlCommand(sql, conn, transaction)
                 cmd.Parameters.AddWithValue("@ReturnID", returnID)
-                cmd.Parameters.AddWithValue("@VariantID", item.ProductID)
+                cmd.Parameters.AddWithValue("@VariantID", variantID)
                 cmd.Parameters.AddWithValue("@ProductName", item.ProductName)
                 cmd.Parameters.AddWithValue("@Quantity", item.ReturnQty)
                 cmd.Parameters.AddWithValue("@UnitPrice", item.UnitPrice)
@@ -849,6 +867,110 @@ Public Class ReturnLineItemsForm
             cmd.Parameters.AddWithValue("@BranchID", _branchID)
             cmd.ExecuteNonQuery()
         End Using
+    End Sub
+    
+    Private Sub ReprintAmendedInvoice(conn As SqlConnection)
+        Try
+            ' Get updated invoice details
+            Dim invoiceItems As New DataTable()
+            Dim sql = "
+                SELECT ProductID, ItemCode, ProductName, Quantity, UnitPrice, LineTotal
+                FROM POS_InvoiceLines
+                WHERE InvoiceNumber = @InvoiceNumber
+                ORDER BY ProductID"
+            
+            Using cmd As New SqlCommand(sql, conn)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                Using adapter As New SqlDataAdapter(cmd)
+                    adapter.Fill(invoiceItems)
+                End Using
+            End Using
+            
+            If invoiceItems.Rows.Count = 0 Then
+                ' All items returned - don't reprint
+                Return
+            End If
+            
+            ' Calculate new totals
+            Dim newTotal As Decimal = 0
+            For Each row As DataRow In invoiceItems.Rows
+                newTotal += CDec(row("LineTotal"))
+            Next
+            
+            Dim newSubtotal = Math.Round(newTotal / 1.15D, 2)
+            Dim newVat = Math.Round(newTotal - newSubtotal, 2)
+            
+            ' Print amended invoice
+            Dim printDoc As New Printing.PrintDocument()
+            printDoc.DefaultPageSettings.PaperSize = New Printing.PaperSize("80mm", 315, 1200)
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim font As New Font("Courier New", 8)
+                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim leftMargin As Integer = 10
+                Dim yPos As Integer = 10
+                
+                ' Header
+                e.Graphics.DrawString("OVEN DELIGHTS", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("AMENDED INVOICE", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString($"Invoice: {_invoiceNumber}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Customer: {txtCustomerName.Text}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString("** ITEMS AFTER RETURN **", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                For Each row As DataRow In invoiceItems.Rows
+                    Dim qty = CDec(row("Quantity"))
+                    Dim product = row("ProductName").ToString()
+                    Dim price = CDec(row("UnitPrice"))
+                    Dim total = CDec(row("LineTotal"))
+                    
+                    e.Graphics.DrawString($"{qty:0.00} x {product}", font, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", font, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                Next
+                
+                yPos += 5
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString($"Subtotal (excl VAT):  R {newSubtotal:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"VAT (15%):            R {newVat:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"TOTAL:                R {newTotal:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 20
+                
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("Thank you for your business", font, Brushes.Black, leftMargin, yPos)
+            End Sub
+            
+            ' Show preview
+            Dim previewDialog As New PrintPreviewDialog()
+            previewDialog.Document = printDoc
+            previewDialog.Width = 400
+            previewDialog.Height = 600
+            
+            If previewDialog.ShowDialog() = DialogResult.OK Then
+                printDoc.Print()
+            End If
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error reprinting invoice: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
     End Sub
 
     ' NOTE: Ledger balances are calculated from Journals table, not stored in Ledgers table

@@ -58,6 +58,10 @@ Public Class POSMainForm
         SetupModernUI()
         InitializeCart()
         SetupIdleScreen()
+        
+        ' Add resize handler
+        AddHandler Me.Resize, AddressOf POSMainForm_Resize
+        AddHandler Me.Load, AddressOf POSMainForm_Load
     End Sub
 
     Private Sub SetupModernUI()
@@ -117,6 +121,34 @@ Public Class POSMainForm
         lblCashier.Location = New Point(Me.Width - lblCashier.Width - 150, 25)
         lblCashier.Anchor = AnchorStyles.Top Or AnchorStyles.Right
 
+        Dim btnRefresh As New Button With {
+            .Text = "🔄 Refresh",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Size = New Size(100, 40),
+            .BackColor = _green,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnRefresh.Location = New Point(Me.Width - 360, 15)
+        btnRefresh.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnRefresh.FlatAppearance.BorderSize = 0
+        AddHandler btnRefresh.Click, AddressOf BtnRefresh_Click
+        
+        Dim btnDayEnd As New Button With {
+            .Text = "📊 Day End",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Size = New Size(120, 40),
+            .BackColor = _orange,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnDayEnd.Location = New Point(Me.Width - 240, 15)
+        btnDayEnd.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        btnDayEnd.FlatAppearance.BorderSize = 0
+        AddHandler btnDayEnd.Click, AddressOf BtnDayEnd_Click
+        
         Dim btnLogout As New Button With {
             .Text = "🚪 Logout",
             .Font = New Font("Segoe UI", 11, FontStyle.Bold),
@@ -131,7 +163,7 @@ Public Class POSMainForm
         btnLogout.FlatAppearance.BorderSize = 0
         AddHandler btnLogout.Click, Sub() Me.Close()
 
-        pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnLogout})
+        pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnRefresh, btnDayEnd, btnLogout})
 
         ' LEFT PANEL - Categories with FlowLayoutPanel
         Dim pnlCategoriesContainer As New Panel With {
@@ -1131,7 +1163,333 @@ Public Class POSMainForm
         MyBase.OnFormClosing(e)
     End Sub
 
-    Private Sub POSMainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-
+    Private Sub POSMainForm_Load(sender As Object, e As EventArgs)
+        ' Initial layout adjustment
+        AdjustLayout()
     End Sub
+    
+    Private Sub POSMainForm_Resize(sender As Object, e As EventArgs)
+        ' Adjust layout when window is resized
+        AdjustLayout()
+    End Sub
+    
+    Private Sub AdjustLayout()
+        If Me.WindowState = FormWindowState.Minimized Then Return
+        
+        Try
+            Me.SuspendLayout()
+            
+            ' Responsive font sizes based on screen width
+            Dim baseFontSize As Single = If(Me.Width > 1600, 12, If(Me.Width > 1200, 10, 9))
+            
+            ' Adjust category panel width (responsive)
+            If pnlCategories IsNot Nothing AndAlso pnlCategories.Parent IsNot Nothing Then
+                Dim categoryWidth = CInt(Me.Width * 0.15) ' 15% of screen width
+                pnlCategories.Parent.Width = Math.Max(180, Math.Min(250, categoryWidth))
+            End If
+            
+            ' Adjust cart panel width (responsive)
+            If pnlCart IsNot Nothing Then
+                Dim cartWidth = CInt(Me.Width * 0.25) ' 25% of screen width
+                pnlCart.Width = Math.Max(300, Math.Min(450, cartWidth))
+            End If
+            
+            ' Adjust product button sizes
+            If flpProducts IsNot Nothing Then
+                Dim buttonWidth = CInt((flpProducts.Width - 40) / 4) ' 4 columns with spacing
+                buttonWidth = Math.Max(120, Math.Min(200, buttonWidth))
+                
+                For Each ctrl As Control In flpProducts.Controls
+                    If TypeOf ctrl Is Button Then
+                        ctrl.Size = New Size(buttonWidth, CInt(buttonWidth * 0.8))
+                        ctrl.Font = New Font("Segoe UI", baseFontSize, FontStyle.Bold)
+                    End If
+                Next
+            End If
+            
+            ' Adjust category button sizes
+            If pnlCategories IsNot Nothing Then
+                For Each ctrl As Control In pnlCategories.Controls
+                    If TypeOf ctrl Is Button Then
+                        ctrl.Width = pnlCategories.Width - 20
+                        ctrl.Font = New Font("Segoe UI", baseFontSize, FontStyle.Bold)
+                    End If
+                Next
+            End If
+            
+            ' Adjust DataGridView font
+            If dgvCart IsNot Nothing Then
+                dgvCart.Font = New Font("Segoe UI", baseFontSize)
+                dgvCart.RowTemplate.Height = CInt(baseFontSize * 3)
+            End If
+            
+            ' Adjust total labels
+            If lblTotal IsNot Nothing Then
+                lblTotal.Font = New Font("Segoe UI", baseFontSize + 6, FontStyle.Bold)
+            End If
+            If lblSubtotal IsNot Nothing Then
+                lblSubtotal.Font = New Font("Segoe UI", baseFontSize + 2)
+            End If
+            If lblTax IsNot Nothing Then
+                lblTax.Font = New Font("Segoe UI", baseFontSize + 2)
+            End If
+            
+        Catch ex As Exception
+            ' Ignore layout errors during resize
+        Finally
+            Me.ResumeLayout()
+        End Try
+    End Sub
+    
+    Private Sub BtnRefresh_Click(sender As Object, e As EventArgs)
+        Try
+            Me.Cursor = Cursors.WaitCursor
+            
+            ' Show refreshing message
+            Dim originalText = DirectCast(sender, Button).Text
+            DirectCast(sender, Button).Text = "⏳ Refreshing..."
+            DirectCast(sender, Button).Enabled = False
+            Application.DoEvents()
+            
+            ' Reload cache from database
+            ProductCacheService.Instance.RefreshCache()
+            
+            ' Reload categories and products display
+            LoadCategories()
+            
+            ' Reset button
+            DirectCast(sender, Button).Text = originalText
+            DirectCast(sender, Button).Enabled = True
+            Me.Cursor = Cursors.Default
+            
+            MessageBox.Show($"Cache refreshed successfully!{vbCrLf}{ProductCacheService.Instance.ProductCount} products loaded.", "Refresh Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            
+        Catch ex As Exception
+            Me.Cursor = Cursors.Default
+            DirectCast(sender, Button).Text = "🔄 Refresh"
+            DirectCast(sender, Button).Enabled = True
+            MessageBox.Show($"Failed to refresh cache: {ex.Message}", "Refresh Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub BtnDayEnd_Click(sender As Object, e As EventArgs)
+        Try
+            ' Confirm day-end action
+            Dim confirmMsg = "Are you sure you want to complete Day End?" & vbCrLf & vbCrLf &
+                           "This will:" & vbCrLf &
+                           "1. Print day-end report to slip printer" & vbCrLf &
+                           "2. Lock this till for today" & vbCrLf &
+                           "3. You will NOT be able to log in again today" & vbCrLf & vbCrLf &
+                           "Continue?"
+            
+            Dim result = MessageBox.Show(confirmMsg, "Day End Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+            
+            If result <> DialogResult.Yes Then
+                Return
+            End If
+            
+            Me.Cursor = Cursors.WaitCursor
+            
+            ' Get today's sales totals from database
+            Dim totalSales As Decimal = 0
+            Dim totalCash As Decimal = 0
+            Dim totalCard As Decimal = 0
+            Dim totalAccount As Decimal = 0
+            Dim totalRefunds As Decimal = 0
+            
+            Using conn As New SqlClient.SqlConnection(_connectionString)
+                conn.Open()
+                
+                ' Get today's sales summary for this till
+                Dim sql = "
+                    SELECT 
+                        ISNULL(SUM(TotalAmount), 0) AS TotalSales,
+                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Cash' THEN TotalAmount ELSE 0 END), 0) AS TotalCash,
+                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Card' THEN TotalAmount ELSE 0 END), 0) AS TotalCard,
+                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Account' THEN TotalAmount ELSE 0 END), 0) AS TotalAccount,
+                        ISNULL(SUM(CASE WHEN TotalAmount < 0 THEN ABS(TotalAmount) ELSE 0 END), 0) AS TotalRefunds
+                    FROM Sales
+                    WHERE CAST(SaleDate AS DATE) = @Today
+                    AND TillPointID = @TillPointID"
+                
+                Using cmd As New SqlClient.SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@Today", DateTime.Today)
+                    cmd.Parameters.AddWithValue("@TillPointID", GetTillPointID())
+                    
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            totalSales = CDec(reader("TotalSales"))
+                            totalCash = CDec(reader("TotalCash"))
+                            totalCard = CDec(reader("TotalCard"))
+                            totalAccount = CDec(reader("TotalAccount"))
+                            totalRefunds = CDec(reader("TotalRefunds"))
+                        End If
+                    End Using
+                End Using
+            End Using
+            
+            ' Prompt for actual cash count
+            Dim actualCashInput = InputBox("Enter actual cash in drawer:", "Cash Count", totalCash.ToString("F2"))
+            
+            If String.IsNullOrWhiteSpace(actualCashInput) Then
+                Me.Cursor = Cursors.Default
+                MessageBox.Show("Day end cancelled - cash count required.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+            
+            Dim actualCash As Decimal
+            If Not Decimal.TryParse(actualCashInput, actualCash) Then
+                Me.Cursor = Cursors.Default
+                MessageBox.Show("Invalid cash amount entered.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return
+            End If
+            
+            Dim cashVariance = actualCash - totalCash
+            
+            ' Optional notes
+            Dim notes = InputBox("Enter any notes (optional):", "Day End Notes", "")
+            
+            ' Print day-end report to slip printer
+            PrintDayEndReport(totalSales, totalCash, totalCard, totalAccount, totalRefunds, totalCash, actualCash, cashVariance, notes)
+            
+            ' Complete day-end in database
+            Dim dayEndService As New DayEndService()
+            dayEndService.CompleteDayEnd(
+                GetTillPointID(),
+                _cashierID,
+                totalSales,
+                totalCash,
+                totalCard,
+                totalAccount,
+                totalRefunds,
+                totalCash,
+                actualCash,
+                notes
+            )
+            
+            Me.Cursor = Cursors.Default
+            
+            ' Show completion message
+            Dim completionMsg = "Day End Completed Successfully!" & vbCrLf & vbCrLf &
+                              $"Total Sales: R {totalSales:N2}" & vbCrLf &
+                              $"Cash Variance: R {cashVariance:N2}" & vbCrLf & vbCrLf &
+                              "Report printed to slip printer." & vbCrLf & vbCrLf &
+                              "You cannot log in again today." & vbCrLf &
+                              "Application will now close."
+            
+            MessageBox.Show(completionMsg, "Day End Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            
+            ' Close application
+            Application.Exit()
+            
+        Catch ex As Exception
+            Me.Cursor = Cursors.Default
+            MessageBox.Show($"Day end failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub PrintDayEndReport(totalSales As Decimal, totalCash As Decimal, totalCard As Decimal,
+                                  totalAccount As Decimal, totalRefunds As Decimal,
+                                  expectedCash As Decimal, actualCash As Decimal, cashVariance As Decimal,
+                                  notes As String)
+        Try
+            ' Create print document for 80mm slip printer
+            Dim printDoc As New Printing.PrintDocument()
+            
+            ' Use default printer
+            ' printDoc.PrinterSettings.PrinterName = "Default Printer Name" ' Leave default
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim font As New Font("Courier New", 9, FontStyle.Regular)
+                Dim fontBold As New Font("Courier New", 9, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 12, FontStyle.Bold)
+                Dim y As Single = 10
+                Dim lineHeight As Single = font.GetHeight(e.Graphics)
+                
+                ' Helper function to print centered text
+                Dim PrintCentered = Sub(text As String, fnt As Font)
+                    Dim textWidth = e.Graphics.MeasureString(text, fnt).Width
+                    Dim x = (e.PageBounds.Width - textWidth) / 2
+                    e.Graphics.DrawString(text, fnt, Brushes.Black, x, y)
+                    y += fnt.GetHeight(e.Graphics)
+                End Sub
+                
+                ' Helper function to print left-aligned text
+                Dim PrintLeft = Sub(text As String, fnt As Font)
+                    e.Graphics.DrawString(text, fnt, Brushes.Black, 10, y)
+                    y += fnt.GetHeight(e.Graphics)
+                End Sub
+                
+                ' Header
+                PrintCentered("================================", font)
+                PrintCentered("OVEN DELIGHTS", fontLarge)
+                PrintCentered("DAY END REPORT", fontBold)
+                PrintCentered("================================", font)
+                y += lineHeight
+                
+                ' Till info
+                PrintLeft($"Date: {DateTime.Today:dd/MM/yyyy}", font)
+                PrintLeft($"Till: Till {GetTillPointID()}", font)
+                PrintLeft($"Cashier: {_cashierName}", font)
+                PrintLeft($"Time: {DateTime.Now:HH:mm:ss}", font)
+                y += lineHeight
+                
+                ' Sales summary
+                PrintCentered("SALES SUMMARY", fontBold)
+                PrintLeft("--------------------------------", font)
+                PrintLeft($"Total Sales:      R {totalSales,10:N2}", font)
+                PrintLeft($"Cash Sales:       R {totalCash,10:N2}", font)
+                PrintLeft($"Card Sales:       R {totalCard,10:N2}", font)
+                PrintLeft($"Account Sales:    R {totalAccount,10:N2}", font)
+                PrintLeft($"Refunds:          R {totalRefunds,10:N2}", font)
+                y += lineHeight
+                
+                ' Cash drawer
+                PrintCentered("CASH DRAWER", fontBold)
+                PrintLeft("--------------------------------", font)
+                PrintLeft($"Expected Cash:    R {expectedCash,10:N2}", font)
+                PrintLeft($"Actual Cash:      R {actualCash,10:N2}", font)
+                PrintLeft($"Variance:         R {cashVariance,10:N2}", fontBold)
+                y += lineHeight
+                
+                ' Notes
+                If Not String.IsNullOrWhiteSpace(notes) Then
+                    PrintLeft("Notes:", fontBold)
+                    PrintLeft(notes, font)
+                    y += lineHeight
+                End If
+                
+                ' Footer
+                PrintCentered("================================", font)
+                PrintCentered("Day End Complete", font)
+                PrintCentered($"{DateTime.Now:dd/MM/yyyy HH:mm:ss}", font)
+                PrintCentered("================================", font)
+            End Sub
+            
+            ' Print
+            printDoc.Print()
+            
+        Catch ex As Exception
+            Throw New Exception("Failed to print day-end report: " & ex.Message, ex)
+        End Try
+    End Sub
+    
+    Private Function GetTillPointID() As Integer
+        Try
+            Using conn As New SqlClient.SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT TillPointID FROM TillPoints WHERE MachineName = @MachineName AND IsActive = 1"
+                Using cmd As New SqlClient.SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@MachineName", Environment.MachineName)
+                    Dim result = cmd.ExecuteScalar()
+                    If result IsNot Nothing AndAlso Not IsDBNull(result) Then
+                        Return CInt(result)
+                    End If
+                End Using
+            End Using
+        Catch ex As Exception
+            Debug.WriteLine($"Error getting TillPointID: {ex.Message}")
+        End Try
+        Return 0
+    End Function
 End Class
