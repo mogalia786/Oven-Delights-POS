@@ -87,7 +87,8 @@ Public Class POSDataService
                 ) AS SellingPrice,
                 ISNULL(p.CurrentStock, 0) AS QtyOnHand
             FROM Demo_Retail_Product p
-            WHERE p.IsActive = 1 
+            WHERE p.BranchID = @BranchID
+                AND p.IsActive = 1 
                 AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
                 AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
                 AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.Barcode, p.SKU) LIKE @Search OR p.Code LIKE @Search OR p.ProductCode LIKE @Search)

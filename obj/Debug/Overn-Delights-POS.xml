@@ -22,6 +22,30 @@ Overn-Delights-POS
   resource lookups using this strongly typed resource class.
 </summary>
 </member>
+<member name="M:Overn_Delights_POS.BarcodeConverter.ToBarcode(System.String)">
+ <summary>
+ Convert invoice/order number to 13-digit barcode
+ Format: [DocType:1][Branch:2][Sequence:10]
+ Example: "O-OD200-000033" -> "2200000000033"
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeConverter.FromBarcode(System.String)">
+ <summary>
+ Convert 13-digit barcode back to invoice/order number
+ Example: "2200000000033" -> "O-OD200-000033"
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeConverter.AddBranchCode(System.String,System.String)">
+ <summary>
+ Add a new branch code mapping
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeGenerator.GenerateCode39Barcode(System.String,System.Int32,System.Int32)">
+ <summary>
+ Generates EAN-13 barcode for order numbers (same format as product barcodes)
+ Example: "6000009" -> Padded to "0000006000009" -> EAN-13 barcode
+ </summary>
+</member>
 <member name="T:Overn_Delights_POS.CategoryNavigationService">
  <summary>
  Service for Category -> SubCategory -> Product navigation
@@ -204,7 +228,7 @@ Overn-Delights-POS
  Smooth fade-in animation for product cards
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintOrderReceiptToThermalPrinter(System.String,System.Decimal,System.Decimal)">
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintOrderReceiptToThermalPrinter(System.String,System.String,System.String,System.String,System.DateTime,System.TimeSpan,System.String,System.String,System.Decimal,System.Decimal,System.String,System.String)">
  <summary>
  Print order receipt to thermal printer (80mm)
  </summary>

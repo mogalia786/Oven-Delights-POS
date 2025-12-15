@@ -53,6 +53,11 @@ Public Class POSMainForm_REDESIGN
     Private _lblRotatingMessage As Label
     Private Const IDLE_TIMEOUT_MS As Integer = 300000 ' 300 seconds = 5 minutes
 
+    ' Tile sizing - responsive to screen
+    Private _tileWidth As Integer = 100
+    Private _tileHeight As Integer = 70
+    Private _tilesPerRow As Integer = 6
+    
     ' Iron Man Theme Color Palette (from pos_styles.css)
     Private _ironRed As Color = ColorTranslator.FromHtml("#C1272D")
     Private _ironRedDark As Color = ColorTranslator.FromHtml("#8B0000")     ' Dark red gradient
@@ -173,29 +178,6 @@ Public Class POSMainForm_REDESIGN
             .AutoSize = True
         }
 
-        ' BARCODE SCANNER - Always focused
-        txtBarcodeScanner = New TextBox With {
-            .Font = New Font("Segoe UI", 14),
-            .Width = 350,
-            .Height = 40,
-            .Location = New Point(400, 15),
-            .Text = "🔍 Scan barcode or type ItemCode...",
-            .ForeColor = _darkGray
-        }
-        AddHandler txtBarcodeScanner.KeyDown, AddressOf BarcodeScanner_KeyDown
-        AddHandler txtBarcodeScanner.Enter, Sub()
-                                                If txtBarcodeScanner.ForeColor = _darkGray Then
-                                                    txtBarcodeScanner.Text = ""
-                                                    txtBarcodeScanner.ForeColor = Color.Black
-                                                End If
-                                            End Sub
-        AddHandler txtBarcodeScanner.Leave, Sub()
-                                                If String.IsNullOrWhiteSpace(txtBarcodeScanner.Text) Then
-                                                    txtBarcodeScanner.Text = "🔍 Scan barcode or type ItemCode..."
-                                                    txtBarcodeScanner.ForeColor = _darkGray
-                                                End If
-                                            End Sub
-
         Dim btnCashUp As New Button With {
             .Text = "💰 CASH UP",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
@@ -233,10 +215,11 @@ Public Class POSMainForm_REDESIGN
             .Anchor = AnchorStyles.Top,
             .BackColor = Color.Transparent
         }
-        ' Position after pnlTop is added to form
-        lblCashier.Location = New Point(450, 20)
 
-        pnlTop.Controls.AddRange({lblTitle, lblBranch, txtBarcodeScanner, lblCashier, btnCashUp, btnLogout})
+        pnlTop.Controls.AddRange({lblTitle, lblBranch, lblCashier, btnCashUp, btnLogout})
+        
+        ' Center the cashier label after adding to panel
+        lblCashier.Location = New Point((pnlTop.Width - lblCashier.Width) / 2, 20)
         lblCashier.BringToFront()
         lblBranch.BringToFront()
 
@@ -293,7 +276,7 @@ Public Class POSMainForm_REDESIGN
                                       txtSearch.Focus()
                                   End Sub
 
-        ' Search textbox (accepts keyboard and touch input) - smaller width
+        ' Search textbox (accepts keyboard and touch input)
         txtSearch = New TextBox With {
             .Font = New Font("Segoe UI", 12),
             .Location = New Point(120, 8),
@@ -305,7 +288,6 @@ Public Class POSMainForm_REDESIGN
             .Cursor = Cursors.IBeam
         }
         
-        ' Clear placeholder on focus OR when user starts typing
         AddHandler txtSearch.Enter, Sub()
             If txtSearch.Text.Contains("Search by code") Then
                 txtSearch.Text = ""
@@ -313,13 +295,11 @@ Public Class POSMainForm_REDESIGN
             End If
         End Sub
         
-        ' Also clear placeholder on first keypress
         AddHandler txtSearch.KeyDown, Sub(sender, e)
             If txtSearch.Text.Contains("Search by code") Then
                 txtSearch.Text = ""
                 txtSearch.ForeColor = Color.Black
             ElseIf e.KeyCode = Keys.Enter Then
-                ' When Enter is pressed, try to add the product by code/barcode
                 e.SuppressKeyPress = True
                 Dim searchCode = txtSearch.Text.Trim()
                 If Not String.IsNullOrWhiteSpace(searchCode) Then
@@ -330,17 +310,13 @@ Public Class POSMainForm_REDESIGN
             End If
         End Sub
         
-        ' Don't restore placeholder on Leave - keep search results visible
-        ' User can manually clear if needed
-        
-        ' Search as user types (debounced)
         AddHandler txtSearch.TextChanged, Sub()
                                               If Not txtSearch.Text.Contains("Search by code") AndAlso txtSearch.Text.Length >= 2 Then
                                                   DebouncedSearch(txtSearch.Text)
                                               End If
                                           End Sub
 
-        ' Search by Name textbox (accepts keyboard and touch input) - adjusted position
+        ' Search by Name textbox
         txtSearchByName = New TextBox With {
             .Font = New Font("Segoe UI", 12),
             .Location = New Point(430, 8),
@@ -352,7 +328,6 @@ Public Class POSMainForm_REDESIGN
             .Cursor = Cursors.IBeam
         }
         
-        ' Clear placeholder on focus OR when user starts typing
         AddHandler txtSearchByName.Enter, Sub()
             If txtSearchByName.Text.Contains("Search by name") Then
                 txtSearchByName.Text = ""
@@ -360,7 +335,6 @@ Public Class POSMainForm_REDESIGN
             End If
         End Sub
         
-        ' Also clear placeholder on first keypress
         AddHandler txtSearchByName.KeyDown, Sub(sender, e)
             If txtSearchByName.Text.Contains("Search by name") Then
                 txtSearchByName.Text = ""
@@ -368,17 +342,13 @@ Public Class POSMainForm_REDESIGN
             End If
         End Sub
         
-        ' Don't restore placeholder on Leave - keep search results visible
-        ' User can manually clear if needed
-        
-        ' Search as user types (debounced)
         AddHandler txtSearchByName.TextChanged, Sub()
             If Not txtSearchByName.Text.Contains("Search by name") AndAlso txtSearchByName.Text.Length >= 2 Then
                 DebouncedSearch(txtSearchByName.Text)
             End If
         End Sub
 
-        ' Refresh Products button - adjusted position
+        ' Refresh Products button
         Dim btnRefresh As New Button With {
             .Text = "🔄 REFRESH",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
@@ -392,6 +362,20 @@ Public Class POSMainForm_REDESIGN
         btnRefresh.FlatAppearance.BorderSize = 0
         AddHandler btnRefresh.Click, Sub() RefreshProductsCache()
 
+        ' xQty button - modify cart line item quantities
+        Dim btnModifyQty As New Button With {
+            .Text = "✕ QTY",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Size = New Size(90, 44),
+            .Location = New Point(860, 8),
+            .BackColor = _orange,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnModifyQty.FlatAppearance.BorderSize = 0
+        AddHandler btnModifyQty.Click, Sub() ShowCartQuantityEditor()
+
         ' Hidden barcode scanner input
         txtBarcodeScanner = New TextBox With {
             .Location = New Point(-100, -100),
@@ -399,7 +383,7 @@ Public Class POSMainForm_REDESIGN
         }
         AddHandler txtBarcodeScanner.KeyDown, AddressOf BarcodeScanner_KeyDown
 
-        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, txtBarcodeScanner})
+        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, txtBarcodeScanner})
 
         flpProducts = New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -849,7 +833,18 @@ Public Class POSMainForm_REDESIGN
         ' Ensure minimum scale factor
         If _scaleFactor < 0.5F Then _scaleFactor = 0.5F
         
-        Debug.WriteLine($"[SCREEN SCALING] Screen: {_screenWidth}x{_screenHeight}, Scale Factor: {_scaleFactor:F2}")
+        ' Calculate tile sizes to fit 6 per row
+        ' Assume flpProducts width is about 70% of screen width
+        Dim availableWidth = CInt(_screenWidth * 0.7)
+        Dim margin = 10 ' 5px margin on each side
+        _tileWidth = CInt((availableWidth - (_tilesPerRow * margin * 2)) / _tilesPerRow)
+        _tileHeight = CInt(_tileWidth * 0.7) ' Maintain aspect ratio
+        
+        ' Ensure minimum size
+        If _tileWidth < 80 Then _tileWidth = 80
+        If _tileHeight < 60 Then _tileHeight = 60
+        
+        Debug.WriteLine($"[SCREEN SCALING] Screen: {_screenWidth}x{_screenHeight}, Scale Factor: {_scaleFactor:F2}, Tile: {_tileWidth}x{_tileHeight}")
     End Sub
     
     Private Function ScaleSize(baseSize As Integer) As Integer
@@ -1147,34 +1142,30 @@ Public Class POSMainForm_REDESIGN
         ' Determine if stock is low (at or below reorder level)
         Dim isLowStock = stock <= reorderLevel
 
-        ' Touch-friendly sizing - minimum 220x160 for better touch targets
-        Dim cardWidth = Math.Max(220, ScaleSize(220))
-        Dim cardHeight = Math.Max(160, ScaleSize(160))
-        
-        ' Ensure minimum touch target size (minimum 44x44 pixels for accessibility)
-        If cardWidth < 44 Then cardWidth = 44
-        If cardHeight < 44 Then cardHeight = 44
+        ' Fixed compact sizing - no scaling to prevent size changes
+        Dim cardWidth As Integer = 140
+        Dim cardHeight As Integer = 100
 
         Dim card As New Panel With {
             .Size = New Size(cardWidth, cardHeight),
             .BackColor = Color.White,
             .BorderStyle = BorderStyle.FixedSingle,
             .Cursor = Cursors.Hand,
-            .Margin = New Padding(ScaleSize(8)),
+            .Margin = New Padding(4),
             .Tag = New With {productID, itemCode, productName, price, stock}
         }
 
-        ' Scale font sizes responsively - larger for better readability
-        Dim codeFontSize = Math.Max(10, ScaleFont(10))
-        Dim nameFontSize = Math.Max(12, ScaleFont(12))
-        Dim priceFontSize = Math.Max(16, ScaleFont(16))
-        Dim stockFontSize = Math.Max(9, ScaleFont(9))
+        ' Fixed compact font sizes
+        Dim codeFontSize As Single = 8
+        Dim nameFontSize As Single = 9
+        Dim priceFontSize As Single = 11
+        Dim stockFontSize As Single = 7
 
         Dim lblItemCode As New Label With {
             .Text = itemCode,
             .Font = New Font("Segoe UI", codeFontSize, FontStyle.Bold),
             .ForeColor = _darkBlue,
-            .Location = New Point(ScaleSize(8), ScaleSize(8)),
+            .Location = New Point(4, 4),
             .AutoSize = True
         }
 
@@ -1182,8 +1173,8 @@ Public Class POSMainForm_REDESIGN
             .Text = productName,
             .Font = New Font("Segoe UI", nameFontSize, FontStyle.Bold),
             .ForeColor = _darkBlue,
-            .Location = New Point(ScaleSize(8), ScaleSize(35)),
-            .Size = New Size(cardWidth - ScaleSize(16), ScaleSize(60)),
+            .Location = New Point(4, 20),
+            .Size = New Size(cardWidth - 8, 35),
             .AutoEllipsis = True
         }
 
@@ -1191,30 +1182,30 @@ Public Class POSMainForm_REDESIGN
             .Text = price.ToString("C2"),
             .Font = New Font("Segoe UI", priceFontSize, FontStyle.Bold),
             .ForeColor = _green,
-            .Location = New Point(ScaleSize(8), cardHeight - ScaleSize(55)),
+            .Location = New Point(4, cardHeight - 35),
             .AutoSize = True
         }
 
         ' Stock label - RED if at or below reorder level
         Dim stockColor = If(isLowStock, Color.Red, _darkGray)
-        Dim stockText = If(isLowStock, $"Stock: {stock} ⚠ LOW!", $"Stock: {stock}")
+        Dim stockText = If(isLowStock, $"Stock: {stock} ⚠", $"Stock: {stock}")
 
         Dim lblStock As New Label With {
             .Text = stockText,
             .Font = New Font("Segoe UI", stockFontSize, If(isLowStock, FontStyle.Bold, FontStyle.Regular)),
             .ForeColor = stockColor,
-            .Location = New Point(ScaleSize(8), cardHeight - ScaleSize(25)),
+            .Location = New Point(4, cardHeight - 16),
             .AutoSize = True
         }
 
         card.Controls.AddRange({lblItemCode, lblName, lblPrice, lblStock})
 
-        ' Make entire card clickable - show quantity modal
-        AddHandler card.Click, Sub() ShowQuantityModal(productID, itemCode, productName, price, stock)
-        AddHandler lblItemCode.Click, Sub() ShowQuantityModal(productID, itemCode, productName, price, stock)
-        AddHandler lblName.Click, Sub() ShowQuantityModal(productID, itemCode, productName, price, stock)
-        AddHandler lblPrice.Click, Sub() ShowQuantityModal(productID, itemCode, productName, price, stock)
-        AddHandler lblStock.Click, Sub() ShowQuantityModal(productID, itemCode, productName, price, stock)
+        ' Make entire card clickable - add 1 qty directly to cart
+        AddHandler card.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblItemCode.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblName.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblPrice.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
+        AddHandler lblStock.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
         
         AddHandler card.MouseEnter, Sub() card.BackColor = ColorTranslator.FromHtml("#E3F2FD")
         AddHandler card.MouseLeave, Sub() card.BackColor = Color.White
@@ -2125,7 +2116,16 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub ProcessReturn()
-        ' Step 1: Supervisor Authorization
+        ' Step 1: Scan barcode to get invoice number
+        Dim fullInvoiceNumber As String = ""
+        Using barcodeDialog As New BarcodeScannerDialog("SCAN INVOICE BARCODE", "Scan the barcode from the customer's receipt")
+            If barcodeDialog.ShowDialog() <> DialogResult.OK Then Return
+            fullInvoiceNumber = barcodeDialog.ScannedBarcode
+        End Using
+        
+        If String.IsNullOrWhiteSpace(fullInvoiceNumber) Then Return
+        
+        ' Step 2: Supervisor Authorization
         Dim supervisorUsername = InputBox("Enter Retail Supervisor Username:", "Returns Authorization")
         If String.IsNullOrWhiteSpace(supervisorUsername) Then Return
 
@@ -2159,42 +2159,29 @@ Public Class POSMainForm_REDESIGN
             Return
         End Try
 
-        ' Step 2: Get invoice number
-        Using invoiceForm As New InvoiceNumberEntryForm()
-            If invoiceForm.ShowDialog() <> DialogResult.OK Then Return
-
-            Dim digits = invoiceForm.InvoiceDigits
-            If String.IsNullOrWhiteSpace(digits) Then Return
-
-            ' Generate full invoice number - Format: INV-BranchCode-TILL-TillNumber-000001
-            ' Example: INV-PH-TILL-01-000003
-            Dim branchPrefix = GetBranchPrefix()
-            Dim tillNumber = GetTillNumber()
-            Dim fullInvoiceNumber = $"INV-{branchPrefix}-TILL-{tillNumber}-{digits.PadLeft(6, "0"c)}"
-
-            ' Verify invoice exists
-            Try
-                Using conn As New SqlConnection(_connectionString)
-                    conn.Open()
-                    Dim sql = "SELECT COUNT(*) FROM Demo_Sales WHERE InvoiceNumber = @InvoiceNumber"
-                    Using cmd As New SqlCommand(sql, conn)
-                        cmd.Parameters.AddWithValue("@InvoiceNumber", fullInvoiceNumber)
-                        Dim count = CInt(cmd.ExecuteScalar())
-                        If count = 0 Then
-                            MessageBox.Show($"Invoice {fullInvoiceNumber} not found!", "Invalid Invoice", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                            Return
-                        End If
-                    End Using
+        ' Step 3: Use scanned invoice number directly (no prefix manipulation needed)
+        ' Verify invoice exists
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT COUNT(*) FROM Demo_Sales WHERE InvoiceNumber = @InvoiceNumber"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@InvoiceNumber", fullInvoiceNumber)
+                    Dim count = CInt(cmd.ExecuteScalar())
+                    If count = 0 Then
+                        MessageBox.Show($"Invoice {fullInvoiceNumber} not found!", "Invalid Invoice", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
                 End Using
-            Catch ex As Exception
-                MessageBox.Show($"Error validating invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Return
-            End Try
-
-            ' Step 3: Show return line items form
-            Using returnForm As New ReturnLineItemsForm(fullInvoiceNumber, _branchID, _tillPointID, _cashierID, supervisorID)
-                returnForm.ShowDialog()
             End Using
+        Catch ex As Exception
+            MessageBox.Show($"Error validating invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Return
+        End Try
+
+        ' Step 4: Show return line items form
+        Using returnForm As New ReturnLineItemsForm(fullInvoiceNumber, _branchID, _tillPointID, _cashierID, supervisorID)
+            returnForm.ShowDialog()
         End Using
     End Sub
 
@@ -2245,7 +2232,7 @@ Public Class POSMainForm_REDESIGN
         Dim branchPrefix = GetBranchPrefix()
 
         ' Show payment tender form (subtotal = Ex VAT, tax = VAT amount, total = Incl VAT)
-        Using paymentForm As New PaymentTenderForm(_cashierID, _cashierName, _branchID, _tillPointID, branchPrefix, _cartItems, totalExVAT, vatAmount, totalInclVAT, _isOrderCollectionMode, _collectionOrderID, _collectionOrderNumber, _collectionColour, _collectionPicture)
+        Using paymentForm As New PaymentTenderForm(_cashierID, _cashierName, _branchID, _tillPointID, branchPrefix, _cartItems, totalExVAT, vatAmount, totalInclVAT, _isOrderCollectionMode, _collectionOrderID, _collectionOrderNumber, "", "")
             If paymentForm.ShowDialog(Me) = DialogResult.OK Then
                 ' If order collection, mark as delivered
                 If _isOrderCollectionMode Then
@@ -3770,30 +3757,22 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine("       COLLECTING YOUR ORDER")
             receipt.AppendLine("========================================")
             
-            ' STEP 1: Show preview first
-            Dim previewResult = MessageBox.Show(receipt.ToString() & vbCrLf & vbCrLf & "Print this receipt?", 
-                                                "Order Receipt Preview", 
-                                                MessageBoxButtons.YesNo, 
-                                                MessageBoxIcon.Question)
+            ' Print to thermal slip printer (default POS printer) first
+            Try
+                PrintOrderReceiptToThermalPrinter(orderNumber, customerName, customerSurname, customerPhone, readyDate, readyTime, collectionDay, specialInstructions, depositPaid, totalAmount, colour, picture)
+            Catch ex As Exception
+                MessageBox.Show($"Thermal printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            End Try
             
-            If previewResult = DialogResult.Yes Then
-                ' STEP 2: Print to thermal slip printer (default POS printer) first
-                Try
-                    PrintOrderReceiptToThermalPrinter(orderNumber, depositPaid, totalAmount)
-                Catch ex As Exception
-                    MessageBox.Show($"Thermal printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                End Try
-                
-                ' STEP 3: Then print to continuous feeder printer
-                Try
-                    Dim printer As New POSReceiptPrinter()
-                    printer.PrintOrderReceipt(orderNumber, customerName, customerSurname, customerPhone, readyDate, readyTime, collectionDay, specialInstructions, depositPaid, totalAmount, colour, picture, _cartItems, _branchID, _cashierName)
-                Catch ex As Exception
-                    MessageBox.Show($"Continuous printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                End Try
-                
-                MessageBox.Show("Order receipt printed!", "Print Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            End If
+            ' Then print to continuous feeder printer
+            Try
+                Dim printer As New POSReceiptPrinter()
+                printer.PrintOrderReceipt(orderNumber, customerName, customerSurname, customerPhone, readyDate, readyTime, collectionDay, specialInstructions, depositPaid, totalAmount, colour, picture, _cartItems, _branchID, _cashierName)
+            Catch ex As Exception
+                MessageBox.Show($"Continuous printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            End Try
+            
+            MessageBox.Show("Order receipt printed!", "Print Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
             
         Catch ex As Exception
             MessageBox.Show($"Error printing receipt: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -3838,32 +3817,24 @@ Public Class POSMainForm_REDESIGN
     End Function
 
     Private Function GenerateOrderNumber(conn As SqlConnection, transaction As SqlTransaction, branchPrefix As String, Optional orderType As String = "CAKE") As String
-        ' Get next sequential number with table lock to prevent duplicates
-        Dim pattern As String
-        Dim prefix As String
-        Dim sql As String
+        ' Generate numeric-only order number: BranchID + 6-digit sequence
+        ' Example: Branch 6, sequence 9 -> "6000009"
+        ' This creates a scannable barcode that can be printed and scanned
         
-        If orderType = "CAKE" Then
-            pattern = $"O-{branchPrefix}-CCAKE-%"
-            prefix = $"O-{branchPrefix}-CCAKE-"
-            sql = "
-                SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 6) AS INT)), 0) + 1 
-                FROM POS_CustomOrders WITH (TABLOCKX)
-                WHERE OrderNumber LIKE @pattern"
-        Else
-            ' General orders - exclude CCAKE orders
-            prefix = $"O-{branchPrefix}-"
-            sql = "
-                SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 6) AS INT)), 0) + 1 
-                FROM POS_CustomOrders WITH (TABLOCKX)
-                WHERE OrderNumber LIKE @pattern AND OrderNumber NOT LIKE '%-CCAKE-%'"
-            pattern = $"O-{branchPrefix}-%"
-        End If
+        Dim sql As String = "
+            SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 6) AS INT)), 0) + 1 
+            FROM POS_CustomOrders WITH (TABLOCKX)
+            WHERE OrderNumber LIKE @pattern"
+        
+        Dim pattern As String = $"{_branchID}%"
         
         Using cmd As New SqlCommand(sql, conn, transaction)
             cmd.Parameters.AddWithValue("@pattern", pattern)
             Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
-            Return $"{prefix}{nextNumber.ToString().PadLeft(6, "0"c)}"
+            
+            ' Format: BranchID (1 digit) + Sequence (6 digits)
+            ' Example: Branch 6, sequence 9 -> "6000009"
+            Return $"{_branchID}{nextNumber.ToString().PadLeft(6, "0"c)}"
         End Using
     End Function
 
@@ -3891,10 +3862,311 @@ Public Class POSMainForm_REDESIGN
                 CalculateTotals()
             End If
 
-            ' Show order collection dialog
-            Using dialog As New OrderCollectionDialog()
-                If dialog.ShowDialog() = DialogResult.OK Then
-                    LoadOrderForCollection(dialog.OrderNumber)
+            ' Step 1: Show option dialog - Barcode or Cell Number
+            Dim optionForm As New Form With {
+                .Text = "Order Collection",
+                .Size = New Size(500, 300),
+                .StartPosition = FormStartPosition.CenterParent,
+                .FormBorderStyle = FormBorderStyle.FixedDialog,
+                .MaximizeBox = False,
+                .MinimizeBox = False,
+                .BackColor = _ironDark
+            }
+
+            Dim lblTitle As New Label With {
+                .Text = "How would you like to collect the order?",
+                .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+                .ForeColor = _ironGold,
+                .Location = New Point(20, 20),
+                .Size = New Size(460, 40),
+                .TextAlign = ContentAlignment.MiddleCenter
+            }
+
+            Dim btnBarcode As New Button With {
+                .Text = "📱 SCAN BARCODE" & vbCrLf & "(From Receipt)",
+                .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+                .Size = New Size(200, 100),
+                .Location = New Point(30, 80),
+                .BackColor = _green,
+                .ForeColor = Color.White,
+                .FlatStyle = FlatStyle.Flat,
+                .Cursor = Cursors.Hand
+            }
+            btnBarcode.FlatAppearance.BorderSize = 0
+
+            Dim btnCellNumber As New Button With {
+                .Text = "📞 CELL NUMBER" & vbCrLf & "(No Receipt)",
+                .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+                .Size = New Size(200, 100),
+                .Location = New Point(250, 80),
+                .BackColor = _orange,
+                .ForeColor = Color.White,
+                .FlatStyle = FlatStyle.Flat,
+                .Cursor = Cursors.Hand
+            }
+            btnCellNumber.FlatAppearance.BorderSize = 0
+
+            Dim btnCancel As New Button With {
+                .Text = "Cancel",
+                .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+                .Size = New Size(100, 40),
+                .Location = New Point(190, 200),
+                .BackColor = Color.Gray,
+                .ForeColor = Color.White,
+                .FlatStyle = FlatStyle.Flat,
+                .Cursor = Cursors.Hand
+            }
+            btnCancel.FlatAppearance.BorderSize = 0
+
+            Dim selectedOption As String = ""
+
+            AddHandler btnBarcode.Click, Sub()
+                selectedOption = "barcode"
+                optionForm.DialogResult = DialogResult.OK
+                optionForm.Close()
+            End Sub
+
+            AddHandler btnCellNumber.Click, Sub()
+                selectedOption = "cellnumber"
+                optionForm.DialogResult = DialogResult.OK
+                optionForm.Close()
+            End Sub
+
+            AddHandler btnCancel.Click, Sub()
+                optionForm.DialogResult = DialogResult.Cancel
+                optionForm.Close()
+            End Sub
+
+            optionForm.Controls.AddRange({lblTitle, btnBarcode, btnCellNumber, btnCancel})
+
+            If optionForm.ShowDialog() <> DialogResult.OK Then Return
+
+            ' Step 2: Get order identifier based on selected option
+            Dim orderIdentifier As String = ""
+
+            If selectedOption = "barcode" Then
+                ' Scan barcode
+                Using barcodeDialog As New BarcodeScannerDialog("SCAN ORDER BARCODE", "Scan the barcode from the order receipt")
+                    If barcodeDialog.ShowDialog() <> DialogResult.OK Then Return
+                    orderIdentifier = barcodeDialog.ScannedBarcode
+                End Using
+                
+                If String.IsNullOrWhiteSpace(orderIdentifier) Then Return
+                LoadOrderForCollection(orderIdentifier)
+
+            ElseIf selectedOption = "cellnumber" Then
+                ' Enter cell number
+                orderIdentifier = ShowCellNumberInput()
+                If String.IsNullOrWhiteSpace(orderIdentifier) Then Return
+                LoadOrderForCollectionByCellNumber(orderIdentifier)
+            End If
+
+        Catch ex As Exception
+            ShowError("Error", ex.Message)
+        End Try
+    End Sub
+
+    Private Function ShowCellNumberInput() As String
+        ' Create touch-friendly cell number input dialog
+        Dim inputForm As New Form With {
+            .Text = "",
+            .Size = New Size(600, 500),
+            .StartPosition = FormStartPosition.CenterParent,
+            .FormBorderStyle = FormBorderStyle.None,
+            .BackColor = _ironDark,
+            .ShowInTaskbar = False
+        }
+
+        Dim lblTitle As New Label With {
+            .Text = "Enter Customer Cell Number",
+            .Font = New Font("Segoe UI", 20, FontStyle.Bold),
+            .ForeColor = _ironGold,
+            .Location = New Point(20, 20),
+            .Size = New Size(560, 40),
+            .TextAlign = ContentAlignment.MiddleCenter
+        }
+
+        Dim txtCellNumber As New TextBox With {
+            .Text = "",
+            .Font = New Font("Segoe UI", 36, FontStyle.Bold),
+            .TextAlign = HorizontalAlignment.Center,
+            .Location = New Point(100, 80),
+            .Size = New Size(400, 60),
+            .BackColor = Color.FromArgb(50, 50, 70),
+            .ForeColor = _ironGold,
+            .BorderStyle = BorderStyle.FixedSingle,
+            .ReadOnly = True
+        }
+
+        ' Numpad panel
+        Dim pnlNumpad As New Panel With {
+            .Location = New Point(100, 160),
+            .Size = New Size(400, 220),
+            .BackColor = _ironDark
+        }
+
+        ' Create numpad buttons (3x4 grid)
+        Dim numbers() As String = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"}
+        Dim btnIndex = 0
+
+        For row = 0 To 3
+            For col = 0 To 2
+                Dim btnText = numbers(btnIndex)
+                Dim btn As New Button With {
+                    .Text = btnText,
+                    .Size = New Size(120, 50),
+                    .Location = New Point(col * 130, row * 55),
+                    .Font = New Font("Segoe UI", 20, FontStyle.Bold),
+                    .BackColor = _ironBlue,
+                    .ForeColor = Color.White,
+                    .FlatStyle = FlatStyle.Flat,
+                    .Cursor = Cursors.Hand,
+                    .Tag = btnText
+                }
+                btn.FlatAppearance.BorderSize = 1
+                btn.FlatAppearance.BorderColor = _ironGlow
+
+                AddHandler btn.Click, Sub(s, ev)
+                    Dim clickedBtn = CType(s, Button)
+                    Dim value = clickedBtn.Tag.ToString()
+
+                    If value = "C" Then
+                        txtCellNumber.Text = ""
+                    ElseIf value = "⌫" Then
+                        If txtCellNumber.Text.Length > 0 Then
+                            txtCellNumber.Text = txtCellNumber.Text.Substring(0, txtCellNumber.Text.Length - 1)
+                        End If
+                    Else
+                        ' Limit to 10 digits
+                        If txtCellNumber.Text.Length < 10 Then
+                            txtCellNumber.Text &= value
+                        End If
+                    End If
+                End Sub
+
+                AddHandler btn.MouseEnter, Sub(s, ev)
+                    Dim hoverBtn = CType(s, Button)
+                    hoverBtn.BackColor = _ironBlueDark
+                    hoverBtn.FlatAppearance.BorderSize = 2
+                    hoverBtn.FlatAppearance.BorderColor = _ironGold
+                End Sub
+
+                AddHandler btn.MouseLeave, Sub(s, ev)
+                    Dim hoverBtn = CType(s, Button)
+                    hoverBtn.BackColor = _ironBlue
+                    hoverBtn.FlatAppearance.BorderSize = 1
+                    hoverBtn.FlatAppearance.BorderColor = _ironGlow
+                End Sub
+
+                pnlNumpad.Controls.Add(btn)
+                btnIndex += 1
+            Next
+        Next
+
+        ' OK button
+        Dim btnOK As New Button With {
+            .Text = "OK",
+            .Size = New Size(180, 50),
+            .Location = New Point(150, 400),
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .BackColor = _green,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnOK.FlatAppearance.BorderSize = 0
+
+        ' Cancel button
+        Dim btnCancel As New Button With {
+            .Text = "Cancel",
+            .Size = New Size(120, 50),
+            .Location = New Point(350, 400),
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .BackColor = Color.Gray,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnCancel.FlatAppearance.BorderSize = 0
+
+        Dim resultCellNumber As String = ""
+
+        AddHandler btnOK.Click, Sub()
+            If txtCellNumber.Text.Length >= 10 Then
+                resultCellNumber = txtCellNumber.Text
+                inputForm.DialogResult = DialogResult.OK
+                inputForm.Close()
+            Else
+                MessageBox.Show("Please enter a valid 10-digit cell number.", "Invalid Cell Number", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            End If
+        End Sub
+
+        AddHandler btnCancel.Click, Sub()
+            inputForm.DialogResult = DialogResult.Cancel
+            inputForm.Close()
+        End Sub
+
+        AddHandler btnOK.MouseEnter, Sub()
+            btnOK.BackColor = Color.FromArgb(0, 180, 0)
+        End Sub
+
+        AddHandler btnOK.MouseLeave, Sub()
+            btnOK.BackColor = _green
+        End Sub
+
+        AddHandler btnCancel.MouseEnter, Sub()
+            btnCancel.BackColor = Color.DarkGray
+        End Sub
+
+        AddHandler btnCancel.MouseLeave, Sub()
+            btnCancel.BackColor = Color.Gray
+        End Sub
+
+        inputForm.Controls.AddRange({lblTitle, txtCellNumber, pnlNumpad, btnOK, btnCancel})
+        
+        If inputForm.ShowDialog() = DialogResult.OK Then
+            Return resultCellNumber
+        Else
+            Return ""
+        End If
+    End Function
+
+    Private Sub LoadOrderForCollectionByCellNumber(cellNumber As String)
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+
+                ' Find orders by cell number
+                Dim cmdOrders As New SqlCommand("
+                    SELECT OrderID, OrderNumber, CustomerName, CustomerSurname, CustomerPhone,
+                           TotalAmount, DepositPaid, BalanceDue, OrderStatus, OrderDate
+                    FROM POS_CustomOrders
+                    WHERE CustomerPhone = @cellNumber 
+                      AND BranchID = @branchId 
+                      AND OrderStatus = 'Ready'
+                    ORDER BY OrderDate DESC", conn)
+
+                cmdOrders.Parameters.AddWithValue("@cellNumber", cellNumber)
+                cmdOrders.Parameters.AddWithValue("@branchId", _branchID)
+
+                Dim orders As New DataTable()
+                Using adapter As New SqlDataAdapter(cmdOrders)
+                    adapter.Fill(orders)
+                End Using
+
+                If orders.Rows.Count = 0 Then
+                    ShowError("No Orders Found", $"No ready orders found for cell number: {cellNumber}")
+                    Return
+                ElseIf orders.Rows.Count = 1 Then
+                    ' Single order - load it directly
+                    Dim orderNumber As String = orders.Rows(0)("OrderNumber").ToString()
+                    LoadOrderForCollection(orderNumber)
+                Else
+                    ' Multiple orders - show selection dialog
+                    Dim selectedOrderNumber As String = ShowOrderSelectionDialog(orders)
+                    If Not String.IsNullOrWhiteSpace(selectedOrderNumber) Then
+                        LoadOrderForCollection(selectedOrderNumber)
+                    End If
                 End If
             End Using
 
@@ -3903,14 +4175,112 @@ Public Class POSMainForm_REDESIGN
         End Try
     End Sub
 
+    Private Function ShowOrderSelectionDialog(orders As DataTable) As String
+        ' Create dialog to select from multiple orders
+        Dim selectForm As New Form With {
+            .Text = "Select Order",
+            .Size = New Size(600, 500),
+            .StartPosition = FormStartPosition.CenterParent,
+            .FormBorderStyle = FormBorderStyle.FixedDialog,
+            .MaximizeBox = False,
+            .MinimizeBox = False,
+            .BackColor = _ironDark
+        }
+
+        Dim lblTitle As New Label With {
+            .Text = "Multiple orders found. Select one:",
+            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .ForeColor = _ironGold,
+            .Location = New Point(20, 20),
+            .Size = New Size(560, 30)
+        }
+
+        Dim dgvOrders As New DataGridView With {
+            .Location = New Point(20, 60),
+            .Size = New Size(560, 340),
+            .BackgroundColor = Color.FromArgb(30, 35, 50),
+            .ForeColor = Color.White,
+            .GridColor = Color.FromArgb(60, 70, 90),
+            .BorderStyle = BorderStyle.None,
+            .AllowUserToAddRows = False,
+            .AllowUserToDeleteRows = False,
+            .SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            .MultiSelect = False,
+            .ReadOnly = True,
+            .AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
+        }
+
+        ' Add columns
+        dgvOrders.Columns.Add("OrderNumber", "Order #")
+        dgvOrders.Columns.Add("CustomerName", "Customer")
+        dgvOrders.Columns.Add("OrderDate", "Date")
+        dgvOrders.Columns.Add("TotalAmount", "Total")
+
+        ' Populate orders
+        For Each row As DataRow In orders.Rows
+            dgvOrders.Rows.Add(
+                row("OrderNumber").ToString(),
+                $"{row("CustomerName")} {row("CustomerSurname")}",
+                Convert.ToDateTime(row("OrderDate")).ToString("dd/MM/yyyy"),
+                CDec(row("TotalAmount")).ToString("C2")
+            )
+        Next
+
+        Dim btnSelect As New Button With {
+            .Text = "Select Order",
+            .Location = New Point(350, 420),
+            .Size = New Size(120, 40),
+            .BackColor = _green,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnSelect.FlatAppearance.BorderSize = 0
+
+        Dim btnCancel As New Button With {
+            .Text = "Cancel",
+            .Location = New Point(480, 420),
+            .Size = New Size(100, 40),
+            .BackColor = Color.Gray,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnCancel.FlatAppearance.BorderSize = 0
+
+        Dim selectedOrderNumber As String = ""
+
+        AddHandler btnSelect.Click, Sub()
+            If dgvOrders.SelectedRows.Count > 0 Then
+                selectedOrderNumber = dgvOrders.SelectedRows(0).Cells("OrderNumber").Value.ToString()
+                selectForm.DialogResult = DialogResult.OK
+                selectForm.Close()
+            Else
+                MessageBox.Show("Please select an order.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+        End Sub
+
+        AddHandler btnCancel.Click, Sub()
+            selectForm.DialogResult = DialogResult.Cancel
+            selectForm.Close()
+        End Sub
+
+        selectForm.Controls.AddRange({lblTitle, dgvOrders, btnSelect, btnCancel})
+
+        If selectForm.ShowDialog() = DialogResult.OK Then
+            Return selectedOrderNumber
+        Else
+            Return ""
+        End If
+    End Function
+
     ' Order collection variables
     Private _isOrderCollectionMode As Boolean = False
     Private _collectionOrderID As Integer = 0
     Private _collectionOrderNumber As String = ""
     Private _collectionDepositPaid As Decimal = 0
-    Private _collectionColour As String = ""
-    Private _collectionPicture As String = ""
     Private _collectionTotalAmount As Decimal = 0
+    Private _collectionCustomerName As String = ""
 
     Private Sub LoadOrderForCollection(orderNumber As String)
         Try
@@ -3920,7 +4290,7 @@ Public Class POSMainForm_REDESIGN
                 ' Load order
                 Dim cmdOrder As New SqlCommand("
                     SELECT OrderID, OrderNumber, CustomerName, CustomerSurname, CustomerPhone,
-                           TotalAmount, DepositPaid, BalanceDue, OrderStatus, Colour, Picture
+                           TotalAmount, DepositPaid, BalanceDue, OrderStatus
                     FROM POS_CustomOrders
                     WHERE OrderNumber = @orderNumber AND BranchID = @branchId", conn)
 
@@ -3952,10 +4322,9 @@ Public Class POSMainForm_REDESIGN
                     _collectionOrderNumber = reader("OrderNumber").ToString()
                     _collectionTotalAmount = Convert.ToDecimal(reader("TotalAmount"))
                     _collectionDepositPaid = Convert.ToDecimal(reader("DepositPaid"))
-                    _collectionColour = If(IsDBNull(reader("Colour")), "", reader("Colour").ToString())
-                    _collectionPicture = If(IsDBNull(reader("Picture")), "", reader("Picture").ToString())
+                    _collectionCustomerName = $"{reader("CustomerName")} {reader("CustomerSurname")}"
                     Dim balanceDue As Decimal = Convert.ToDecimal(reader("BalanceDue"))
-                    Dim customerName As String = $"{reader("CustomerName")} {reader("CustomerSurname")}"
+                    Dim customerName As String = _collectionCustomerName
                     Dim customerPhone As String = reader("CustomerPhone").ToString()
 
                     reader.Close()
@@ -4052,7 +4421,7 @@ Public Class POSMainForm_REDESIGN
                     CompleteOrderCollection()
                     
                     ' Print receipt (no extra confirmation needed)
-                    PrintCollectionReceipt(_collectionOrderNumber, balanceDue, _collectionDepositPaid, _collectionTotalAmount, paymentMethod, cashAmount, cardAmount, paymentForm.ChangeAmount)
+                    PrintCollectionReceipt(_collectionOrderNumber, _collectionCustomerName, balanceDue, _collectionDepositPaid, _collectionTotalAmount, paymentMethod, cashAmount, cardAmount, paymentForm.ChangeAmount)
                 Else
                     ' Payment cancelled - silently reset
                     _isOrderCollectionMode = False
@@ -4100,10 +4469,10 @@ Public Class POSMainForm_REDESIGN
         End Try
     End Sub
     
-    Private Sub PrintCollectionReceipt(orderNumber As String, balancePaid As Decimal, depositPaid As Decimal, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, changeAmount As Decimal)
+    Private Sub PrintCollectionReceipt(orderNumber As String, customerName As String, balancePaid As Decimal, depositPaid As Decimal, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, changeAmount As Decimal)
         Try
             ' PRINT TO THERMAL PRINTER FIRST
-            PrintCollectionReceiptToThermalPrinter(orderNumber, balancePaid, depositPaid, totalAmount, paymentMethod, cashAmount, cardAmount, changeAmount)
+            PrintCollectionReceiptToThermalPrinter(orderNumber, customerName, balancePaid, depositPaid, totalAmount, paymentMethod, cashAmount, cardAmount, changeAmount)
             
             ' THEN PRINT TO CONTINUOUS PRINTER (with XY coordinates from database)
             Try
@@ -4174,13 +4543,14 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine("================================")
             receipt.AppendLine()
             receipt.AppendLine($"Order #: {orderNumber}")
-            receipt.AppendLine($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}")
+            receipt.AppendLine($"Customer: {customerName}")
+            receipt.AppendLine($"Date Collected: {DateTime.Now:dd/MM/yyyy HH:mm}")
             receipt.AppendLine($"Cashier: {_cashierName}")
             receipt.AppendLine()
             receipt.AppendLine("PAYMENT SUMMARY:")
-            receipt.AppendLine($"Order Total: R{totalAmount:N2}")
-            receipt.AppendLine($"Deposit Paid: R{depositPaid:N2}")
-            receipt.AppendLine($"Balance Paid: R{balancePaid:N2}")
+            receipt.AppendLine($"Order Total:    R{totalAmount:N2}")
+            receipt.AppendLine($"Deposit Paid:   R{depositPaid:N2}")
+            receipt.AppendLine($"Balance Paid:   R{balancePaid:N2}")
             receipt.AppendLine()
             receipt.AppendLine("PAYMENT METHOD:")
             receipt.AppendLine($"  {paymentMethod}")
@@ -4413,18 +4783,22 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Function CreateCategoryTile(categoryId As Integer, categoryName As String, productCount As Integer) As Button
-        ' Glassy modern category tile with gradient effect
+        ' Compact category tile with smaller font to prevent cutoff
+        ' Responsive font size based on text length
+        Dim fontSize As Single = If(categoryName.Length > 15, 9, If(categoryName.Length > 10, 10, 11))
+        
         Dim btn As New Button With {
-            .Text = $"{categoryName}{vbCrLf}({productCount} items)",
-            .Size = New Size(200, 140),
-            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .Text = categoryName.ToUpper(),
+            .Size = New Size(_tileWidth, _tileHeight),
+            .Font = New Font("Segoe UI", fontSize, FontStyle.Bold),
             .ForeColor = Color.White,
             .BackColor = Color.FromArgb(180, 193, 39, 45),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
             .Tag = categoryId,
             .Margin = New Padding(10),
-            .TextAlign = ContentAlignment.MiddleCenter
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .AutoSize = False
         }
         btn.FlatAppearance.BorderSize = 2
         btn.FlatAppearance.BorderColor = Color.FromArgb(255, 215, 0)
@@ -4434,31 +4808,33 @@ Public Class POSMainForm_REDESIGN
                                        btn.BackColor = Color.FromArgb(220, 193, 39, 45)
                                        btn.FlatAppearance.BorderSize = 3
                                        btn.FlatAppearance.BorderColor = _ironGold
-                                       btn.Font = New Font("Segoe UI", 17, FontStyle.Bold)
                                    End Sub
         AddHandler btn.MouseLeave, Sub()
                                        btn.BackColor = Color.FromArgb(180, 193, 39, 45)
                                        btn.FlatAppearance.BorderSize = 2
                                        btn.FlatAppearance.BorderColor = Color.FromArgb(255, 215, 0)
-                                       btn.Font = New Font("Segoe UI", 16, FontStyle.Bold)
                                    End Sub
 
         Return btn
     End Function
 
     Private Function CreateSubCategoryTile(subCategoryId As Integer, subCategoryName As String, productCount As Integer) As Button
-        ' Glassy modern subcategory tile with different color
+        ' Compact subcategory tile with smaller font to prevent cutoff
+        ' Responsive font size based on text length
+        Dim fontSize As Single = If(subCategoryName.Length > 15, 8, If(subCategoryName.Length > 10, 9, 10))
+        
         Dim btn As New Button With {
-            .Text = $"{subCategoryName}{vbCrLf}({productCount} items)",
-            .Size = New Size(200, 140),
-            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .Text = subCategoryName.ToUpper(),
+            .Size = New Size(_tileWidth, _tileHeight),
+            .Font = New Font("Segoe UI", fontSize, FontStyle.Bold),
             .ForeColor = Color.White,
             .BackColor = Color.FromArgb(180, 0, 150, 255),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
             .Tag = subCategoryId,
             .Margin = New Padding(10),
-            .TextAlign = ContentAlignment.MiddleCenter
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .AutoSize = False
         }
         btn.FlatAppearance.BorderSize = 2
         btn.FlatAppearance.BorderColor = Color.FromArgb(100, 200, 255)
@@ -4468,45 +4844,33 @@ Public Class POSMainForm_REDESIGN
                                        btn.BackColor = Color.FromArgb(220, 0, 150, 255)
                                        btn.FlatAppearance.BorderSize = 3
                                        btn.FlatAppearance.BorderColor = Color.FromArgb(0, 212, 255)
-                                       btn.Font = New Font("Segoe UI", 17, FontStyle.Bold)
                                    End Sub
         AddHandler btn.MouseLeave, Sub()
                                        btn.BackColor = Color.FromArgb(180, 0, 150, 255)
                                        btn.FlatAppearance.BorderSize = 2
                                        btn.FlatAppearance.BorderColor = Color.FromArgb(100, 200, 255)
-                                       btn.Font = New Font("Segoe UI", 16, FontStyle.Bold)
                                    End Sub
 
         Return btn
     End Function
 
     Private Function CreateProductTileNew(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal, Optional barcode As String = "") As Panel
-        ' Create panel for product tile - WHITE background with DARK BLUE text
+        ' Compact product tile - fixed size
         Dim pnl As New Panel With {
-            .Size = New Size(220, 160),
+            .Size = New Size(140, 100),
             .BackColor = Color.White,
             .Cursor = Cursors.Hand,
             .Tag = New With {productId, productCode, productName, price, stock},
-            .Margin = New Padding(10),
+            .Margin = New Padding(4),
             .BorderStyle = BorderStyle.FixedSingle
         }
 
         ' Product Code (top left, small)
         Dim lblCode As New Label With {
             .Text = productCode,
-            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 8, FontStyle.Bold),
             .ForeColor = _darkBlue,
-            .Location = New Point(8, 8),
-            .AutoSize = True,
-            .BackColor = Color.White
-        }
-
-        ' Barcode (top right, small, gray)
-        Dim lblBarcode As New Label With {
-            .Text = If(String.IsNullOrEmpty(barcode), "", $"🔖 {barcode}"),
-            .Font = New Font("Segoe UI", 8, FontStyle.Regular),
-            .ForeColor = Color.Gray,
-            .Location = New Point(8, 26),
+            .Location = New Point(4, 4),
             .AutoSize = True,
             .BackColor = Color.White
         }
@@ -4514,53 +4878,49 @@ Public Class POSMainForm_REDESIGN
         ' Product Name (center, wrapped)
         Dim lblName As New Label With {
             .Text = productName,
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 9, FontStyle.Bold),
             .ForeColor = _darkBlue,
-            .Location = New Point(8, 40),
-            .Size = New Size(204, 70),
-            .TextAlign = ContentAlignment.TopCenter,
+            .Location = New Point(4, 20),
+            .Size = New Size(132, 35),
+            .AutoEllipsis = True,
             .BackColor = Color.White
         }
 
-        ' Price (bottom left, large, green color)
+        ' Price (bottom left, green color)
         Dim lblPrice As New Label With {
             .Text = $"R {price:N2}",
-            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .ForeColor = _green,
-            .Location = New Point(8, 115),
-            .Size = New Size(120, 35),
-            .TextAlign = ContentAlignment.MiddleLeft,
+            .Location = New Point(4, 65),
+            .AutoSize = True,
             .BackColor = Color.White
         }
 
         ' Stock (bottom right, small)
         Dim lblStock As New Label With {
             .Text = $"Stock: {stock:N0}",
-            .Font = New Font("Segoe UI", 10, FontStyle.Regular),
+            .Font = New Font("Segoe UI", 7, FontStyle.Regular),
             .ForeColor = If(stock > 0, _darkBlue, Color.Red),
-            .Location = New Point(130, 120),
-            .Size = New Size(82, 30),
-            .TextAlign = ContentAlignment.MiddleRight,
+            .Location = New Point(4, 84),
+            .AutoSize = True,
             .BackColor = Color.White
         }
 
         ' Add labels to panel
-        pnl.Controls.AddRange({lblCode, lblBarcode, lblName, lblPrice, lblStock})
+        pnl.Controls.AddRange({lblCode, lblName, lblPrice, lblStock})
 
-        ' Click handlers
-        AddHandler pnl.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
-        AddHandler lblCode.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
-        AddHandler lblBarcode.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
-        AddHandler lblName.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
-        AddHandler lblPrice.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
-        AddHandler lblStock.Click, Sub() AddProductToCartFromTile(productId, productCode, productName, price, stock)
+        ' Click handlers - add 1 qty directly to cart
+        AddHandler pnl.Click, Sub() AddProductToCart(productId, productCode, productName, price)
+        AddHandler lblCode.Click, Sub() AddProductToCart(productId, productCode, productName, price)
+        AddHandler lblName.Click, Sub() AddProductToCart(productId, productCode, productName, price)
+        AddHandler lblPrice.Click, Sub() AddProductToCart(productId, productCode, productName, price)
+        AddHandler lblStock.Click, Sub() AddProductToCart(productId, productCode, productName, price)
 
         ' Hover effects (light blue on hover)
         AddHandler pnl.MouseEnter, Sub()
                                        Dim hoverColor = ColorTranslator.FromHtml("#E3F2FD")
                                        pnl.BackColor = hoverColor
                                        lblCode.BackColor = hoverColor
-                                       lblBarcode.BackColor = hoverColor
                                        lblName.BackColor = hoverColor
                                        lblPrice.BackColor = hoverColor
                                        lblStock.BackColor = hoverColor
@@ -4568,7 +4928,6 @@ Public Class POSMainForm_REDESIGN
         AddHandler pnl.MouseLeave, Sub()
                                        pnl.BackColor = Color.White
                                        lblCode.BackColor = Color.White
-                                       lblBarcode.BackColor = Color.White
                                        lblName.BackColor = Color.White
                                        lblPrice.BackColor = Color.White
                                        lblStock.BackColor = Color.White
@@ -4577,10 +4936,171 @@ Public Class POSMainForm_REDESIGN
         Return pnl
     End Function
 
-    Private Sub AddProductToCartFromTile(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal)
-        ' Disregard out of stock - allow all products
-        ' Show quantity modal (like mockup)
-        ShowQuantityModal(productId, productCode, productName, price, stock)
+    Private Sub ShowCartQuantityEditor()
+        ' Show numpad dialog to modify quantity of selected cart item
+        If _cartItems.Rows.Count = 0 Then
+            MessageBox.Show("Cart is empty. Add items first.", "Empty Cart", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        ' Check if a cart item is selected
+        If dgvCart.SelectedRows.Count = 0 Then
+            MessageBox.Show("Please select a cart item first.", "No Item Selected", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        ' Get selected cart item details
+        Dim selectedRow = dgvCart.SelectedRows(0)
+        Dim rowIndex = selectedRow.Index
+        Dim productName = selectedRow.Cells("Product").Value.ToString()
+        Dim currentQty = CDec(selectedRow.Cells("Qty").Value)
+        Dim price = CDec(selectedRow.Cells("Price").Value)
+
+        ' Create modal form with numpad
+        Dim modalForm As New Form With {
+            .Text = "",
+            .Size = New Size(600, 500),
+            .StartPosition = FormStartPosition.CenterParent,
+            .FormBorderStyle = FormBorderStyle.None,
+            .BackColor = _ironDark,
+            .ShowInTaskbar = False
+        }
+
+        ' Title
+        Dim lblTitle As New Label With {
+            .Text = productName,
+            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+            .ForeColor = _ironGold,
+            .Location = New Point(20, 20),
+            .Size = New Size(560, 50),
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .BackColor = _ironDark
+        }
+
+        ' Quantity input with current qty
+        Dim isInitialValue As Boolean = True
+        Dim txtQuantity As New TextBox With {
+            .Text = currentQty.ToString(),
+            .Font = New Font("Segoe UI", 48, FontStyle.Bold),
+            .TextAlign = HorizontalAlignment.Center,
+            .Location = New Point(150, 90),
+            .Size = New Size(300, 80),
+            .BackColor = Color.FromArgb(50, 50, 70),
+            .ForeColor = _ironGold,
+            .BorderStyle = BorderStyle.FixedSingle,
+            .ReadOnly = True
+        }
+
+        ' Numpad panel
+        Dim pnlNumpad As New Panel With {
+            .Location = New Point(100, 190),
+            .Size = New Size(400, 220),
+            .BackColor = _ironDark
+        }
+
+        ' Create numpad buttons (3x4 grid)
+        Dim numbers() As String = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"}
+        Dim btnIndex = 0
+
+        For row = 0 To 3
+            For col = 0 To 2
+                Dim btnText = numbers(btnIndex)
+                Dim btn As New Button With {
+                    .Text = btnText,
+                    .Size = New Size(120, 50),
+                    .Location = New Point(col * 130, row * 55),
+                    .Font = New Font("Segoe UI", 20, FontStyle.Bold),
+                    .BackColor = _ironBlue,
+                    .ForeColor = Color.White,
+                    .FlatStyle = FlatStyle.Flat,
+                    .Cursor = Cursors.Hand,
+                    .Tag = btnText
+                }
+                btn.FlatAppearance.BorderSize = 1
+                btn.FlatAppearance.BorderColor = _ironGlow
+
+                AddHandler btn.Click, Sub(s, ev)
+                                          Dim clickedBtn = CType(s, Button)
+                                          Dim value = clickedBtn.Tag.ToString()
+
+                                          If value = "C" Then
+                                              txtQuantity.Text = "1"
+                                              isInitialValue = True
+                                          ElseIf value = "⌫" Then
+                                              If txtQuantity.Text.Length > 1 Then
+                                                  txtQuantity.Text = txtQuantity.Text.Substring(0, txtQuantity.Text.Length - 1)
+                                              Else
+                                                  txtQuantity.Text = "1"
+                                                  isInitialValue = True
+                                              End If
+                                          Else
+                                              ' If it's the initial value, replace it with the first digit
+                                              If isInitialValue Then
+                                                  txtQuantity.Text = value
+                                                  isInitialValue = False
+                                              Else
+                                                  ' Otherwise append the digit
+                                                  txtQuantity.Text &= value
+                                              End If
+                                          End If
+                                      End Sub
+
+                AddHandler btn.MouseEnter, Sub(s, ev)
+                                               Dim hoverBtn = CType(s, Button)
+                                               hoverBtn.BackColor = _ironBlueDark
+                                               hoverBtn.FlatAppearance.BorderSize = 2
+                                               hoverBtn.FlatAppearance.BorderColor = _ironGold
+                                           End Sub
+
+                AddHandler btn.MouseLeave, Sub(s, ev)
+                                               Dim hoverBtn = CType(s, Button)
+                                               hoverBtn.BackColor = _ironBlue
+                                               hoverBtn.FlatAppearance.BorderSize = 1
+                                               hoverBtn.FlatAppearance.BorderColor = _ironGlow
+                                           End Sub
+
+                pnlNumpad.Controls.Add(btn)
+                btnIndex += 1
+            Next
+        Next
+
+        ' OK button
+        Dim btnOK As New Button With {
+            .Text = "OK",
+            .Size = New Size(200, 50),
+            .Location = New Point(200, 420),
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .BackColor = _green,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnOK.FlatAppearance.BorderSize = 0
+
+        AddHandler btnOK.Click, Sub()
+            Dim newQty As Decimal
+            If Decimal.TryParse(txtQuantity.Text, newQty) AndAlso newQty > 0 Then
+                ' Update cart item quantity
+                _cartItems.Rows(rowIndex)("Qty") = newQty
+                _cartItems.Rows(rowIndex)("Total") = price * newQty
+                CalculateTotals()
+                modalForm.DialogResult = DialogResult.OK
+                modalForm.Close()
+            Else
+                MessageBox.Show("Please enter a valid quantity.", "Invalid Quantity", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            End If
+        End Sub
+
+        AddHandler btnOK.MouseEnter, Sub()
+                                          btnOK.BackColor = Color.FromArgb(0, 180, 0)
+                                      End Sub
+
+        AddHandler btnOK.MouseLeave, Sub()
+                                          btnOK.BackColor = _green
+                                      End Sub
+
+        modalForm.Controls.AddRange({lblTitle, txtQuantity, pnlNumpad, btnOK})
+        modalForm.ShowDialog(Me)
     End Sub
 
     Private Sub ShowQuantityModal(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal)
@@ -4605,7 +5125,8 @@ Public Class POSMainForm_REDESIGN
             .BackColor = _ironDark
         }
 
-        ' Quantity input
+        ' Quantity input with flag to track if it's the initial value
+        Dim isInitialValue As Boolean = True
         Dim txtQuantity As New TextBox With {
             .Text = "1",
             .Font = New Font("Segoe UI", 48, FontStyle.Bold),
@@ -4652,16 +5173,21 @@ Public Class POSMainForm_REDESIGN
 
                                           If value = "C" Then
                                               txtQuantity.Text = "1"
+                                              isInitialValue = True
                                           ElseIf value = "⌫" Then
                                               If txtQuantity.Text.Length > 1 Then
                                                   txtQuantity.Text = txtQuantity.Text.Substring(0, txtQuantity.Text.Length - 1)
                                               Else
                                                   txtQuantity.Text = "1"
+                                                  isInitialValue = True
                                               End If
                                           Else
-                                              If txtQuantity.Text = "1" Then
+                                              ' If it's the initial "1", replace it with the first digit
+                                              If isInitialValue Then
                                                   txtQuantity.Text = value
+                                                  isInitialValue = False
                                               Else
+                                                  ' Otherwise append the digit
                                                   txtQuantity.Text &= value
                                               End If
                                           End If
@@ -4758,7 +5284,7 @@ Public Class POSMainForm_REDESIGN
     ''' <summary>
     ''' Print order receipt to thermal printer (80mm)
     ''' </summary>
-    Private Sub PrintOrderReceiptToThermalPrinter(orderNumber As String, depositPaid As Decimal, totalAmount As Decimal)
+    Private Sub PrintOrderReceiptToThermalPrinter(orderNumber As String, customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, collectionDay As String, specialInstructions As String, depositPaid As Decimal, totalAmount As Decimal, Optional colour As String = "", Optional picture As String = "")
         Try
             Dim printDoc As New Printing.PrintDocument()
             
@@ -4805,6 +5331,36 @@ Public Class POSMainForm_REDESIGN
                                                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
                                                
+                                               ' Customer details
+                                               e.Graphics.DrawString("CUSTOMER:", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"{customerName} {customerSurname}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Phone: {customerPhone}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 18
+                                               
+                                               ' Collection details
+                                               e.Graphics.DrawString("READY FOR COLLECTION:", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Date: {readyDate:dd/MM/yyyy}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Time: {readyTime:hh\:mm}", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"*** {collectionDay.ToUpper()} ***", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 18
+                                               
+                                               ' Special instructions
+                                               If Not String.IsNullOrWhiteSpace(specialInstructions) Then
+                                                   e.Graphics.DrawString("INSTRUCTIONS:", fontBold, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                                   e.Graphics.DrawString(specialInstructions, font, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 18
+                                               End If
+                                               
+                                               ' Separator
+                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+                                               
                                                ' Items
                                                For Each row As DataRow In _cartItems.Rows
                                                    Dim product = row("Product").ToString()
@@ -4840,13 +5396,32 @@ Public Class POSMainForm_REDESIGN
                                                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
                                                
+                                               ' Barcode - generated as image
+                                               Try
+                                                   Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(orderNumber, 250, 50)
+                                                   e.Graphics.DrawImage(barcodeImage, CInt((302 - 250) / 2), CInt(yPos))
+                                                   yPos += 55
+                                                   
+                                                   ' Order number below barcode
+                                                   Dim orderNumSize = e.Graphics.MeasureString(orderNumber, font)
+                                                   e.Graphics.DrawString(orderNumber, font, Brushes.Black, (302 - orderNumSize.Width) / 2, yPos)
+                                                   yPos += 18
+                                                   
+                                                   barcodeImage.Dispose()
+                                               Catch ex As Exception
+                                                   ' If barcode generation fails, just print order number
+                                                   Dim orderNumSize = e.Graphics.MeasureString(orderNumber, fontLarge)
+                                                   e.Graphics.DrawString(orderNumber, fontLarge, Brushes.Black, (302 - orderNumSize.Width) / 2, yPos)
+                                                   yPos += 22
+                                               End Try
+                                               
                                                ' Footer - centered
-                                               Dim footer1 = "PLEASE BRING THIS RECEIPT"
-                                               Dim footer1Size = e.Graphics.MeasureString(footer1, font)
-                                               e.Graphics.DrawString(footer1, font, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
+                                               Dim footer1 = "SCAN BARCODE TO COLLECT"
+                                               Dim footer1Size = e.Graphics.MeasureString(footer1, fontBold)
+                                               e.Graphics.DrawString(footer1, fontBold, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
                                                yPos += 14
                                                
-                                               Dim footer2 = "WHEN COLLECTING YOUR ORDER"
+                                               Dim footer2 = "PLEASE BRING THIS RECEIPT"
                                                Dim footer2Size = e.Graphics.MeasureString(footer2, font)
                                                e.Graphics.DrawString(footer2, font, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
                                            End Sub
@@ -4862,7 +5437,7 @@ Public Class POSMainForm_REDESIGN
     ''' <summary>
     ''' Print order collection receipt to thermal printer (80mm)
     ''' </summary>
-    Private Sub PrintCollectionReceiptToThermalPrinter(orderNumber As String, balancePaid As Decimal, depositPaid As Decimal, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, changeAmount As Decimal)
+    Private Sub PrintCollectionReceiptToThermalPrinter(orderNumber As String, customerName As String, balancePaid As Decimal, depositPaid As Decimal, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, changeAmount As Decimal)
         Try
             Dim printDoc As New Printing.PrintDocument()
 
@@ -4885,12 +5460,16 @@ Public Class POSMainForm_REDESIGN
                                                e.Graphics.DrawString(GetBranchName(), font, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
-                                               ' Date and time
-                                               e.Graphics.DrawString(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), font, Brushes.Black, leftMargin, yPos)
+                                               ' Date collected
+                                               e.Graphics.DrawString($"Date Collected: {DateTime.Now:dd/MM/yyyy HH:mm}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Order number
                                                e.Graphics.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 15
+
+                                               ' Customer name
+                                               e.Graphics.DrawString($"Customer: {customerName}", font, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Cashier

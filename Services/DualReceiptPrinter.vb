@@ -138,7 +138,33 @@ Public Class DualReceiptPrinter
                 e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
+                ' Barcode - generated as image
+                Try
+                    Dim invoiceNum = receiptData("InvoiceNumber").ToString()
+                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(invoiceNum, 250, 50)
+                    e.Graphics.DrawImage(barcodeImage, CInt((302 - 250) / 2), CInt(yPos))
+                    yPos += 55
+                    
+                    ' Invoice number below barcode
+                    Dim invNumSize = e.Graphics.MeasureString(invoiceNum, font)
+                    e.Graphics.DrawString(invoiceNum, font, Brushes.Black, (302 - invNumSize.Width) / 2, yPos)
+                    yPos += 18
+                    
+                    barcodeImage.Dispose()
+                Catch ex As Exception
+                    ' If barcode generation fails, just print invoice number
+                    Dim invoiceNum = receiptData("InvoiceNumber").ToString()
+                    Dim invNumSize = e.Graphics.MeasureString(invoiceNum, fontLarge)
+                    e.Graphics.DrawString(invoiceNum, fontLarge, Brushes.Black, (302 - invNumSize.Width) / 2, yPos)
+                    yPos += 22
+                End Try
+                
                 ' Footer - centered
+                Dim footer0 = "SCAN BARCODE FOR RETURNS"
+                Dim footer0Size = e.Graphics.MeasureString(footer0, fontBold)
+                e.Graphics.DrawString(footer0, fontBold, Brushes.Black, (302 - footer0Size.Width) / 2, yPos)
+                yPos += 14
+                
                 Dim footer1 = "Thank you for your purchase!"
                 Dim footer1Size = e.Graphics.MeasureString(footer1, font)
                 e.Graphics.DrawString(footer1, font, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)

@@ -958,15 +958,8 @@ Public Class ReturnLineItemsForm
                 e.Graphics.DrawString("Thank you for your business", font, Brushes.Black, leftMargin, yPos)
             End Sub
             
-            ' Show preview
-            Dim previewDialog As New PrintPreviewDialog()
-            previewDialog.Document = printDoc
-            previewDialog.Width = 400
-            previewDialog.Height = 600
-            
-            If previewDialog.ShowDialog() = DialogResult.OK Then
-                printDoc.Print()
-            End If
+            ' Print directly without preview
+            printDoc.Print()
             
         Catch ex As Exception
             MessageBox.Show($"Error reprinting invoice: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)

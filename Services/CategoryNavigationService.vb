@@ -99,22 +99,8 @@ Public Class CategoryNavigationService
                 p.SKU,
                 p.ProductID AS VariantID,
                 ISNULL(p.Barcode, p.SKU) AS Barcode,
-                ISNULL(
-                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
-                     WHERE ProductID = p.ProductID AND BranchID = @BranchID 
-                     ORDER BY EffectiveFrom DESC),
-                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
-                     WHERE ProductID = p.ProductID AND BranchID IS NULL 
-                     ORDER BY EffectiveFrom DESC)
-                ) AS SellingPrice,
-                ISNULL(
-                    (SELECT TOP 1 CostPrice FROM Demo_Retail_Price 
-                     WHERE ProductID = p.ProductID AND BranchID = @BranchID 
-                     ORDER BY EffectiveFrom DESC),
-                    (SELECT TOP 1 CostPrice FROM Demo_Retail_Price 
-                     WHERE ProductID = p.ProductID AND BranchID IS NULL 
-                     ORDER BY EffectiveFrom DESC)
-                ) AS CostPrice,
+                ISNULL(price.SellingPrice, 0) AS SellingPrice,
+                ISNULL(price.CostPrice, 0) AS CostPrice,
                 ISNULL(p.CurrentStock, 0) AS QtyOnHand,
                 0 AS ReorderLevel,
                 c.CategoryName,
@@ -122,8 +108,11 @@ Public Class CategoryNavigationService
             FROM Demo_Retail_Product p
             INNER JOIN Categories c ON c.CategoryID = p.CategoryID
             INNER JOIN SubCategories sc ON sc.SubCategoryID = p.SubCategoryID
+            LEFT JOIN Demo_Retail_Price price ON price.ProductID = p.ProductID 
+                AND price.BranchID = @BranchID
             WHERE p.CategoryID = @CategoryID
               AND p.SubCategoryID = @SubCategoryID
+              AND p.BranchID = @BranchID
               AND p.IsActive = 1
               AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
             ORDER BY p.Name"
@@ -158,14 +147,7 @@ Public Class CategoryNavigationService
                 p.SKU,
                 p.ProductID AS VariantID,
                 ISNULL(p.ExternalBarcode, p.SKU) AS Barcode,
-                ISNULL(
-                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
-                     WHERE ProductID = p.ProductID AND BranchID = @BranchID 
-                     ORDER BY EffectiveFrom DESC),
-                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
-                     WHERE ProductID = p.ProductID AND BranchID IS NULL 
-                     ORDER BY EffectiveFrom DESC)
-                ) AS SellingPrice,
+                ISNULL(price.SellingPrice, 0) AS SellingPrice,
                 ISNULL(s.Quantity, 0) AS QtyOnHand,
                 c.CategoryName,
                 sc.SubCategoryName
@@ -174,7 +156,10 @@ Public Class CategoryNavigationService
             LEFT JOIN SubCategories sc ON sc.SubCategoryID = p.SubCategoryID
             LEFT JOIN dbo.RetailStock s ON s.ProductID = p.ProductID 
                 AND s.BranchID = @BranchID
-            WHERE p.IsActive = 1
+            LEFT JOIN Demo_Retail_Price price ON price.ProductID = p.ProductID 
+                AND price.BranchID = @BranchID
+            WHERE p.BranchID = @BranchID
+              AND p.IsActive = 1
               AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'pest control')
               AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
               AND (

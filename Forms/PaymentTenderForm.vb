@@ -131,21 +131,28 @@ Public Class PaymentTenderForm
         Me.WindowState = FormWindowState.Normal
         Me.ShowInTaskbar = True
         Me.ControlBox = True
-        Me.Size = New Size(1200, 900)
+        
+        ' Scale based on screen size
+        Dim screenWidth = Screen.PrimaryScreen.WorkingArea.Width
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formWidth = Math.Min(1200, CInt(screenWidth * 0.8))
+        Dim formHeight = Math.Min(900, CInt(screenHeight * 0.85))
+        Me.Size = New Size(formWidth, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
     End Sub
     
     Private Sub ShowPaymentMethodSelection()
         Me.Controls.Clear()
         
-        ' Ensure form is visible and properly sized
-        Me.WindowState = FormWindowState.Normal
-        Me.Size = New Size(1200, 700)
-        Me.StartPosition = FormStartPosition.CenterScreen
+        ' Scale based on screen size
+        Dim screenWidth = Screen.PrimaryScreen.WorkingArea.Width
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formWidth = Math.Min(1200, CInt(screenWidth * 0.8))
+        Dim formHeight = Math.Min(700, CInt(screenHeight * 0.75))
         
-        ' Use actual form dimensions
-        Dim formWidth = 1200
-        Dim formHeight = 700
+        Me.WindowState = FormWindowState.Normal
+        Me.Size = New Size(formWidth, formHeight)
+        Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Header with Iron Man theme - centered and compact
         Dim pnlHeader As New Panel With {
@@ -323,7 +330,9 @@ Public Class PaymentTenderForm
     
     Private Sub ShowEFTSlip()
         Me.Controls.Clear()
-        Me.Size = New Size(600, 800)
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formHeight = Math.Min(800, CInt(screenHeight * 0.85))
+        Me.Size = New Size(600, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Header
@@ -473,7 +482,9 @@ Public Class PaymentTenderForm
     
     Private Sub ShowCashKeypad(amountDue As Decimal, title As String)
         Me.Controls.Clear()
-        Me.Size = New Size(600, 750)
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formHeight = Math.Min(750, CInt(screenHeight * 0.8))
+        Me.Size = New Size(600, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Adjust header height for split payments
@@ -500,8 +511,8 @@ Public Class PaymentTenderForm
         
         pnlHeader.Controls.AddRange({lblAmountDue, lblTendered, lblChange})
         
-        ' Make text box accept keyboard input
-        Dim txtAmount As New TextBox With {.Font = New Font("Segoe UI", 48, FontStyle.Bold), .TextAlign = HorizontalAlignment.Right, .Location = New Point(50, 140), .Size = New Size(500, 80), .Text = "0.00", .ReadOnly = False, .BackColor = Color.White, .ForeColor = _darkBlue, .Name = "txtAmount"}
+        ' Make text box accept keyboard input - position below header
+        Dim txtAmount As New TextBox With {.Font = New Font("Segoe UI", 48, FontStyle.Bold), .TextAlign = HorizontalAlignment.Right, .Location = New Point(50, headerHeight + 10), .Size = New Size(500, 80), .Text = "0.00", .ReadOnly = False, .BackColor = Color.White, .ForeColor = _darkBlue, .Name = "txtAmount"}
         
         ' Handle keyboard input and update change calculation
         AddHandler txtAmount.TextChanged, Sub()
@@ -533,7 +544,10 @@ Public Class PaymentTenderForm
         
         txtAmount.Focus() ' Set focus so keyboard works immediately
         
-        Dim pnlKeypad As New Panel With {.Location = New Point(100, 240), .Size = New Size(400, 350)}
+        ' Calculate numpad position to avoid overlap with bottom buttons
+        Dim numpadTop = headerHeight + 120 ' Below text box
+        Dim numpadHeight = Math.Min(350, formHeight - numpadTop - 110) ' Leave space for buttons
+        Dim pnlKeypad As New Panel With {.Location = New Point(100, numpadTop), .Size = New Size(400, numpadHeight)}
         Dim buttonSize As New Size(120, 70)
         Dim buttons(,) As String = {{"7", "8", "9"}, {"4", "5", "6"}, {"1", "2", "3"}, {".", "0", "⌫"}}
         
@@ -611,7 +625,9 @@ Public Class PaymentTenderForm
     
     Private Sub ProcessCardTransaction(amount As Decimal)
         Me.Controls.Clear()
-        Me.Size = New Size(700, 600)
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formHeight = Math.Min(600, CInt(screenHeight * 0.7))
+        Me.Size = New Size(700, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         Dim pnlMain As New Panel With {.Dock = DockStyle.Fill, .BackColor = _darkBlue}
@@ -686,7 +702,9 @@ Public Class PaymentTenderForm
     
     Private Sub ShowCardProcessing(amount As Decimal)
         Me.Controls.Clear()
-        Me.Size = New Size(700, 500)
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formHeight = Math.Min(500, CInt(screenHeight * 0.6))
+        Me.Size = New Size(700, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         Dim pnlMain As New Panel With {.Dock = DockStyle.Fill, .BackColor = ColorTranslator.FromHtml("#3498DB")} ' Blue
@@ -746,7 +764,9 @@ Public Class PaymentTenderForm
     
     Private Sub ShowCardSuccess(amount As Decimal)
         Me.Controls.Clear()
-        Me.Size = New Size(700, 700)
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formHeight = Math.Min(700, CInt(screenHeight * 0.75))
+        Me.Size = New Size(700, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Gradient background colors
@@ -941,7 +961,11 @@ Public Class PaymentTenderForm
         ' Large centered window for better readability
         Me.Controls.Clear()
         Me.WindowState = FormWindowState.Normal
-        Me.Size = New Size(900, 800)
+        Dim screenWidth = Screen.PrimaryScreen.WorkingArea.Width
+        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
+        Dim formWidth = Math.Min(900, CInt(screenWidth * 0.7))
+        Dim formHeight = Math.Min(800, CInt(screenHeight * 0.85))
+        Me.Size = New Size(formWidth, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
         
@@ -956,8 +980,16 @@ Public Class PaymentTenderForm
         }
         pnlHeader.Controls.Add(lblHeaderText)
         
-        ' Receipt panel - larger for better readability
-        Dim pnlReceipt As New Panel With {.Location = New Point(50, 85), .Size = New Size(800, 600), .BackColor = Color.White, .BorderStyle = BorderStyle.FixedSingle, .AutoScroll = True}
+        ' Receipt panel - responsive sizing
+        Dim receiptWidth = Math.Min(800, formWidth - 100)
+        Dim receiptHeight = Math.Min(600, formHeight - 200)
+        Dim pnlReceipt As New Panel With {
+            .Location = New Point((formWidth - receiptWidth) / 2, 85),
+            .Size = New Size(receiptWidth, receiptHeight),
+            .BackColor = Color.White,
+            .BorderStyle = BorderStyle.FixedSingle,
+            .AutoScroll = True
+        }
         
         Dim yPos = 10
         

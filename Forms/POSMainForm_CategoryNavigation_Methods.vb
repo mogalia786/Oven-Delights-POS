@@ -207,9 +207,9 @@ End Sub
 ' ============================================
 Private Function CreateCategoryTile(categoryId As Integer, categoryName As String, productCount As Integer) As Button
     Dim btn As New Button With {
-        .Text = $"{categoryName}{vbCrLf}({productCount} items)",
-        .Size = New Size(100, 70),
-        .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+        .Text = categoryName.ToUpper(),
+        .Size = New Size(_tileWidth, _tileHeight),
+        .Font = New Font("Segoe UI", 16, FontStyle.Bold),
         .ForeColor = Color.White,
         .BackColor = _ironRed,
         .FlatStyle = FlatStyle.Flat,
@@ -231,9 +231,9 @@ End Function
 ' ============================================
 Private Function CreateSubCategoryTile(subCategoryId As Integer, subCategoryName As String, productCount As Integer) As Button
     Dim btn As New Button With {
-        .Text = $"{subCategoryName}{vbCrLf}({productCount} items)",
-        .Size = New Size(100, 70),
-        .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+        .Text = subCategoryName.ToUpper(),
+        .Size = New Size(_tileWidth, _tileHeight),
+        .Font = New Font("Segoe UI", 14, FontStyle.Bold),
         .ForeColor = Color.White,
         .BackColor = _ironBlue,
         .FlatStyle = FlatStyle.Flat,
@@ -256,8 +256,8 @@ End Function
 Private Function CreateProductTileNew(productId As Integer, productCode As String, productName As String, price As Decimal, stock As Decimal) As Button
     Dim btn As New Button With {
         .Text = $"{productName}{vbCrLf}R {price:N2}",
-        .Size = New Size(100, 70),
-        .Font = New Font("Segoe UI", 9, FontStyle.Bold),
+        .Size = New Size(_tileWidth, _tileHeight),
+        .Font = New Font("Segoe UI", 8, FontStyle.Bold),
         .ForeColor = _ironDark,
         .BackColor = _ironGold,
         .FlatStyle = FlatStyle.Flat,

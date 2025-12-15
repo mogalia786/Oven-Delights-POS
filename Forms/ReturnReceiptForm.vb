@@ -352,16 +352,8 @@ Public Class ReturnReceiptForm
                 e.Graphics.DrawString("Thank you", font, Brushes.Black, leftMargin, yPos)
             End Sub
             
-            ' Show preview first
-            Dim previewDialog As New PrintPreviewDialog()
-            previewDialog.Document = printDoc
-            previewDialog.Width = 400
-            previewDialog.Height = 600
-            
-            If previewDialog.ShowDialog() = DialogResult.OK Then
-                ' Print to default printer
-                printDoc.Print()
-            End If
+            ' Print directly without preview
+            printDoc.Print()
             
         Catch ex As Exception
             MessageBox.Show($"Print error: {ex.Message}", "Print Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
