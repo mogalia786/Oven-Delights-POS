@@ -100,7 +100,7 @@ Public Class PaymentTenderForm
         ShowPaymentMethodSelection()
     End Sub
     
-    ' Constructor for order deposits (simplified - no cart items needed, no sale recording)
+    ' Constructor for order deposits (simplified - no cart items needed, records as ORDER not SALE)
     Public Sub New(depositAmount As Decimal, branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String)
         MyBase.New()
         _cashierID = cashierID
@@ -112,9 +112,9 @@ Public Class PaymentTenderForm
         _subtotal = depositAmount
         _taxAmount = 0
         _totalAmount = depositAmount
-        _isOrderCollection = False ' This is a deposit, not a collection
+        _isOrderCollection = True ' Mark as order-related to use 'ORDER' SaleType
         _orderID = 0
-        _orderNumber = "DEPOSIT" ' Flag to indicate this is just payment collection, not a sale
+        _orderNumber = "DEPOSIT" ' Flag to indicate this is deposit payment
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
         
         InitializeComponent()
@@ -1266,51 +1266,40 @@ Public Class PaymentTenderForm
     End Function
     
     Private Function GenerateInvoiceNumber(conn As SqlConnection, transaction As SqlTransaction) As String
-        ' Get till number (just the number, not "TILL1" prefix)
-        Dim tillNumber As String = "01"
-        Try
-            Dim sqlTill = "SELECT TillNumber FROM TillPoints WHERE TillPointID = @TillPointID"
-            Using cmdTill As New SqlCommand(sqlTill, conn, transaction)
-                cmdTill.Parameters.AddWithValue("@TillPointID", _tillPointID)
-                Dim result = cmdTill.ExecuteScalar()
-                If result IsNot Nothing Then
-                    Dim fullTillNumber = result.ToString()
-                    ' Extract just the number part (e.g., "PH-TILL-01" becomes "01")
-                    If fullTillNumber.Contains("-") Then
-                        Dim parts = fullTillNumber.Split("-"c)
-                        tillNumber = parts(parts.Length - 1) ' Get last part
-                    Else
-                        tillNumber = fullTillNumber
-                    End If
-                End If
-            End Using
-        Catch
-            tillNumber = "01"
-        End Try
+        ' Generate numeric-only invoice number: 5 + TransactionType + 5-digit sequence (7 digits total)
+        ' Example: invoice 1 -> "5100001" (5=prefix, 1=Sale, 00001=sequence)
+        ' Transaction type codes: 1=Sale, 4=Return, 2=Order
+        ' 7-digit format matches working barcode from yesterday
         
-        ' Format: INV-BranchCode-TILL-TillNumber-000001
-        ' Example: INV-PH-TILL-01-000001
-        Dim pattern = $"INV-{_branchPrefix}-TILL-{tillNumber}-%"
-        Dim sql = "SELECT ISNULL(MAX(CAST(RIGHT(InvoiceNumber, 6) AS INT)), 0) + 1 FROM Demo_Sales WHERE InvoiceNumber LIKE @Pattern"
+        Dim sql As String = "
+            SELECT ISNULL(MAX(CAST(RIGHT(InvoiceNumber, 5) AS INT)), 0) + 1 
+            FROM Demo_Sales WITH (TABLOCKX)
+            WHERE InvoiceNumber LIKE @pattern AND LEN(InvoiceNumber) = 7"
+        
+        Dim pattern As String = "51%"
+        
         Using cmd As New SqlCommand(sql, conn, transaction)
-            cmd.Parameters.AddWithValue("@Pattern", pattern)
-            Dim nextNumber = CInt(cmd.ExecuteScalar())
-            Return $"INV-{_branchPrefix}-TILL-{tillNumber}-{nextNumber.ToString("D6")}"
+            cmd.Parameters.AddWithValue("@pattern", pattern)
+            Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+            Return $"51{nextNumber.ToString().PadLeft(5, "0"c)}"
         End Using
     End Function
     
     Private Function InsertSale(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String) As Integer
-        ' Skip sale recording if this is just a deposit payment (order will record it)
-        If _orderNumber = "DEPOSIT" Then
-            Return 0 ' No sale ID needed for deposits
-        End If
-        
         ' Determine sale type
-        Dim saleType As String = "Sale"
+        Dim saleType As String = "SALE"
         Dim referenceNumber As String = invoiceNumber
         
         If _isOrderCollection Then
-            saleType = "OrderCollection"
+            ' Check if this is a deposit (orderNumber = "DEPOSIT") or order collection
+            If _orderNumber = "DEPOSIT" Then
+                saleType = "ORDER" ' Deposit payment - not a sale
+                ' Record deposit in DailySales for cashup tracking
+                InsertDailySale(conn, transaction, invoiceNumber, saleType)
+                Return 0 ' No sale ID needed for deposits (skip Demo_Sales)
+            Else
+                saleType = "OrderCollection" ' Order pickup/collection
+            End If
             referenceNumber = _orderNumber
         End If
         
@@ -1345,7 +1334,8 @@ Public Class PaymentTenderForm
     Private Sub InsertDailySale(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String, saleType As String)
         Try
             Dim tillNumber As String = GetTillNumber()
-            Dim itemCount As Integer = _cartItems.Rows.Count
+            ' Handle null cart items for deposits
+            Dim itemCount As Integer = If(_cartItems IsNot Nothing, _cartItems.Rows.Count, 0)
             
             Dim sql = "INSERT INTO DailySales (SaleDate, BranchID, TillNumber, CashierID, CashierName, InvoiceNumber, SaleType, TotalAmount, PaymentMethod, ItemCount) 
                       VALUES (CAST(GETDATE() AS DATE), @BranchID, @TillNumber, @CashierID, @CashierName, @InvoiceNumber, @SaleType, @TotalAmount, @PaymentMethod, @ItemCount)"
@@ -1363,7 +1353,8 @@ Public Class PaymentTenderForm
                 cmd.ExecuteNonQuery()
             End Using
         Catch ex As Exception
-            ' Don't fail the sale if daily tracking fails
+            ' Log error for debugging
+            System.Diagnostics.Debug.WriteLine($"InsertDailySale error: {ex.Message}")
         End Try
     End Sub
     
@@ -1558,15 +1549,19 @@ Public Class PaymentTenderForm
     
     Private Function GetAverageCost(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, branchID As Integer) As Decimal
         Try
-            ' Join through ProductVariants since Retail_Stock uses VariantID
-            Dim sql = "SELECT TOP 1 ISNULL(rs.AverageCost, 0) FROM Retail_Stock rs " &
-                      "INNER JOIN ProductVariants pv ON rs.VariantID = pv.VariantID " &
-                      "WHERE pv.ProductID = @ProductID AND rs.BranchID = @BranchID"
+            ' Get cost price from Demo_Retail_Price table
+            Dim sql = "SELECT TOP 1 ISNULL(CostPrice, 0) FROM Demo_Retail_Price " &
+                      "WHERE ProductID = @ProductID AND (BranchID = @BranchID OR BranchID = 0) " &
+                      "ORDER BY BranchID DESC"
             Using cmd As New SqlCommand(sql, conn, transaction)
                 cmd.Parameters.AddWithValue("@ProductID", productID)
                 cmd.Parameters.AddWithValue("@BranchID", branchID)
                 Dim result = cmd.ExecuteScalar()
-                Return If(result IsNot Nothing AndAlso Not IsDBNull(result), CDec(result), 0D)
+                If result IsNot Nothing AndAlso Not IsDBNull(result) Then
+                    Return CDec(result)
+                Else
+                    Return 0D
+                End If
             End Using
         Catch ex As Exception
             ' Log error and return 0 if cost cannot be determined

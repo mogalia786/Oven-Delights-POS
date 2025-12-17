@@ -520,21 +520,28 @@ Public Class ReturnLineItemsForm
                         transaction.Commit()
                         Debug.WriteLine($"TRANSACTION COMMITTED SUCCESSFULLY!")
 
-                        ' Convert return items to receipt format
-                        Dim receiptItems As New List(Of ReturnItem)
+                        ' Convert return items to DataTable for receipt
+                        Dim receiptItems As New DataTable()
+                        receiptItems.Columns.Add("ProductID", GetType(Integer))
+                        receiptItems.Columns.Add("ItemCode", GetType(String))
+                        receiptItems.Columns.Add("ProductName", GetType(String))
+                        receiptItems.Columns.Add("Quantity", GetType(Decimal))
+                        receiptItems.Columns.Add("UnitPrice", GetType(Decimal))
+                        receiptItems.Columns.Add("LineTotal", GetType(Decimal))
+                        
                         For Each item In _returnItems
-                            receiptItems.Add(New ReturnItem With {
-                                .ProductID = item.ProductID,
-                                .ItemCode = item.ItemCode,
-                                .ProductName = item.ProductName,
-                                .QtyReturned = item.ReturnQty,
-                                .UnitPrice = item.UnitPrice,
-                                .LineTotal = item.LineTotal
-                            })
+                            receiptItems.Rows.Add(
+                                item.ProductID,
+                                item.ItemCode,
+                                item.ProductName,
+                                item.ReturnQty,
+                                item.UnitPrice,
+                                item.LineTotal
+                            )
                         Next
 
                         ' Show return receipt
-                        Using receiptForm As New ReturnReceiptForm(returnNumber, DateTime.Now, txtCustomerName.Text, _invoiceNumber, receiptItems, totalReturn, totalTax, txtReason.Text)
+                        Using receiptForm As New ReturnReceiptForm(returnNumber, receiptItems, totalReturn, _branchID, "Cashier")
                             receiptForm.ShowDialog()
                         End Using
                         

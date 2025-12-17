@@ -34,6 +34,9 @@ Public Class CakeOrderForm
     Private _keyboard As OrderEntryKeyboard
     Private _numpad As OrderEntryNumpad
     Private _activeTextBox As TextBox
+    Private cboSpecialRequests As ComboBox
+    Private txtSpecialRequests As TextBox
+    Private btnAddRequest As Button
     
     Private _darkBlue As Color = ColorTranslator.FromHtml("#2C3E50")
     Private _lightBlue As Color = ColorTranslator.FromHtml("#3498DB")
@@ -253,7 +256,7 @@ Public Class CakeOrderForm
         ' Questions FlowLayoutPanel
         flpQuestions = New FlowLayoutPanel With {
             .Location = New Point(20, yPos),
-            .Size = New Size(1120, 400),
+            .Size = New Size(1120, 300),
             .FlowDirection = FlowDirection.TopDown,
             .WrapContents = False,
             .AutoScroll = True,
@@ -261,7 +264,88 @@ Public Class CakeOrderForm
             .BackColor = _lightGray
         }
         pnlMain.Controls.Add(flpQuestions)
-        yPos += 420
+        yPos += 320
+        
+        ' Special Requests Section
+        Dim lblSpecialSection As New Label With {
+            .Text = "SPECIAL REQUESTS / CAKE OPTIONS",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Location = New Point(20, yPos),
+            .AutoSize = True,
+            .ForeColor = _orange
+        }
+        pnlMain.Controls.Add(lblSpecialSection)
+        yPos += 35
+        
+        ' ComboBox with predefined cake options (editable)
+        cboSpecialRequests = New ComboBox With {
+            .Font = New Font("Segoe UI", 11),
+            .Location = New Point(20, yPos),
+            .Width = 400,
+            .DropDownStyle = ComboBoxStyle.DropDown
+        }
+        
+        ' Add cake options to ComboBox
+        cboSpecialRequests.Items.AddRange(New String() {
+            "Double vanilla",
+            "Double choc",
+            "Eggless",
+            "Figure only",
+            "Figure on base",
+            "Blackforest",
+            "Red velvet",
+            "Milkybar",
+            "Bar one",
+            "Ferrero",
+            "Carrot cake",
+            "Heart shape",
+            "Bible",
+            "Tiered",
+            "Mould",
+            "Doll cake",
+            "Soccer field",
+            "1mx 500"
+        })
+        
+        ' Add button
+        btnAddRequest = New Button With {
+            .Text = "➕ ADD",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Size = New Size(100, 30),
+            .Location = New Point(430, yPos),
+            .BackColor = _green,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnAddRequest.FlatAppearance.BorderSize = 0
+        AddHandler btnAddRequest.Click, AddressOf AddSpecialRequest
+        
+        pnlMain.Controls.AddRange({cboSpecialRequests, btnAddRequest})
+        yPos += 40
+        
+        ' TextBox to display added special requests
+        Dim lblRequestsDisplay As New Label With {
+            .Text = "Added Special Requests:",
+            .Font = New Font("Segoe UI", 10),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        pnlMain.Controls.Add(lblRequestsDisplay)
+        yPos += 25
+        
+        txtSpecialRequests = New TextBox With {
+            .Font = New Font("Segoe UI", 10),
+            .Location = New Point(20, yPos),
+            .Width = 1120,
+            .Height = 80,
+            .Multiline = True,
+            .ScrollBars = ScrollBars.Vertical,
+            .BackColor = Color.LightYellow,
+            .ReadOnly = False
+        }
+        pnlMain.Controls.Add(txtSpecialRequests)
+        yPos += 100
         
         ' Bottom panel with totals
         Dim pnlBottom As New Panel With {
@@ -380,6 +464,31 @@ Public Class CakeOrderForm
         AddHandler txtDeposit.GotFocus, Sub() UpdateKeyboardTarget(txtDeposit)
         
         Me.Controls.AddRange({pnlMain, pnlBottom, pnlHeader, _keyboard, _numpad})
+    End Sub
+    
+    Private Sub AddSpecialRequest(sender As Object, e As EventArgs)
+        Try
+            Dim requestText = cboSpecialRequests.Text.Trim()
+            
+            If String.IsNullOrWhiteSpace(requestText) Then
+                MessageBox.Show("Please enter or select a special request.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+            
+            ' Add to special requests textbox
+            If String.IsNullOrWhiteSpace(txtSpecialRequests.Text) Then
+                txtSpecialRequests.Text = requestText
+            Else
+                txtSpecialRequests.Text &= vbCrLf & requestText
+            End If
+            
+            ' Clear combobox for next entry
+            cboSpecialRequests.Text = ""
+            cboSpecialRequests.Focus()
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error adding special request: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
     
     Private Sub UpdateKeyboardTarget(targetTextBox As TextBox)
@@ -695,6 +804,13 @@ Public Class CakeOrderForm
                             Next
                         End If
                         
+                        ' Add special requests if any
+                        If Not String.IsNullOrWhiteSpace(txtSpecialRequests.Text) Then
+                            manufacturingInstructions.AppendLine()
+                            manufacturingInstructions.AppendLine("SPECIAL REQUESTS:")
+                            manufacturingInstructions.AppendLine(txtSpecialRequests.Text)
+                        End If
+                        
                         ' Insert main order into POS_CustomOrders
                         Dim sqlOrder = "
                             INSERT INTO POS_CustomOrders (
@@ -913,6 +1029,16 @@ Public Class CakeOrderForm
             receipt.AppendLine($"    {answer.AnswerText} - {answer.AnswerPrice:C2}")
         Next
         
+        ' Add special requests to receipt
+        If Not String.IsNullOrWhiteSpace(txtSpecialRequests.Text) Then
+            receipt.AppendLine()
+            receipt.AppendLine("SPECIAL REQUESTS:")
+            Dim requests() As String = txtSpecialRequests.Text.Split(New String() {vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
+            For Each request In requests
+                receipt.AppendLine($"  - {request}")
+            Next
+        End If
+        
         receipt.AppendLine()
         receipt.AppendLine("================================")
         receipt.AppendLine($"TOTAL AMOUNT:     {_totalAmount:C2}")
@@ -1002,18 +1128,35 @@ Public Class CakeOrderForm
     End Function
     
     Private Function GenerateOrderNumber(conn As SqlConnection, transaction As SqlTransaction, branchPrefix As String) As String
-        ' Generate CCAKE order number: O-BranchPrefix-CCAKE-000001
-        Dim pattern As String = $"O-{branchPrefix}-CCAKE-%"
-        Dim prefix As String = $"O-{branchPrefix}-CCAKE-"
+        ' Generate numeric-only order number: BranchID + 2 + 4-digit sequence
+        ' Example: Branch 6, sequence 1 -> "620001"
+        ' Transaction type codes: 1=Sale, 4=Return, 2=Order
+        ' Shorter format for optimal barcode scanning (6 digits total)
+        
+        Dim branchID As Integer = 0
+        Try
+            Dim sqlBranch = "SELECT BranchID FROM Branches WHERE BranchPrefix = @prefix"
+            Using cmdBranch As New SqlCommand(sqlBranch, conn, transaction)
+                cmdBranch.Parameters.AddWithValue("@prefix", branchPrefix)
+                Dim result = cmdBranch.ExecuteScalar()
+                If result IsNot Nothing Then
+                    branchID = CInt(result)
+                End If
+            End Using
+        Catch
+            branchID = 1 ' Default to 1 if lookup fails
+        End Try
+        
+        Dim pattern As String = $"{branchID}2%"
         Dim sql As String = "
-            SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 5) AS INT)), 0) + 1 
+            SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1 
             FROM POS_CustomOrders WITH (TABLOCKX)
-            WHERE OrderNumber LIKE @pattern"
+            WHERE OrderNumber LIKE @pattern AND LEN(OrderNumber) = 6"
         
         Using cmd As New SqlCommand(sql, conn, transaction)
             cmd.Parameters.AddWithValue("@pattern", pattern)
             Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
-            Return $"{prefix}{nextNumber.ToString().PadLeft(5, "0"c)}"
+            Return $"{branchID}2{nextNumber.ToString().PadLeft(4, "0"c)}"
         End Using
     End Function
 End Class

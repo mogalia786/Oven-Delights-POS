@@ -580,11 +580,33 @@ Public Class CustomerOrderDialog
     End Function
 
     Private Function GenerateOrderNumber(conn As SqlConnection, transaction As SqlTransaction, branchPrefix As String) As String
-        Dim cmd As New SqlCommand("SELECT ISNULL(MAX(CAST(SUBSTRING(OrderNumber, LEN(@prefix) + 3, 6) AS INT)), 0) + 1 FROM POS_CustomOrders WHERE OrderNumber LIKE @pattern", conn, transaction)
-        cmd.Parameters.AddWithValue("@prefix", branchPrefix)
-        cmd.Parameters.AddWithValue("@pattern", $"O-{branchPrefix}-%")
-        Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
-        Return $"O-{branchPrefix}-{nextNumber.ToString().PadLeft(6, "0"c)}"
+        ' Generate numeric-only order number: BranchID + 2 + 4-digit sequence
+        ' Example: Branch 6, sequence 1 -> "620001"
+        ' Transaction type codes: 1=Sale, 4=Return, 2=Order
+        ' Shorter format for optimal barcode scanning (6 digits total)
+        
+        Dim branchID As Integer = 0
+        Try
+            Dim sqlBranch = "SELECT BranchID FROM Branches WHERE BranchPrefix = @prefix"
+            Using cmdBranch As New SqlCommand(sqlBranch, conn, transaction)
+                cmdBranch.Parameters.AddWithValue("@prefix", branchPrefix)
+                Dim result = cmdBranch.ExecuteScalar()
+                If result IsNot Nothing Then
+                    branchID = CInt(result)
+                End If
+            End Using
+        Catch
+            branchID = 1 ' Default to 1 if lookup fails
+        End Try
+        
+        Dim pattern As String = $"{branchID}2%"
+        Dim sql As String = "SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1 FROM POS_CustomOrders WHERE OrderNumber LIKE @pattern AND LEN(OrderNumber) = 6"
+        
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@pattern", pattern)
+            Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+            Return $"{branchID}2{nextNumber.ToString().PadLeft(4, "0"c)}"
+        End Using
     End Function
 
     Private Function BuildOrderDetailsString() As String

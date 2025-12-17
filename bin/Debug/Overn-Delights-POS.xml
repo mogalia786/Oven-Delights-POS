@@ -40,7 +40,7 @@ Overn-Delights-POS
  Add a new branch code mapping
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.BarcodeGenerator.GenerateCode39Barcode(System.String,System.Int32,System.Int32)">
+<member name="M:Overn_Delights_POS.BarcodeGenerator.GenerateBarcode(System.String)">
  <summary>
  Generates EAN-13 barcode for order numbers (same format as product barcodes)
  Example: "6000009" -> Padded to "0000006000009" -> EAN-13 barcode
@@ -233,7 +233,7 @@ Overn-Delights-POS
  Print order receipt to thermal printer (80mm)
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintCollectionReceiptToThermalPrinter(System.String,System.Decimal,System.Decimal,System.Decimal,System.String,System.Decimal,System.Decimal,System.Decimal)">
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintCollectionReceiptToThermalPrinter(System.String,System.String,System.Decimal,System.Decimal,System.Decimal,System.String,System.Decimal,System.Decimal,System.Decimal)">
  <summary>
  Print order collection receipt to thermal printer (80mm)
  </summary>

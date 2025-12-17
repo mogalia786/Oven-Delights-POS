@@ -1,0 +1,23 @@
+-- Check if POS_ReturnItems table exists and show ALL columns
+SELECT 
+    c.COLUMN_NAME,
+    c.DATA_TYPE,
+    c.IS_NULLABLE,
+    c.ORDINAL_POSITION
+FROM INFORMATION_SCHEMA.COLUMNS c
+WHERE c.TABLE_NAME = 'POS_ReturnItems'
+ORDER BY c.ORDINAL_POSITION;
+
+-- If no results, check what return tables exist
+SELECT TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_NAME LIKE '%Return%'
+ORDER BY TABLE_NAME;
+
+-- Check Demo_Retail_Product table structure
+SELECT TOP 5
+    c.COLUMN_NAME,
+    c.DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS c
+WHERE c.TABLE_NAME = 'Demo_Retail_Product'
+ORDER BY c.ORDINAL_POSITION;

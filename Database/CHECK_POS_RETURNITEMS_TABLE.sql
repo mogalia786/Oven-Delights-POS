@@ -1,0 +1,16 @@
+-- Check if POS_ReturnItems table exists and its structure
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    CHARACTER_MAXIMUM_LENGTH,
+    IS_NULLABLE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'POS_ReturnItems'
+ORDER BY ORDINAL_POSITION
+
+-- If table doesn't exist, check if it's named differently
+SELECT TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_NAME LIKE '%Return%'
+ORDER BY TABLE_NAME

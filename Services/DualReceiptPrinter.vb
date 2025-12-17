@@ -40,7 +40,8 @@ Public Class DualReceiptPrinter
         Try
             Dim printDoc As New PrintDocument()
             
-            ' Use default printer - don't set PrinterName to use system default
+            ' Use Windows default printer - don't set PrinterName to use system default
+            ' This allows the user to set their preferred receipt printer as default in Windows
             ' Don't force paper size - let printer use its default settings
             
             Dim changeAmount As Decimal = If(receiptData.ContainsKey("ChangeAmount"), CDec(receiptData("ChangeAmount")), 0D)
@@ -138,25 +139,20 @@ Public Class DualReceiptPrinter
                 e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Barcode - generated as image
+                ' Barcode for returns (7-digit format, research-based settings)
                 Try
                     Dim invoiceNum = receiptData("InvoiceNumber").ToString()
-                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(invoiceNum, 250, 50)
-                    e.Graphics.DrawImage(barcodeImage, CInt((302 - 250) / 2), CInt(yPos))
-                    yPos += 55
-                    
-                    ' Invoice number below barcode
-                    Dim invNumSize = e.Graphics.MeasureString(invoiceNum, font)
-                    e.Graphics.DrawString(invoiceNum, font, Brushes.Black, (302 - invNumSize.Width) / 2, yPos)
-                    yPos += 18
+                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(invoiceNum, 180, 60)
+                    e.Graphics.DrawImage(barcodeImage, CInt((302 - 180) / 2), CInt(yPos))
+                    yPos += 65
                     
                     barcodeImage.Dispose()
                 Catch ex As Exception
-                    ' If barcode generation fails, just print invoice number
                     Dim invoiceNum = receiptData("InvoiceNumber").ToString()
-                    Dim invNumSize = e.Graphics.MeasureString(invoiceNum, fontLarge)
-                    e.Graphics.DrawString(invoiceNum, fontLarge, Brushes.Black, (302 - invNumSize.Width) / 2, yPos)
-                    yPos += 22
+                    Dim invNumFont As New Font("Arial", 20, FontStyle.Bold)
+                    Dim invNumSize = e.Graphics.MeasureString(invoiceNum, invNumFont)
+                    e.Graphics.DrawString(invoiceNum, invNumFont, Brushes.Black, (302 - invNumSize.Width) / 2, yPos)
+                    yPos += 28
                 End Try
                 
                 ' Footer - centered
