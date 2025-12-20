@@ -41,6 +41,7 @@ Public Class CakeOrderFormNew
     Private cboSpecialRequests As ComboBox
     Private txtSpecialRequests As TextBox
     Private btnAddRequest As Button
+    Private txtNotes As TextBox
     
     Private lblInvoiceTotal As Label
     Private txtDeposit As TextBox
@@ -117,7 +118,7 @@ Public Class CakeOrderFormNew
         Me.Font = New Font("Segoe UI", 10)
         Me.AutoScroll = True
         Me.MinimumSize = New Size(800, 600)
-        Me.FormBorderStyle = FormBorderStyle.Sizable
+        Me.FormBorderStyle = FormBorderStyle.None
         Me.MaximizeBox = True
         
         Dim yPos As Integer = 20
@@ -286,6 +287,7 @@ Public Class CakeOrderFormNew
             .Location = New Point(115, 33),
             .Width = 150
         }
+        AddHandler txtAccountNumber.Leave, AddressOf txtAccountNumber_Leave
         pnlAccount.Controls.AddRange({lblAccountNo, txtAccountNumber})
         
         Dim lblName As New Label With {
@@ -555,6 +557,29 @@ Public Class CakeOrderFormNew
         Me.Controls.Add(txtSpecialRequests)
         yPos += 70
         
+        ' ===== NOTES SECTION =====
+        Dim lblNotesTitle As New Label With {
+            .Text = "NOTES",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .ForeColor = ColorTranslator.FromHtml("#E67E22"),
+            .Location = New Point(20, yPos),
+            .AutoSize = True
+        }
+        Me.Controls.Add(lblNotesTitle)
+        yPos += 25
+        
+        txtNotes = New TextBox With {
+            .Font = New Font("Segoe UI", 9),
+            .Location = New Point(20, yPos),
+            .Size = New Size(950, 50),
+            .Multiline = True,
+            .ScrollBars = ScrollBars.Vertical,
+            .BackColor = Color.White,
+            .BorderStyle = BorderStyle.FixedSingle
+        }
+        Me.Controls.Add(txtNotes)
+        yPos += 60
+        
         ' ===== FOOTER SECTION =====
         Dim pnlFooter As New Panel With {
             .Location = New Point(20, yPos),
@@ -703,6 +728,12 @@ Public Class CakeOrderFormNew
         Catch ex As Exception
             MessageBox.Show($"Error loading products: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
+    End Sub
+    
+    Private Sub txtAccountNumber_Leave(sender As Object, e As EventArgs)
+        If Not String.IsNullOrWhiteSpace(txtAccountNumber.Text) Then
+            LookupCustomer(txtAccountNumber.Text.Trim())
+        End If
     End Sub
     
     Private Sub txtCustomerPhone_Leave(sender As Object, e As EventArgs)
@@ -931,91 +962,161 @@ Public Class CakeOrderFormNew
     
     Private Sub PrintTillSlip(orderNumber As String, orderID As Integer)
         Try
-            ' Create standard POS till slip
+            ' Create standard POS till slip - ALL BOLD FONTS
             Dim printDoc As New PrintDocument()
             
             AddHandler printDoc.PrintPage, Sub(sender As Object, e As PrintPageEventArgs)
                 Dim g = e.Graphics
-                Dim font As New Font("Courier New", 8, FontStyle.Regular)
-                Dim fontBold As New Font("Courier New", 9, FontStyle.Bold)
-                Dim yPos As Single = 10
-                Dim leftMargin As Single = 10
+                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
+                Dim yPos As Single = 5
+                Dim leftMargin As Single = 5
                 
-                ' Header
-                g.DrawString("OVEN DELIGHTS", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString(_branchName, font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                g.DrawString("================================", font, Brushes.Black, leftMargin, yPos)
-                yPos += 15
+                ' Store header - centered
+                Dim headerText = "OVEN DELIGHTS"
+                Dim headerSize = g.MeasureString(headerText, fontLarge)
+                g.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
+                yPos += 22
                 
-                ' Order info
-                g.DrawString($"CAKE ORDER DEPOSIT", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString($"Order #: {orderNumber}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                
-                ' Barcode for order collection scanning
-                Try
-                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(orderNumber, 180, 60)
-                    g.DrawImage(barcodeImage, CInt((315 - 180) / 2), CInt(yPos))
-                    yPos += 65
-                Catch ex As Exception
-                    ' If barcode fails, continue without it
-                    System.Diagnostics.Debug.WriteLine($"Barcode generation failed: {ex.Message}")
-                End Try
-                
-                g.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                g.DrawString($"Cashier: {_cashierName}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString("================================", font, Brushes.Black, leftMargin, yPos)
+                ' Branch info with full address
+                g.DrawString(_branchName, fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString(_branchAddress, fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Tel: {_branchPhone}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Customer
-                g.DrawString($"Customer: {txtCustomerName.Text}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                g.DrawString($"Phone: {txtCustomerPhone.Text}", font, Brushes.Black, leftMargin, yPos)
+                ' Date and time
+                g.DrawString(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
+                
+                ' Order number
+                g.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Cashier
+                g.DrawString($"Cashier: {_cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' Separator
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Order header - centered
+                Dim orderText = "CAKE ORDER RECEIPT"
+                Dim orderSize = g.MeasureString(orderText, fontBold)
+                g.DrawString(orderText, fontBold, Brushes.Black, (302 - orderSize.Width) / 2, yPos)
+                yPos += 18
+                
+                ' Separator
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Customer details
+                g.DrawString("CUSTOMER:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString(txtCustomerName.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Phone: {txtCustomerPhone.Text.Trim()}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
                 
                 ' Collection details
-                g.DrawString($"Collection: {dtpCollectionDate.Value:dd/MM/yyyy}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                g.DrawString($"Time: {dtpCollectionTime.Value:HH:mm}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString("================================", font, Brushes.Black, leftMargin, yPos)
+                g.DrawString("READY FOR COLLECTION:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Date: {dtpCollectionDate.Value:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Time: {dtpCollectionTime.Value:HH:mm}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"*** {lblCollectionDay.Text.ToUpper()} ***", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' Cake details
+                If Not String.IsNullOrWhiteSpace(txtCakeColor.Text) Then
+                    g.DrawString("CAKE COLOR:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtCakeColor.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                If Not String.IsNullOrWhiteSpace(txtCakePicture.Text) Then
+                    g.DrawString("CAKE IMAGE:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtCakePicture.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                ' Special instructions
+                If Not String.IsNullOrWhiteSpace(txtSpecialRequests.Text) Then
+                    g.DrawString("SPECIAL INSTRUCTIONS:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtSpecialRequests.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                ' Notes
+                If Not String.IsNullOrWhiteSpace(txtNotes.Text) Then
+                    g.DrawString("NOTES:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtNotes.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                ' Separator
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Items
-                g.DrawString("ITEMS:", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
                 For Each item In _orderItems
-                    g.DrawString($"{item.Quantity}x {item.Description}", font, Brushes.Black, leftMargin, yPos)
-                    yPos += 12
-                    g.DrawString($"   R{item.TotalPrice:F2}", font, Brushes.Black, leftMargin + 150, yPos - 12)
+                    g.DrawString($"{item.Quantity:0.00} x {item.Description}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString($"    @ R{item.UnitPrice:N2} = R{item.TotalPrice:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
                 Next
-                yPos += 10
                 
-                g.DrawString("================================", font, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                
-                ' Totals
-                g.DrawString($"TOTAL:           R{_totalAmount:F2}", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString($"DEPOSIT PAID:    R{_depositAmount:F2}", font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                g.DrawString($"BALANCE DUE:     R{_balanceAmount:F2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 5
+                g.DrawString("--------------------------------------", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                g.DrawString("================================", font, Brushes.Black, leftMargin, yPos)
+                ' Calculate VAT breakdown (prices are VAT-inclusive)
+                Dim subtotalExclVAT = Math.Round(_totalAmount / 1.15D, 2)
+                Dim vatAmount = Math.Round(_totalAmount - subtotalExclVAT, 2)
+                
+                g.DrawString($"Subtotal (excl VAT):  R {subtotalExclVAT:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"VAT (15%):            R {vatAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Total Amount:         R {_totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Deposit Paid:         R {_depositAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Balance Due:          R {_balanceAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Footer
-                g.DrawString("Please keep this receipt", font, Brushes.Black, leftMargin, yPos)
-                yPos += 12
-                g.DrawString("for order collection", font, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString("Thank you!", fontBold, Brushes.Black, leftMargin, yPos)
+                ' Barcode for order collection
+                Try
+                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(orderNumber, 180, 60)
+                    g.DrawImage(barcodeImage, CInt((302 - 180) / 2), CInt(yPos))
+                    yPos += 65
+                    barcodeImage.Dispose()
+                Catch ex As Exception
+                    Dim orderNumFont As New Font("Arial", 20, FontStyle.Bold)
+                    Dim orderNumSize = g.MeasureString(orderNumber, orderNumFont)
+                    g.DrawString(orderNumber, orderNumFont, Brushes.Black, (302 - orderNumSize.Width) / 2, yPos)
+                    yPos += 28
+                End Try
+                
+                ' Footer - centered
+                Dim footer1 = "SCAN BARCODE TO COLLECT"
+                Dim footer1Size = g.MeasureString(footer1, fontBold)
+                g.DrawString(footer1, fontBold, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
+                yPos += 14
+                
+                Dim footer2 = "PLEASE BRING THIS RECEIPT"
+                Dim footer2Size = g.MeasureString(footer2, fontBold)
+                g.DrawString(footer2, fontBold, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
                 
                 e.HasMorePages = False
             End Sub
@@ -1099,14 +1200,14 @@ Public Class CakeOrderFormNew
                                 OrderNumber, BranchID, BranchName, OrderType,
                                 CustomerName, CustomerSurname, CustomerPhone, AccountNumber,
                                 OrderDate, ReadyDate, ReadyTime, CollectionDay, CollectionPoint,
-                                CakeColor, CakePicture, SpecialInstructions,
+                                CakeColor, CakePicture, SpecialInstructions, Notes,
                                 TotalAmount, DepositPaid, BalanceDue,
                                 OrderStatus, CreatedBy, ManufacturingInstructions
                             ) VALUES (
                                 @OrderNumber, @BranchID, @BranchName, 'Cake',
                                 @CustomerName, @CustomerSurname, @CustomerPhone, @AccountNumber,
                                 GETDATE(), @ReadyDate, @ReadyTime, @CollectionDay, @CollectionPoint,
-                                @CakeColor, @CakePicture, @SpecialInstructions,
+                                @CakeColor, @CakePicture, @SpecialInstructions, @Notes,
                                 @TotalAmount, @DepositPaid, @BalanceDue,
                                 'New', @CreatedBy, @DepositPaymentMethod
                             )
@@ -1134,6 +1235,7 @@ Public Class CakeOrderFormNew
                             cmd.Parameters.AddWithValue("@CakeColor", txtCakeColor.Text.Trim())
                             cmd.Parameters.AddWithValue("@CakePicture", If(String.IsNullOrWhiteSpace(txtCakePicture.Text), "see whats app", txtCakePicture.Text.Trim()))
                             cmd.Parameters.AddWithValue("@SpecialInstructions", If(String.IsNullOrWhiteSpace(txtSpecialRequests.Text), DBNull.Value, txtSpecialRequests.Text.Trim()))
+                            cmd.Parameters.AddWithValue("@Notes", If(String.IsNullOrWhiteSpace(txtNotes.Text), DBNull.Value, txtNotes.Text.Trim()))
                             cmd.Parameters.AddWithValue("@TotalAmount", _totalAmount)
                             cmd.Parameters.AddWithValue("@DepositPaid", _depositAmount)
                             cmd.Parameters.AddWithValue("@BalanceDue", _balanceAmount)
@@ -1202,19 +1304,30 @@ Public Class CakeOrderFormNew
     End Sub
     
     Private Function GenerateOrderNumber(conn As SqlConnection, transaction As SqlTransaction) As String
+        ' Generate numeric-only order number: BranchID + 4 + 4-digit sequence
+        ' Example: Branch 6, sequence 1 -> "640001"
+        ' Transaction type code: 4=Order
+        ' Format: BranchID (1 digit) + Type (1 digit) + Sequence (4 digits) = 6 digits total
+        ' Numeric only for better barcode scanning with Free 3 of 9 font
+        
         Try
-            Dim prefix = "PBAU"
-            Dim sql = "SELECT ISNULL(MAX(CAST(SUBSTRING(OrderNumber, 9, LEN(OrderNumber)) AS INT)), 0) + 1 
-                      FROM POS_CustomOrders 
-                      WHERE OrderNumber LIKE @Prefix + '%'"
+            Dim sql = "SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1 
+                      FROM POS_CustomOrders WITH (TABLOCKX)
+                      WHERE OrderNumber LIKE @pattern AND LEN(OrderNumber) = 6"
+            
+            Dim pattern = $"{_branchID}4%"
             
             Using cmd As New SqlCommand(sql, conn, transaction)
-                cmd.Parameters.AddWithValue("@Prefix", prefix)
-                Dim nextNum = Convert.ToInt32(cmd.ExecuteScalar())
-                Return $"{prefix}ORD{nextNum:D6}"
+                cmd.Parameters.AddWithValue("@pattern", pattern)
+                Dim nextNumber = Convert.ToInt32(cmd.ExecuteScalar())
+                
+                ' Format: BranchID + 4 (Order) + Sequence (4 digits) = 6 digits total
+                ' Example: Branch 6, order 1 -> "640001"
+                Return $"{_branchID}4{nextNumber.ToString().PadLeft(4, "0"c)}"
             End Using
         Catch ex As Exception
-            Return $"PBAUORD{DateTime.Now:yyyyMMddHHmmss}"
+            ' Fallback to timestamp-based number if error
+            Return $"{_branchID}4{DateTime.Now:HHmmss}"
         End Try
     End Function
     
@@ -1241,6 +1354,7 @@ Public Class CakeOrderFormNew
             .CustomerPhone = txtCustomerPhone.Text.Trim(),
             .AccountNumber = txtAccountNumber.Text.Trim(),
             .SpecialRequests = txtSpecialRequests.Text.Trim(),
+            .Notes = txtNotes.Text.Trim(),
             .InvoiceTotal = _totalAmount,
             .DepositPaid = _depositAmount,
             .BalanceOwing = _balanceAmount

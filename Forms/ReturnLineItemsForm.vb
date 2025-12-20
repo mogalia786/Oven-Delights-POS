@@ -156,7 +156,7 @@ Public Class ReturnLineItemsForm
         }
 
         Dim lblPhone As New Label With {
-            .Text = "Phone Number:",
+            .Text = "Cell Number:",
             .Font = New Font("Segoe UI", 11),
             .Location = New Point(500, 395),
             .AutoSize = True
@@ -165,8 +165,10 @@ Public Class ReturnLineItemsForm
         txtPhone = New TextBox With {
             .Font = New Font("Segoe UI", 11),
             .Location = New Point(640, 392),
-            .Width = 200
+            .Width = 200,
+            .MaxLength = 10
         }
+        AddHandler txtPhone.Leave, AddressOf LookupCustomer
 
         Dim lblAddress As New Label With {
             .Text = "Address:",
@@ -344,7 +346,7 @@ Public Class ReturnLineItemsForm
                 .Font = New Font("Segoe UI", 9, FontStyle.Bold),
                 .Location = New Point(695, 20),
                 .Size = New Size(20, 20),
-                .Checked = True
+                .Checked = False
             }
 
             Dim btnMinus As New Button With {
@@ -540,8 +542,11 @@ Public Class ReturnLineItemsForm
                             )
                         Next
 
-                        ' Show return receipt
-                        Using receiptForm As New ReturnReceiptForm(returnNumber, receiptItems, totalReturn, _branchID, "Cashier")
+                        ' Save customer if new
+                        SaveCustomer(conn, transaction)
+
+                        ' Show return receipt with customer details and reason
+                        Using receiptForm As New ReturnReceiptForm(returnNumber, receiptItems, totalReturn, _branchID, "Cashier", txtCustomerName.Text, "", txtPhone.Text, txtReason.Text)
                             receiptForm.ShowDialog()
                         End Using
                         
@@ -641,6 +646,66 @@ Public Class ReturnLineItemsForm
             Return CInt(cmd.ExecuteScalar())
         End Using
     End Function
+
+    Private Sub LookupCustomer(sender As Object, e As EventArgs)
+        Dim cellNumber = txtPhone.Text.Trim()
+        If String.IsNullOrWhiteSpace(cellNumber) OrElse cellNumber.Length < 10 Then Return
+
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT FirstName, Surname, Email FROM POS_Customers WHERE CellNumber = @CellNumber"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@CellNumber", cellNumber)
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            ' Customer found - populate fields
+                            txtCustomerName.Text = reader("FirstName").ToString()
+                            txtAddress.Text = If(IsDBNull(reader("Email")), "", reader("Email").ToString())
+                            
+                            ' Visual feedback
+                            txtCustomerName.BackColor = Color.LightGreen
+                            txtAddress.BackColor = Color.LightGreen
+                            Dim timer As New Timer With {.Interval = 500}
+                            AddHandler timer.Tick, Sub()
+                                txtCustomerName.BackColor = Color.White
+                                txtAddress.BackColor = Color.White
+                                timer.Stop()
+                                timer.Dispose()
+                            End Sub
+                            timer.Start()
+                        End If
+                    End Using
+                End Using
+            End Using
+        Catch ex As Exception
+            ' Silently fail - customer lookup is optional
+        End Try
+    End Sub
+
+    Private Sub SaveCustomer(conn As SqlConnection, transaction As SqlTransaction)
+        Dim cellNumber = txtPhone.Text.Trim()
+        If String.IsNullOrWhiteSpace(cellNumber) Then Return
+
+        Try
+            Dim sql = "IF NOT EXISTS (SELECT 1 FROM POS_Customers WHERE CellNumber = @CellNumber)
+                       INSERT INTO POS_Customers (FirstName, Surname, CellNumber, Email, CreatedDate)
+                       VALUES (@FirstName, @Surname, @CellNumber, @Email, GETDATE())
+                       ELSE
+                       UPDATE POS_Customers SET FirstName = @FirstName, Surname = @Surname, Email = @Email
+                       WHERE CellNumber = @CellNumber"
+            
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@FirstName", txtCustomerName.Text.Trim())
+                cmd.Parameters.AddWithValue("@Surname", "")
+                cmd.Parameters.AddWithValue("@CellNumber", cellNumber)
+                cmd.Parameters.AddWithValue("@Email", If(String.IsNullOrWhiteSpace(txtAddress.Text), DBNull.Value, CObj(txtAddress.Text.Trim())))
+                cmd.ExecuteNonQuery()
+            End Using
+        Catch ex As Exception
+            ' Non-critical - continue even if customer save fails
+        End Try
+    End Sub
 
     Private Sub InsertReturnLineItems(conn As SqlConnection, transaction As SqlTransaction, returnID As Integer)
         Debug.WriteLine($"=== InsertReturnLineItems: Processing {_returnItems.Count} items ===")

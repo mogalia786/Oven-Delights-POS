@@ -52,6 +52,9 @@ Public Class CakeOrderPrinter
         ' Special Requests
         Public Property SpecialRequests As String
         
+        ' Notes
+        Public Property Notes As String
+        
         ' Totals
         Public Property InvoiceTotal As Decimal
         Public Property DepositPaid As Decimal
@@ -163,6 +166,11 @@ Public Class CakeOrderPrinter
         ' Special Request
         If Not String.IsNullOrEmpty(_orderData.SpecialRequests) Then
             DrawField(g, "SpecialRequest", $"Special Request: {_orderData.SpecialRequests}", 10, 250, 8, True)
+        End If
+        
+        ' Notes
+        If Not String.IsNullOrEmpty(_orderData.Notes) Then
+            DrawField(g, "Notes", $"Notes: {_orderData.Notes}", 10, 270, 8, True)
         End If
         
         ' Order Header

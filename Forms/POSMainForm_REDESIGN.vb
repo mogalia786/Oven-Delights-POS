@@ -22,6 +22,7 @@ Public Class POSMainForm_REDESIGN
     Private pnlCart As Panel
     Private pnlShortcuts As Panel
     Private pnlNumpad As Panel
+    Private pnlSearchBar As Panel
     Private flpProducts As FlowLayoutPanel
     Private dgvCart As DataGridView
     Private lblTotal As Label
@@ -30,6 +31,8 @@ Public Class POSMainForm_REDESIGN
     Private txtSearch As TextBox
     Private txtSearchByName As TextBox
     Private txtBarcodeScanner As TextBox
+    Private btnRefresh As Button
+    Private btnModifyQty As Button
     Private _onScreenKeyboard As OnScreenKeyboard
     
     ' Category Navigation State
@@ -98,11 +101,12 @@ Public Class POSMainForm_REDESIGN
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
 
         Me.KeyPreview = True
-        
-        ' Initialize screen dimensions and scaling
-        InitializeScreenScaling()
-        
+
         SetupModernUI()
+
+        ' Initialize screen dimensions and scaling AFTER form is positioned
+        InitializeScreenScaling()
+
         InitializeCart()
         SetupIdleScreen()
         InitializeSearchTimer()
@@ -110,33 +114,47 @@ Public Class POSMainForm_REDESIGN
 
         ' Handle resize for different screen sizes
         AddHandler Me.Resize, Sub() HandleFormResize()
-        AddHandler Me.Load, Sub() HandleFormResize()
+        AddHandler Me.Shown, AddressOf OnFormShown
     End Sub
-    
+
+    Private Sub OnFormShown(sender As Object, e As EventArgs)
+        ' Properly maximize to screen using native Windows behavior
+        Try
+            ' Simply maximize - let Windows handle it
+            Me.WindowState = FormWindowState.Maximized
+
+            ' Force the scaling system to recalculate based on actual screen
+            InitializeScreenScaling()
+            HandleFormResize()
+        Catch ex As Exception
+            MessageBox.Show($"Screen detection error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
     Private Sub InitializeSearchTimer()
         _searchTimer = New Timer()
         _searchTimer.Interval = 300 ' 300ms delay
         AddHandler _searchTimer.Tick, Sub()
-            _searchTimer.Stop()
-            SearchProducts(_pendingSearchText)
-        End Sub
+                                          _searchTimer.Stop()
+                                          SearchProducts(_pendingSearchText)
+                                      End Sub
     End Sub
-    
+
     Private Sub DebouncedSearch(searchText As String)
         _pendingSearchText = searchText
         _searchTimer.Stop()
         _searchTimer.Start()
     End Sub
-    
+
     Private Sub InitializeIdleTimer()
         _idleTimer = New Timer()
         _idleTimer.Interval = IDLE_TIMEOUT_MS
         AddHandler _idleTimer.Tick, Sub()
-            _idleTimer.Stop()
-            ShowIdleScreen()
-        End Sub
+                                        _idleTimer.Stop()
+                                        ShowIdleScreen()
+                                    End Sub
     End Sub
-    
+
     Private Sub ResetIdleTimer()
         If _idleTimer IsNot Nothing Then
             _idleTimer.Stop()
@@ -146,22 +164,23 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub SetupModernUI()
         Me.Text = "Oven Delights POS"
-        Me.WindowState = FormWindowState.Maximized
         Me.BackColor = _ironDark
         Me.FormBorderStyle = FormBorderStyle.None
-        Me.StartPosition = FormStartPosition.Manual
-        Me.Bounds = Screen.PrimaryScreen.Bounds
+        Me.StartPosition = FormStartPosition.WindowsDefaultLocation
 
-        ' TOP BAR - Iron Man Red gradient
+        ' Don't set WindowState here - let OnFormShown handle it
+        ' This prevents conflicts with screen detection
+
+        ' TOP BAR - Iron Man Red gradient - Reduced height for 1024x768
         pnlTop = New Panel With {
             .Dock = DockStyle.Top,
-            .Height = 70,
+            .Height = 60,
             .BackColor = _ironRed
         }
 
         ' Get branch name
         Dim branchName As String = GetBranchName()
-        
+
         Dim lblTitle As New Label With {
             .Text = "🍰 OVEN DELIGHTS POS",
             .Font = New Font("Segoe UI", 14, FontStyle.Bold),
@@ -169,7 +188,7 @@ Public Class POSMainForm_REDESIGN
             .Location = New Point(20, 10),
             .AutoSize = True
         }
-        
+
         Dim lblBranch As New Label With {
             .Text = branchName.ToUpper(),
             .Font = New Font("Segoe UI", 20, FontStyle.Bold),
@@ -217,7 +236,7 @@ Public Class POSMainForm_REDESIGN
         }
 
         pnlTop.Controls.AddRange({lblTitle, lblBranch, lblCashier, btnCashUp, btnLogout})
-        
+
         ' Center the cashier label after adding to panel
         lblCashier.Location = New Point((pnlTop.Width - lblCashier.Width) / 2, 20)
         lblCashier.BringToFront()
@@ -237,7 +256,7 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.FromArgb(15, 20, 35),
             .Padding = New Padding(10)
         }
-        
+
         ' BREADCRUMB - Category navigation (CSS: gold with glow)
         lblBreadcrumb = New Label With {
             .Text = "Categories",
@@ -252,7 +271,7 @@ Public Class POSMainForm_REDESIGN
         AddHandler lblBreadcrumb.Click, AddressOf Breadcrumb_Click
 
         ' Search panel with barcode scanner button
-        Dim pnlSearchBar As New Panel With {
+        pnlSearchBar = New Panel With {
             .Dock = DockStyle.Top,
             .Height = 60,
             .BackColor = Color.White,
@@ -287,29 +306,29 @@ Public Class POSMainForm_REDESIGN
             .ReadOnly = False,
             .Cursor = Cursors.IBeam
         }
-        
+
         AddHandler txtSearch.Enter, Sub()
-            If txtSearch.Text.Contains("Search by code") Then
-                txtSearch.Text = ""
-                txtSearch.ForeColor = Color.Black
-            End If
-        End Sub
-        
+                                        If txtSearch.Text.Contains("Search by code") Then
+                                            txtSearch.Text = ""
+                                            txtSearch.ForeColor = Color.Black
+                                        End If
+                                    End Sub
+
         AddHandler txtSearch.KeyDown, Sub(sender, e)
-            If txtSearch.Text.Contains("Search by code") Then
-                txtSearch.Text = ""
-                txtSearch.ForeColor = Color.Black
-            ElseIf e.KeyCode = Keys.Enter Then
-                e.SuppressKeyPress = True
-                Dim searchCode = txtSearch.Text.Trim()
-                If Not String.IsNullOrWhiteSpace(searchCode) Then
-                    ProcessBarcodeScan(searchCode)
-                    txtSearch.Clear()
-                    txtSearch.Focus()
-                End If
-            End If
-        End Sub
-        
+                                          If txtSearch.Text.Contains("Search by code") Then
+                                              txtSearch.Text = ""
+                                              txtSearch.ForeColor = Color.Black
+                                          ElseIf e.KeyCode = Keys.Enter Then
+                                              e.SuppressKeyPress = True
+                                              Dim searchCode = txtSearch.Text.Trim()
+                                              If Not String.IsNullOrWhiteSpace(searchCode) Then
+                                                  ProcessBarcodeScan(searchCode)
+                                                  txtSearch.Clear()
+                                                  txtSearch.Focus()
+                                              End If
+                                          End If
+                                      End Sub
+
         AddHandler txtSearch.TextChanged, Sub()
                                               If Not txtSearch.Text.Contains("Search by code") AndAlso txtSearch.Text.Length >= 2 Then
                                                   DebouncedSearch(txtSearch.Text)
@@ -327,33 +346,31 @@ Public Class POSMainForm_REDESIGN
             .ReadOnly = False,
             .Cursor = Cursors.IBeam
         }
-        
-        AddHandler txtSearchByName.Enter, Sub()
-            If txtSearchByName.Text.Contains("Search by name") Then
-                txtSearchByName.Text = ""
-                txtSearchByName.ForeColor = Color.Black
-            End If
-        End Sub
-        
-        AddHandler txtSearchByName.KeyDown, Sub(sender, e)
-            If txtSearchByName.Text.Contains("Search by name") Then
-                txtSearchByName.Text = ""
-                txtSearchByName.ForeColor = Color.Black
-            End If
-        End Sub
-        
-        AddHandler txtSearchByName.TextChanged, Sub()
-            If Not txtSearchByName.Text.Contains("Search by name") AndAlso txtSearchByName.Text.Length >= 2 Then
-                DebouncedSearch(txtSearchByName.Text)
-            End If
-        End Sub
 
-        ' Refresh Products button
-        Dim btnRefresh As New Button With {
-            .Text = "🔄 REFRESH",
+        AddHandler txtSearchByName.Enter, Sub()
+                                              If txtSearchByName.Text.Contains("Search by name") Then
+                                                  txtSearchByName.Text = ""
+                                                  txtSearchByName.ForeColor = Color.Black
+                                              End If
+                                          End Sub
+
+        AddHandler txtSearchByName.KeyDown, Sub(sender, e)
+                                                If txtSearchByName.Text.Contains("Search by name") Then
+                                                    txtSearchByName.Text = ""
+                                                    txtSearchByName.ForeColor = Color.Black
+                                                End If
+                                            End Sub
+
+        AddHandler txtSearchByName.TextChanged, Sub()
+                                                    If Not txtSearchByName.Text.Contains("Search by name") AndAlso txtSearchByName.Text.Length >= 2 Then
+                                                        DebouncedSearch(txtSearchByName.Text)
+                                                    End If
+                                                End Sub
+
+        ' Refresh Products button - sized in RepositionControls
+        btnRefresh = New Button With {
+            .Text = "🔄",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
-            .Size = New Size(110, 44),
-            .Location = New Point(740, 8),
             .BackColor = _green,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
@@ -362,12 +379,10 @@ Public Class POSMainForm_REDESIGN
         btnRefresh.FlatAppearance.BorderSize = 0
         AddHandler btnRefresh.Click, Sub() RefreshProductsCache()
 
-        ' xQty button - modify cart line item quantities
-        Dim btnModifyQty As New Button With {
+        ' xQty button - modify cart line item quantities - sized in RepositionControls
+        btnModifyQty = New Button With {
             .Text = "✕ QTY",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
-            .Size = New Size(90, 44),
-            .Location = New Point(860, 8),
             .BackColor = _orange,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
@@ -396,10 +411,10 @@ Public Class POSMainForm_REDESIGN
 
         pnlProducts.Controls.AddRange({flpProducts, lblBreadcrumb, pnlSearchBar})
 
-        ' RIGHT PANEL - Cart
+        ' RIGHT PANEL - Cart - Much wider, almost to categories
         pnlCart = New Panel With {
             .Dock = DockStyle.Right,
-            .Width = 380,
+            .Width = 450,
             .BackColor = Color.White,
             .Padding = New Padding(0)
         }
@@ -429,9 +444,9 @@ Public Class POSMainForm_REDESIGN
 
         Dim pnlTotals As New Panel With {
             .Dock = DockStyle.Bottom,
-            .Height = 240,
+            .Height = 200,
             .BackColor = _darkBlue,
-            .Padding = New Padding(20)
+            .Padding = New Padding(15)
         }
 
         lblSubtotal = New Label With {
@@ -475,12 +490,12 @@ Public Class POSMainForm_REDESIGN
         pnlTotals.Controls.AddRange({lblSubtotal, lblTax, lblTotal, btnPay})
         pnlCart.Controls.AddRange({dgvCart, pnlTotals, lblCartHeader})
 
-        ' BOTTOM PANEL - F-Key Shortcuts
+        ' BOTTOM PANEL - F-Key Shortcuts - Reduced height for 1024x768
         pnlShortcuts = New Panel With {
             .Dock = DockStyle.Bottom,
-            .Height = 90,
+            .Height = 80,
             .BackColor = Color.White,
-            .Padding = New Padding(10)
+            .Padding = New Padding(5)
         }
 
         CreateShortcutButtons()
@@ -743,7 +758,7 @@ Public Class POSMainForm_REDESIGN
                                        Try
                                            ' CRITICAL: Refresh the ProductCacheService from database first!
                                            ProductCacheService.Instance.RefreshCache()
-                                           
+
                                            ' Then reload local cache from refreshed service
                                            LoadAllProductsToCache()
 
@@ -788,7 +803,7 @@ Public Class POSMainForm_REDESIGN
         Try
             ' Use ProductCacheService for instant performance - NO DATABASE QUERY!
             Dim cachedProducts = ProductCacheService.Instance.GetAllProducts()
-            
+
             _allProducts.Clear()
             _allProducts.Columns.Clear()
             _allProducts.Columns.Add("ProductID", GetType(Integer))
@@ -821,9 +836,19 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub InitializeScreenScaling()
-        ' Get current screen dimensions
-        _screenWidth = Screen.PrimaryScreen.Bounds.Width
-        _screenHeight = Screen.PrimaryScreen.Bounds.Height
+        ' Get current screen dimensions - use actual form size when maximized
+        ' This ensures we scale based on what Windows actually gives us
+        If Me.WindowState = FormWindowState.Maximized Then
+            _screenWidth = Me.ClientSize.Width
+            _screenHeight = Me.ClientSize.Height
+        Else
+            Dim currentScreen As Screen = Screen.FromControl(Me)
+            If currentScreen Is Nothing Then
+                currentScreen = Screen.PrimaryScreen
+            End If
+            _screenWidth = currentScreen.WorkingArea.Width
+            _screenHeight = currentScreen.WorkingArea.Height
+        End If
 
         ' Calculate scale factor based on screen size
         Dim widthScale As Single = CSng(_screenWidth) / CSng(_baseWidth)
@@ -835,16 +860,18 @@ Public Class POSMainForm_REDESIGN
         ' Ensure minimum scale factor
         If _scaleFactor < 0.5F Then _scaleFactor = 0.5F
 
-        ' Calculate tile sizes to fit 6 per row
-        ' Assume flpProducts width is about 70% of screen width
-        Dim availableWidth = CInt(_screenWidth * 0.7)
+        ' Calculate tile sizes - wider tiles for better visibility
+        ' Cart is now 450px, so products area calculation updated
+        Dim availableWidth = _screenWidth - 450 - 40 ' Subtract cart width and margins
         Dim margin = 10 ' 5px margin on each side
         _tileWidth = CInt((availableWidth - (_tilesPerRow * margin * 2)) / _tilesPerRow)
         _tileHeight = CInt(_tileWidth * 0.7) ' Maintain aspect ratio
 
-        ' Ensure minimum size
-        If _tileWidth < 80 Then _tileWidth = 80
-        If _tileHeight < 60 Then _tileHeight = 60
+        ' Ensure minimum size and maximum for readability
+        If _tileWidth < 100 Then _tileWidth = 100
+        If _tileHeight < 70 Then _tileHeight = 70
+        If _tileWidth > 180 Then _tileWidth = 180
+        If _tileHeight > 126 Then _tileHeight = 126
 
         Debug.WriteLine($"[SCREEN SCALING] Screen: {_screenWidth}x{_screenHeight}, Scale Factor: {_scaleFactor:F2}, Tile: {_tileWidth}x{_tileHeight}")
     End Sub
@@ -929,6 +956,57 @@ Public Class POSMainForm_REDESIGN
                 lblTax.Font = New Font("Segoe UI", baseFontSize + 2)
             End If
 
+            ' Reposition search bar controls dynamically
+            If pnlSearchBar IsNot Nothing Then
+                Dim buttonHeight = 44
+                Dim spacing = 6
+                Dim xPos = 10
+                
+                ' Fixed widths
+                Dim scanBtnWidth = 80
+                Dim searchCodeWidth = 150
+                Dim searchNameWidth = 150
+                Dim refreshBtnWidth = 55
+                Dim qtyBtnWidth = 55
+                
+                ' Scan button
+                Dim btnScan = pnlSearchBar.Controls.OfType(Of Button)().FirstOrDefault(Function(b) b.Text.Contains("📷"))
+                If btnScan IsNot Nothing Then
+                    btnScan.Location = New Point(xPos, 8)
+                    btnScan.Size = New Size(scanBtnWidth, buttonHeight)
+                    xPos += scanBtnWidth + spacing
+                End If
+                
+                ' Search by code textbox
+                If txtSearch IsNot Nothing Then
+                    txtSearch.Location = New Point(xPos, 8)
+                    txtSearch.Size = New Size(searchCodeWidth, buttonHeight)
+                    xPos += searchCodeWidth + spacing
+                End If
+                
+                ' Search by name textbox
+                If txtSearchByName IsNot Nothing Then
+                    txtSearchByName.Location = New Point(xPos, 8)
+                    txtSearchByName.Size = New Size(searchNameWidth, buttonHeight)
+                    xPos += searchNameWidth + spacing
+                End If
+                
+                ' Refresh button - directly access class field
+                If btnRefresh IsNot Nothing Then
+                    btnRefresh.Location = New Point(xPos, 8)
+                    btnRefresh.Size = New Size(refreshBtnWidth, buttonHeight)
+                    btnRefresh.Visible = True
+                    xPos += refreshBtnWidth + spacing
+                End If
+                
+                ' Qty button - directly access class field
+                If btnModifyQty IsNot Nothing Then
+                    btnModifyQty.Location = New Point(xPos, 8)
+                    btnModifyQty.Size = New Size(qtyBtnWidth, buttonHeight)
+                    btnModifyQty.Visible = True
+                End If
+            End If
+
             ' Reposition cashier label to stay centered
             For Each ctrl As Control In pnlTop.Controls
                 If TypeOf ctrl Is Label AndAlso ctrl.Text.Contains("Till:") Then
@@ -944,6 +1022,7 @@ Public Class POSMainForm_REDESIGN
 
         Catch ex As Exception
             ' Ignore layout errors during resize
+            MessageBox.Show($"RepositionControls ERROR: {ex.Message}{vbCrLf}{ex.StackTrace}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         Finally
             Me.ResumeLayout()
         End Try
@@ -1219,15 +1298,25 @@ Public Class POSMainForm_REDESIGN
         ' Don't hide keyboards or clear search - keep search results visible
         ' User can manually close keyboard/numpad or clear search if needed
 
+        Dim rowIndex As Integer = -1
         Dim existingRow = _cartItems.Select($"ProductID = {productID}")
         If existingRow.Length > 0 Then
             existingRow(0)("Qty") = CDec(existingRow(0)("Qty")) + 1
             existingRow(0)("Total") = CDec(existingRow(0)("Qty")) * CDec(existingRow(0)("Price"))
+            rowIndex = _cartItems.Rows.IndexOf(existingRow(0))
         Else
             _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price)
+            rowIndex = _cartItems.Rows.Count - 1
         End If
 
         CalculateTotals()
+
+        ' Highlight the last added/updated item
+        If rowIndex >= 0 AndAlso dgvCart.Rows.Count > rowIndex Then
+            dgvCart.ClearSelection()
+            dgvCart.Rows(rowIndex).Selected = True
+            dgvCart.FirstDisplayedScrollingRowIndex = rowIndex
+        End If
 
         ' Auto-focus barcode scanner for next scan
         If txtBarcodeScanner IsNot Nothing Then
@@ -1267,29 +1356,45 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("F9", "↩️ Return", CType(Sub() ProcessReturn(), Action)),
             Tuple.Create("F10", "❌ Void", CType(Sub() VoidSale(), Action)),
             Tuple.Create("F11", "📝 Order", CType(Sub() CreateOrder(), Action)),
-            Tuple.Create("F12", "📦 Collect", CType(Sub() OrderCollection(), Action))
+            Tuple.Create("F12", "📦 Collect", CType(Sub() OrderCollection(), Action)),
+            Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
+            Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
+            Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 12
+        Dim visibleCount = 15 ' 12 F-keys + 2 User Defined buttons + 1 Set Priority button
+        ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
-        Dim availableWidth = screenWidth - 20
-        Dim spacing = 5
-        Dim buttonWidth = (availableWidth \ visibleCount) - spacing
+        Dim leftMargin = 5
+        Dim rightMargin = 5
+        Dim availableWidth = screenWidth - leftMargin - rightMargin
+        Dim spacing = 3 ' Reduced spacing for more room
+        Dim buttonWidth = ((availableWidth - (spacing * (visibleCount - 1))) \ visibleCount)
+
+        ' Ensure buttons fit on screen - adjust if too wide
+        If buttonWidth < 60 Then 
+            buttonWidth = 60
+        ElseIf buttonWidth > 80 Then
+            buttonWidth = 80
+        End If
+        
+        ' Calculate font size based on button width
+        Dim fontSize As Single = If(buttonWidth < 65, 7, 8)
 
         For i = 0 To visibleCount - 1
             Dim shortcut = shortcuts(i)
             Dim btn As New Button With {
                 .Text = $"{shortcut.Item1}{vbCrLf}{shortcut.Item2}",
-                .Size = New Size(buttonWidth, 70),
-                .Location = New Point(10 + (i * (buttonWidth + spacing)), 10),
+                .Size = New Size(buttonWidth, 60),
+                .Location = New Point(leftMargin + (i * (buttonWidth + spacing)), 10),
                 .BackColor = _darkBlue,
                 .ForeColor = Color.White,
-                .Font = New Font("Segoe UI", 9, FontStyle.Bold),
+                .Font = New Font("Segoe UI", fontSize, FontStyle.Bold),
                 .FlatStyle = FlatStyle.Flat,
                 .Cursor = Cursors.Hand,
                 .Tag = shortcut.Item3
             }
-            btn.FlatAppearance.BorderSize = 1
+            btn.FlatAppearance.BorderSize = 0
             btn.FlatAppearance.BorderColor = _lightBlue
             AddHandler btn.Click, Sub(s, e) CType(CType(s, Button).Tag, Action).Invoke()
             AddHandler btn.MouseEnter, Sub(s, e) btn.BackColor = _lightBlue
@@ -1313,6 +1418,7 @@ Public Class POSMainForm_REDESIGN
             ' Query Demo_Retail_Product and get VAT-inclusive price from Demo_Retail_Price
             ' Use the scanned/typed itemCode as the ItemCode to prevent duplicates
             ' Match product card behavior: only search products at current branch
+            ' Use LIKE with wildcard to match partial barcodes (e.g., scan "12007" matches barcode "20012007")
             Dim sql = "
                 SELECT TOP 1
                     p.ProductID,
@@ -1320,7 +1426,7 @@ Public Class POSMainForm_REDESIGN
                     ISNULL(price.SellingPrice, 0) AS SellingPrice
                 FROM Demo_Retail_Product p
                 LEFT JOIN Demo_Retail_Price price ON p.ProductID = price.ProductID AND price.BranchID = @BranchID
-                WHERE (p.SKU = @ItemCode OR p.Barcode = @ItemCode)
+                WHERE (p.SKU LIKE '%' + @ItemCode + '%' OR p.Barcode LIKE '%' + @ItemCode + '%')
                   AND p.BranchID = @BranchID
                   AND p.IsActive = 1
                   AND ISNULL(price.SellingPrice, 0) > 0"
@@ -1352,6 +1458,7 @@ Public Class POSMainForm_REDESIGN
                             txtBarcodeScanner.BackColor = _red
                             MessageBox.Show($"Product not found: {itemCode}", "Scan Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                             txtBarcodeScanner.SelectAll()
+                            txtBarcodeScanner.Focus()
                         End If
                     End Using
                 End Using
@@ -2207,73 +2314,68 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub ProcessReturnWithReceipt()
-        ' Original workflow - Scan invoice barcode
-        Dim fullInvoiceNumber As String = ""
-        Using barcodeDialog As New BarcodeScannerDialog("SCAN INVOICE BARCODE", "Scan the barcode from the customer's receipt")
-            If barcodeDialog.ShowDialog() <> DialogResult.OK Then Return
-            fullInvoiceNumber = barcodeDialog.ScannedBarcode
-        End Using
-
-        If String.IsNullOrWhiteSpace(fullInvoiceNumber) Then Return
-
-        ' Step 2: Supervisor Authorization
-        Dim supervisorUsername = InputBox("Enter Retail Supervisor Username:", "Returns Authorization")
-        If String.IsNullOrWhiteSpace(supervisorUsername) Then Return
-
-        Dim supervisorPassword As String = ""
-        Using pwdForm As New PasswordInputForm("Enter Retail Supervisor Password:", "Returns Authorization")
-            If pwdForm.ShowDialog() <> DialogResult.OK Then Return
-            supervisorPassword = pwdForm.Password
-        End Using
-
-        If String.IsNullOrWhiteSpace(supervisorPassword) Then Return
-
-        ' Validate supervisor credentials
-        Dim supervisorID As Integer = 0
+        ' Scan receipt barcode using colorful barcode scanner dialog
         Try
+            ' Get supervisor authorization first
+            Dim supervisorID As Integer = 0
+            Dim supervisorUsername = InputBox("Enter Supervisor Username:", "Authorization Required")
+            If String.IsNullOrWhiteSpace(supervisorUsername) Then Return
+
+            Dim supervisorPassword As String = ""
+            Using pwdForm As New PasswordInputForm("Enter Supervisor Password:", "Authorization Required")
+                If pwdForm.ShowDialog() <> DialogResult.OK Then Return
+                supervisorPassword = pwdForm.Password
+            End Using
+
+            If String.IsNullOrWhiteSpace(supervisorPassword) Then Return
+
+            ' Validate supervisor credentials
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                Dim sql = "SELECT u.UserID FROM Users u INNER JOIN Roles r ON u.RoleID = r.RoleID WHERE u.Username = @Username AND u.Password = @Password AND r.RoleName = 'Retail Supervisor' AND u.IsActive = 1"
+                Dim sql = "SELECT UserID FROM Users u INNER JOIN Roles r ON u.RoleID = r.RoleID WHERE u.Username = @Username AND u.Password = @Password AND r.RoleName IN ('Retail Supervisor', 'Manager', 'Admin') AND u.IsActive = 1"
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@Username", supervisorUsername)
                     cmd.Parameters.AddWithValue("@Password", supervisorPassword)
                     Dim result = cmd.ExecuteScalar()
                     If result Is Nothing Then
-                        MessageBox.Show("Invalid Retail Supervisor credentials!", "Authorization Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        MessageBox.Show("Invalid supervisor credentials!", "Authorization Failed", MessageBoxButtons.OK, MessageBoxIcon.Error)
                         Return
                     End If
                     supervisorID = CInt(result)
                 End Using
             End Using
-        Catch ex As Exception
-            MessageBox.Show($"Authorization error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Return
-        End Try
 
-        ' Step 3: Use scanned invoice number directly (no prefix manipulation needed)
-        ' Verify invoice exists
-        Try
+            ' Scan invoice barcode using colorful barcode scanner dialog
+            Dim invoiceNumber As String = ""
+            Using barcodeDialog As New BarcodeScannerDialog("SCAN RECEIPT BARCODE", "Scan the barcode from the sales receipt")
+                If barcodeDialog.ShowDialog() <> DialogResult.OK Then Return
+                invoiceNumber = barcodeDialog.ScannedBarcode
+            End Using
+
+            If String.IsNullOrWhiteSpace(invoiceNumber) Then Return
+
+            ' Validate invoice exists and get sale details
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                Dim sql = "SELECT COUNT(*) FROM Demo_Sales WHERE InvoiceNumber = @InvoiceNumber"
+                Dim sql = "SELECT SaleID, InvoiceNumber, TotalAmount FROM Demo_Sales WHERE InvoiceNumber = @InvoiceNumber"
                 Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@InvoiceNumber", fullInvoiceNumber)
-                    Dim count = CInt(cmd.ExecuteScalar())
-                    If count = 0 Then
-                        MessageBox.Show($"Invoice {fullInvoiceNumber} not found!", "Invalid Invoice", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                        Return
-                    End If
+                    cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber.Trim())
+                    Using reader = cmd.ExecuteReader()
+                        If Not reader.Read() Then
+                            MessageBox.Show("Invoice not found. Please check the barcode and try again.", "Invalid Invoice", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                            Return
+                        End If
+                    End Using
                 End Using
             End Using
-        Catch ex As Exception
-            MessageBox.Show($"Error validating invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Return
-        End Try
 
-        ' Step 4: Show return line items form
-        Using returnForm As New ReturnLineItemsForm(fullInvoiceNumber, _branchID, _tillPointID, _cashierID, supervisorID)
-            returnForm.ShowDialog()
-        End Using
+            ' Open ReturnLineItemsForm with the invoice number (it will auto-load items)
+            Using returnForm As New ReturnLineItemsForm(invoiceNumber.Trim(), _branchID, _tillPointID, _cashierID, supervisorID)
+                returnForm.ShowDialog()
+            End Using
+        Catch ex As Exception
+            MessageBox.Show($"Error processing return: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
     Private Sub ProcessReturnNoReceipt()
@@ -2294,7 +2396,7 @@ Public Class POSMainForm_REDESIGN
 
             ' Get branch details
             Dim branchDetails = GetBranchDetails()
-            
+
             Dim cakeForm As New CakeOrderFormNew(_branchID, _tillPointID, _cashierID, _cashierName,
                                                  branchDetails.Name, branchDetails.Address, branchDetails.Phone)
             cakeForm.ShowDialog()
@@ -3518,6 +3620,11 @@ Public Class POSMainForm_REDESIGN
     ' F11 - Create Order (NEW FLOW: Categories first, then order info)
     Private _isOrderMode As Boolean = False
     Private _btnAddOrderInfo As Button
+    
+    ' User Defined Order Mode
+    Private _isUserDefinedMode As Boolean = False
+    Private _userDefinedOrderData As UserDefinedOrderData
+    Private _btnCompleteUserDefined As Button
 
     Private Sub CreateOrder()
         Try
@@ -3583,9 +3690,9 @@ Public Class POSMainForm_REDESIGN
         Try
             ' Get branch details
             Dim branchDetails = GetBranchDetails()
-            
+
             ' Open new CakeOrderFormNew with cart items pre-populated
-            Using cakeForm As New CakeOrderFormNew(_branchID, _tillPointID, _cashierID, _cashierName, 
+            Using cakeForm As New CakeOrderFormNew(_branchID, _tillPointID, _cashierID, _cashierName,
                                                    branchDetails.Name, branchDetails.Address, branchDetails.Phone, _cartItems)
                 If cakeForm.ShowDialog() = DialogResult.OK Then
                     ' Order created successfully, clear cart and exit order mode
@@ -3893,26 +4000,26 @@ Public Class POSMainForm_REDESIGN
     End Function
 
     Private Function GenerateOrderNumber(conn As SqlConnection, transaction As SqlTransaction, branchPrefix As String, Optional orderType As String = "CAKE") As String
-        ' Generate numeric-only order number: BranchID + 2 + 4-digit sequence
-        ' Example: Branch 6, sequence 1 -> "620001"
-        ' Transaction type codes: 1=Sale, 4=Return, 2=Order
-        ' Shorter format for optimal barcode scanning (6 digits total)
+        ' Generate numeric-only order number: BranchID + 4 + 5-digit sequence
+        ' Example: Branch 6, sequence 1 -> "640001"
+        ' Transaction type codes: 4=Order, (Sales use branchID+sequence, Returns use branchID+4+sequence)
+        ' Format: BranchID (1 digit) + Type (1 digit) + Sequence (4 digits) = 6 digits total
+        ' Numeric only for better barcode scanning with Free 3 of 9 font
 
         Dim sql As String = "
-            SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 5) AS INT)), 0) + 1 
+            SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 4) AS INT)), 0) + 1 
             FROM POS_CustomOrders WITH (TABLOCKX)
-            WHERE OrderNumber LIKE @pattern AND LEN(OrderNumber) = 7"
+            WHERE OrderNumber LIKE @pattern AND LEN(OrderNumber) = 6"
 
-        Dim pattern As String = "52%"
+        Dim pattern As String = $"{_branchID}4%"
 
         Using cmd As New SqlCommand(sql, conn, transaction)
             cmd.Parameters.AddWithValue("@pattern", pattern)
             Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
 
-            ' Format: 5 + TransactionType (1 digit) + Sequence (5 digits) = 7 digits total
-            ' Example: order 1 -> "5200001" (5=prefix, 2=Order, 00001=sequence)
-            ' 7-digit format matches working barcode from yesterday
-            Return $"52{nextNumber.ToString().PadLeft(5, "0"c)}"
+            ' Format: BranchID + 4 (Order) + Sequence (4 digits) = 6 digits total
+            ' Example: Branch 6, order 1 -> "640001"
+            Return $"{_branchID}4{nextNumber.ToString().PadLeft(4, "0"c)}"
         End Using
     End Function
 
@@ -5362,12 +5469,12 @@ Public Class POSMainForm_REDESIGN
     ''' <summary>
     ''' Print order receipt to thermal printer (80mm)
     ''' </summary>
-    Private Sub PrintOrderReceiptToThermalPrinter(orderNumber As String, customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, collectionDay As String, specialInstructions As String, depositPaid As Decimal, totalAmount As Decimal, Optional colour As String = "", Optional picture As String = "")
+    Private Sub PrintOrderReceiptToThermalPrinter(orderNumber As String, customerName As String, customerSurname As String, customerPhone As String, readyDate As DateTime, readyTime As TimeSpan, collectionDay As String, specialInstructions As String, depositPaid As Decimal, totalAmount As Decimal, Optional colour As String = "", Optional picture As String = "", Optional notes As String = "")
         Try
             Dim printDoc As New Printing.PrintDocument()
 
             AddHandler printDoc.PrintPage, Sub(sender, e)
-                                               Dim font As New Font("Courier New", 8)
+                                               ' ALL FONTS BOLD FOR BETTER VISIBILITY
                                                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
                                                Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
                                                Dim yPos As Single = 5
@@ -5379,12 +5486,17 @@ Public Class POSMainForm_REDESIGN
                                                e.Graphics.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
                                                yPos += 22
 
-                                               ' Branch info
-                                               e.Graphics.DrawString(GetBranchName(), font, Brushes.Black, leftMargin, yPos)
+                                               ' Branch info with full address
+                                               Dim branchDetails = GetBranchDetails()
+                                               e.Graphics.DrawString(branchDetails.Name, fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString(branchDetails.Address, fontBold, Brushes.Black, leftMargin, yPos)
+                                               yPos += 14
+                                               e.Graphics.DrawString($"Tel: {branchDetails.Phone}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Date and time
-                                               e.Graphics.DrawString(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Order number
@@ -5392,11 +5504,11 @@ Public Class POSMainForm_REDESIGN
                                                yPos += 15
 
                                                ' Cashier
-                                               e.Graphics.DrawString($"Cashier: {_cashierName}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"Cashier: {_cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 18
 
                                                ' Separator
-                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Order header - centered
@@ -5406,37 +5518,45 @@ Public Class POSMainForm_REDESIGN
                                                yPos += 18
 
                                                ' Separator
-                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Customer details
                                                e.Graphics.DrawString("CUSTOMER:", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
-                                               e.Graphics.DrawString($"{customerName} {customerSurname}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"{customerName} {customerSurname}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
-                                               e.Graphics.DrawString($"Phone: {customerPhone}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"Phone: {customerPhone}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 18
 
                                                ' Collection details
                                                e.Graphics.DrawString("READY FOR COLLECTION:", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
-                                               e.Graphics.DrawString($"Date: {readyDate:dd/MM/yyyy}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"Date: {readyDate:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
-                                               e.Graphics.DrawString($"Time: {readyTime:hh\:mm}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"Time: {readyTime:hh\:mm}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
                                                e.Graphics.DrawString($"*** {collectionDay.ToUpper()} ***", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 18
 
                                                ' Special instructions
                                                If Not String.IsNullOrWhiteSpace(specialInstructions) Then
-                                                   e.Graphics.DrawString("INSTRUCTIONS:", fontBold, Brushes.Black, leftMargin, yPos)
+                                                   e.Graphics.DrawString("SPECIAL INSTRUCTIONS:", fontBold, Brushes.Black, leftMargin, yPos)
                                                    yPos += 14
-                                                   e.Graphics.DrawString(specialInstructions, font, Brushes.Black, leftMargin, yPos)
+                                                   e.Graphics.DrawString(specialInstructions, fontBold, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 18
+                                               End If
+
+                                               ' Notes
+                                               If Not String.IsNullOrWhiteSpace(notes) Then
+                                                   e.Graphics.DrawString("NOTES:", fontBold, Brushes.Black, leftMargin, yPos)
+                                                   yPos += 14
+                                                   e.Graphics.DrawString(notes, fontBold, Brushes.Black, leftMargin, yPos)
                                                    yPos += 18
                                                End If
 
                                                ' Separator
-                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Items
@@ -5446,32 +5566,32 @@ Public Class POSMainForm_REDESIGN
                                                    Dim price = CDec(row("Price"))
                                                    Dim total = CDec(row("Total"))
 
-                                                   e.Graphics.DrawString($"{qty:0.00} x {product}", font, Brushes.Black, leftMargin, yPos)
+                                                   e.Graphics.DrawString($"{qty:0.00} x {product}", fontBold, Brushes.Black, leftMargin, yPos)
                                                    yPos += 14
-                                                   e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", font, Brushes.Black, leftMargin, yPos)
+                                                   e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                                                    yPos += 14
                                                Next
 
                                                yPos += 5
-                                               e.Graphics.DrawString("--------------------------------------", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString("--------------------------------------", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Calculate VAT breakdown (prices are VAT-inclusive)
                                                Dim subtotalExclVAT = Math.Round(totalAmount / 1.15D, 2)
                                                Dim vatAmount = Math.Round(totalAmount - subtotalExclVAT, 2)
 
-                                               e.Graphics.DrawString($"Subtotal (excl VAT):  R {subtotalExclVAT:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"Subtotal (excl VAT):  R {subtotalExclVAT:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
-                                               e.Graphics.DrawString($"VAT (15%):            R {vatAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"VAT (15%):            R {vatAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
                                                e.Graphics.DrawString($"Total Amount:         R {totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
-                                               e.Graphics.DrawString($"Deposit Paid:         R {depositPaid:N2}", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString($"Deposit Paid:         R {depositPaid:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 14
                                                e.Graphics.DrawString($"Balance Due:          R {(totalAmount - depositPaid):N2}", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 18
 
-                                               e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                                               e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                                                yPos += 15
 
                                                ' Barcode for order collection (7-digit format, research-based settings)
@@ -5495,8 +5615,8 @@ Public Class POSMainForm_REDESIGN
                                                yPos += 14
 
                                                Dim footer2 = "PLEASE BRING THIS RECEIPT"
-                                               Dim footer2Size = e.Graphics.MeasureString(footer2, font)
-                                               e.Graphics.DrawString(footer2, font, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
+                                               Dim footer2Size = e.Graphics.MeasureString(footer2, fontBold)
+                                               e.Graphics.DrawString(footer2, fontBold, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
                                            End Sub
 
             ' Print to default thermal printer
@@ -5800,6 +5920,540 @@ Public Class POSMainForm_REDESIGN
 
         Catch ex As Exception
             Throw New Exception("Failed to print day-end report: " & ex.Message, ex)
+        End Try
+    End Sub
+
+    ' ========================================
+    ' USER DEFINED ORDER METHODS
+    ' ========================================
+    
+    Private Sub StartUserDefinedOrder()
+        Try
+            ' Clear cart if needed
+            If _cartItems.Rows.Count > 0 Then
+                Dim result = MessageBox.Show("Clear current cart and start User Defined Order?", "User Defined Order", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                If result = DialogResult.No Then
+                    Return
+                End If
+                _cartItems.Clear()
+                CalculateTotals()
+            End If
+
+            ' Show User Defined Order Dialog to capture header fields
+            Dim dialog As New UserDefinedOrderDialog(_branchID, GetBranchName())
+            If dialog.ShowDialog() = DialogResult.OK Then
+                ' Save order data
+                _userDefinedOrderData = New UserDefinedOrderData With {
+                    .CustomerCellNumber = dialog.CustomerCellNumber,
+                    .CustomerName = dialog.CustomerName,
+                    .CustomerSurname = dialog.CustomerSurname,
+                    .CakeColour = dialog.CakeColour,
+                    .SpecialRequest = dialog.SpecialRequest,
+                    .CakeImage = dialog.CakeImage,
+                    .CollectionDate = dialog.CollectionDate,
+                    .CollectionTime = dialog.CollectionTime,
+                    .CollectionDay = dialog.CollectionDay
+                }
+
+                ' Enter User Defined Mode
+                _isUserDefinedMode = True
+                _isOrderMode = False
+
+                ' Show categories for item selection
+                ShowCategories()
+
+                ' Update breadcrumb
+                lblBreadcrumb.Text = $"🎂 USER DEFINED ORDER - {_userDefinedOrderData.CustomerName} - Collect: {_userDefinedOrderData.CollectionDate:dd/MM/yyyy}"
+                lblBreadcrumb.ForeColor = ColorTranslator.FromHtml("#E67E22")
+
+                ' Show Complete User Defined Order button
+                ShowCompleteUserDefinedButton()
+            End If
+
+        Catch ex As Exception
+            MessageBox.Show($"Error starting User Defined Order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub ShowCompleteUserDefinedButton()
+        ' Remove existing button if present
+        If _btnCompleteUserDefined IsNot Nothing AndAlso pnlCart.Controls.Contains(_btnCompleteUserDefined) Then
+            pnlCart.Controls.Remove(_btnCompleteUserDefined)
+        End If
+
+        ' Hide Pay Now button in User Defined mode
+        Dim btnPayNow = pnlCart.Controls.Find("btnPayNow", True).FirstOrDefault()
+        If btnPayNow IsNot Nothing Then
+            btnPayNow.Visible = False
+        End If
+
+        ' Create "COMPLETE USER DEFINED ORDER" button at bottom of cart
+        _btnCompleteUserDefined = New Button With {
+            .Text = "✓ COMPLETE USER DEFINED ORDER",
+            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Size = New Size(pnlCart.Width - 40, 60),
+            .Location = New Point(20, pnlCart.Height - 80),
+            .BackColor = ColorTranslator.FromHtml("#27AE60"),
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand,
+            .Anchor = AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
+        }
+        _btnCompleteUserDefined.FlatAppearance.BorderSize = 0
+        AddHandler _btnCompleteUserDefined.Click, AddressOf CompleteUserDefinedOrder
+        pnlCart.Controls.Add(_btnCompleteUserDefined)
+        _btnCompleteUserDefined.BringToFront()
+    End Sub
+
+    Private Sub CompleteUserDefinedOrder()
+        Try
+            ' Validate cart has items
+            If _cartItems.Rows.Count = 0 Then
+                MessageBox.Show("Please add items to the cart before completing the order.", "No Items", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+
+            ' Calculate totals
+            Dim subtotal = CalculateSubtotal()
+            Dim taxAmount = CalculateTax(subtotal)
+            Dim totalAmount = subtotal + taxAmount
+
+            ' Open payment tender
+            Dim tenderForm As New PaymentTenderForm(_cashierID, _cashierName, _branchID, _tillPointID, GetBranchPrefix(), _cartItems, subtotal, taxAmount, totalAmount)
+            If tenderForm.ShowDialog() = DialogResult.OK Then
+                ' Payment successful - save User Defined Order
+                Dim orderNumber = SaveUserDefinedOrder(tenderForm.PaymentMethod, tenderForm.CashAmount, tenderForm.CardAmount, totalAmount)
+
+                ' Print dual till slip
+                PrintUserDefinedOrderSlip(orderNumber, totalAmount, tenderForm.PaymentMethod, tenderForm.CashAmount, tenderForm.CardAmount)
+
+                ' Show success message
+                MessageBox.Show($"User Defined Order {orderNumber} created successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+                ' Reset to Sale Mode
+                ResetToSaleMode()
+            End If
+
+        Catch ex As Exception
+            MessageBox.Show($"Error completing User Defined Order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Function SaveUserDefinedOrder(paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, totalAmount As Decimal) As String
+        Dim orderNumber As String = ""
+        Dim saleID As Integer = 0
+        Dim invoiceNumber As String = ""
+
+        Using conn As New SqlConnection(_connectionString)
+            conn.Open()
+            Using transaction = conn.BeginTransaction()
+                Try
+                    ' Generate order number: BranchID + 6 + sequence
+                    orderNumber = GenerateUserDefinedOrderNumber(conn, transaction)
+
+                    ' 1. Write to Sales table
+                    saleID = WriteSaleToDatabase(conn, transaction, paymentMethod, cashAmount, cardAmount, totalAmount)
+
+                    ' 2. Generate invoice number
+                    invoiceNumber = GenerateInvoiceNumber(conn, transaction)
+
+                    ' 3. Write to Invoices table
+                    WriteInvoiceItems(conn, transaction, invoiceNumber, saleID)
+
+                    ' 4. Write to POS_UserDefinedOrders table
+                    Dim insertOrderSql = "
+                        INSERT INTO POS_UserDefinedOrders (
+                            OrderNumber, BranchID, BranchName, CashierID, CashierName, TillPointID,
+                            CustomerCellNumber, CustomerName, CustomerSurname,
+                            CakeColour, CakeImage, SpecialRequest,
+                            CollectionDate, CollectionTime, CollectionDay,
+                            OrderDate, OrderTime, OrderDateTime,
+                            TotalAmount, AmountPaid, PaymentMethod, CashAmount, CardAmount,
+                            Status, SaleID, InvoiceNumber
+                        ) VALUES (
+                            @OrderNumber, @BranchID, @BranchName, @CashierID, @CashierName, @TillPointID,
+                            @CustomerCellNumber, @CustomerName, @CustomerSurname,
+                            @CakeColour, @CakeImage, @SpecialRequest,
+                            @CollectionDate, @CollectionTime, @CollectionDay,
+                            @OrderDate, @OrderTime, GETDATE(),
+                            @TotalAmount, @AmountPaid, @PaymentMethod, @CashAmount, @CardAmount,
+                            'Created', @SaleID, @InvoiceNumber
+                        )"
+
+                    Using cmd As New SqlCommand(insertOrderSql, conn, transaction)
+                        cmd.Parameters.AddWithValue("@OrderNumber", orderNumber)
+                        cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                        cmd.Parameters.AddWithValue("@BranchName", GetBranchName())
+                        cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                        cmd.Parameters.AddWithValue("@CashierName", _cashierName)
+                        cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
+                        cmd.Parameters.AddWithValue("@CustomerCellNumber", _userDefinedOrderData.CustomerCellNumber)
+                        cmd.Parameters.AddWithValue("@CustomerName", _userDefinedOrderData.CustomerName)
+                        cmd.Parameters.AddWithValue("@CustomerSurname", If(String.IsNullOrEmpty(_userDefinedOrderData.CustomerSurname), DBNull.Value, _userDefinedOrderData.CustomerSurname))
+                        cmd.Parameters.AddWithValue("@CakeColour", If(String.IsNullOrEmpty(_userDefinedOrderData.CakeColour), DBNull.Value, _userDefinedOrderData.CakeColour))
+                        cmd.Parameters.AddWithValue("@CakeImage", If(String.IsNullOrEmpty(_userDefinedOrderData.CakeImage), DBNull.Value, _userDefinedOrderData.CakeImage))
+                        cmd.Parameters.AddWithValue("@SpecialRequest", If(String.IsNullOrEmpty(_userDefinedOrderData.SpecialRequest), DBNull.Value, _userDefinedOrderData.SpecialRequest))
+                        cmd.Parameters.AddWithValue("@CollectionDate", _userDefinedOrderData.CollectionDate)
+                        cmd.Parameters.AddWithValue("@CollectionTime", _userDefinedOrderData.CollectionTime)
+                        cmd.Parameters.AddWithValue("@CollectionDay", _userDefinedOrderData.CollectionDay)
+                        cmd.Parameters.AddWithValue("@OrderDate", DateTime.Today)
+                        cmd.Parameters.AddWithValue("@OrderTime", DateTime.Now.TimeOfDay)
+                        cmd.Parameters.AddWithValue("@TotalAmount", totalAmount)
+                        cmd.Parameters.AddWithValue("@AmountPaid", totalAmount)
+                        cmd.Parameters.AddWithValue("@PaymentMethod", paymentMethod)
+                        cmd.Parameters.AddWithValue("@CashAmount", If(cashAmount > 0, cashAmount, DBNull.Value))
+                        cmd.Parameters.AddWithValue("@CardAmount", If(cardAmount > 0, cardAmount, DBNull.Value))
+                        cmd.Parameters.AddWithValue("@SaleID", saleID)
+                        cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                        cmd.ExecuteNonQuery()
+                    End Using
+
+                    ' 5. Write order items
+                    Try
+                        Dim orderID = GetUserDefinedOrderID(conn, transaction, orderNumber)
+                        For Each row As DataRow In _cartItems.Rows
+                            Dim insertItemSql = "
+                                INSERT INTO POS_UserDefinedOrderItems (
+                                    UserDefinedOrderID, ProductID, ProductName, ProductCode, Quantity, UnitPrice, LineTotal
+                                ) VALUES (
+                                    @OrderID, @ProductID, @ProductName, @ProductCode, @Quantity, @UnitPrice, @LineTotal
+                                )"
+                            Using cmdItem As New SqlCommand(insertItemSql, conn, transaction)
+                                cmdItem.Parameters.AddWithValue("@OrderID", orderID)
+                                cmdItem.Parameters.AddWithValue("@ProductID", CInt(row("ProductID")))
+                                cmdItem.Parameters.AddWithValue("@ProductName", row("Product").ToString())
+                                cmdItem.Parameters.AddWithValue("@ProductCode", If(IsDBNull(row("ItemCode")), DBNull.Value, row("ItemCode")))
+                                cmdItem.Parameters.AddWithValue("@Quantity", CDec(row("Qty")))
+                                cmdItem.Parameters.AddWithValue("@UnitPrice", CDec(row("Price")))
+                                cmdItem.Parameters.AddWithValue("@LineTotal", CDec(row("Total")))
+                                cmdItem.ExecuteNonQuery()
+                            End Using
+                        Next
+                    Catch ex As SqlException
+                        Throw New Exception($"Error writing order items. SQL Error: {ex.Message}. Line: {ex.LineNumber}. Procedure: {ex.Procedure}", ex)
+                    End Try
+
+                    ' 6. Update stock
+                    UpdateStock(conn, transaction)
+
+                    ' 7. Create journal entries for sales and cost of sales
+                    CreateJournalEntries(conn, transaction, invoiceNumber, paymentMethod, cashAmount, cardAmount, totalAmount)
+
+                    transaction.Commit()
+                    Return orderNumber
+
+                Catch ex As Exception
+                    transaction.Rollback()
+                    ' Get inner exception details
+                    Dim innerMsg = If(ex.InnerException IsNot Nothing, $" Inner: {ex.InnerException.Message}", "")
+                    Throw New Exception($"Failed to save User Defined Order: {ex.Message}{innerMsg}", ex)
+                End Try
+            End Using
+        End Using
+    End Function
+
+    Private Function GenerateUserDefinedOrderNumber(conn As SqlConnection, transaction As SqlTransaction) As String
+        ' Format: BranchID + 6 + 5-digit sequence
+        ' Example: Branch 6 → "6600001"
+        Dim sql = "
+            SELECT ISNULL(MAX(CAST(RIGHT(OrderNumber, 5) AS INT)), 0) + 1
+            FROM POS_UserDefinedOrders WITH (TABLOCKX)
+            WHERE OrderNumber LIKE @pattern AND LEN(OrderNumber) = 7"
+
+        Dim pattern As String = $"{_branchID}6%"
+
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@pattern", pattern)
+            Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+            Return $"{_branchID}6{nextNumber.ToString().PadLeft(5, "0"c)}"
+        End Using
+    End Function
+
+    Private Function GetUserDefinedOrderID(conn As SqlConnection, transaction As SqlTransaction, orderNumber As String) As Integer
+        Dim sql = "SELECT UserDefinedOrderID FROM POS_UserDefinedOrders WHERE OrderNumber = @OrderNumber"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@OrderNumber", orderNumber)
+            Return CInt(cmd.ExecuteScalar())
+        End Using
+    End Function
+
+    Private Sub PrintUserDefinedOrderSlip(orderNumber As String, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal)
+        Try
+            Dim printer As New UserDefinedOrderPrinter(_connectionString, _branchID)
+            printer.PrintCreationSlip(orderNumber, _userDefinedOrderData, _cartItems, totalAmount, paymentMethod, cashAmount, cardAmount, _cashierName)
+        Catch ex As Exception
+            MessageBox.Show($"Error printing User Defined Order slip: {ex.Message}", "Print Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+    End Sub
+
+    Private Sub CollectUserDefinedOrder()
+        Try
+            ' Open collection dialog
+            Dim dialog As New CollectUserDefinedDialog(_connectionString, _branchID, _cashierName)
+            dialog.ShowDialog()
+        Catch ex As Exception
+            MessageBox.Show($"Error collecting User Defined Order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub ResetToSaleMode()
+        ' Reset mode flags
+        _isUserDefinedMode = False
+        _isOrderMode = False
+        _userDefinedOrderData = Nothing
+
+        ' Remove User Defined button
+        If _btnCompleteUserDefined IsNot Nothing AndAlso pnlCart.Controls.Contains(_btnCompleteUserDefined) Then
+            pnlCart.Controls.Remove(_btnCompleteUserDefined)
+            _btnCompleteUserDefined = Nothing
+        End If
+
+        ' Show Pay Now button
+        Dim btnPayNow = pnlCart.Controls.Find("btnPayNow", True).FirstOrDefault()
+        If btnPayNow IsNot Nothing Then
+            btnPayNow.Visible = True
+        End If
+
+        ' Clear cart
+        _cartItems.Clear()
+        CalculateTotals()
+
+        ' Reset breadcrumb
+        lblBreadcrumb.Text = "🏠 Home > Categories"
+        lblBreadcrumb.ForeColor = _ironGold
+
+        ' Show categories
+        ShowCategories()
+    End Sub
+
+    ' Helper methods for User Defined Orders
+    Private Function CalculateSubtotal() As Decimal
+        Dim totalInclVAT As Decimal = 0
+        For Each row As DataRow In _cartItems.Rows
+            totalInclVAT += CDec(row("Total"))
+        Next
+        Return Math.Round(totalInclVAT / 1.15D, 2)
+    End Function
+
+    Private Function CalculateTax(subtotal As Decimal) As Decimal
+        Return Math.Round(subtotal * 0.15D, 2)
+    End Function
+
+    Private Function WriteSaleToDatabase(conn As SqlConnection, transaction As SqlTransaction, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, totalAmount As Decimal) As Integer
+        Dim subtotal = CalculateSubtotal()
+        Dim taxAmount = CalculateTax(subtotal)
+        
+        Dim sql = "INSERT INTO Demo_Sales (SaleNumber, InvoiceNumber, BranchID, TillPointID, CashierID, SaleDate, Subtotal, TaxAmount, TotalAmount, PaymentMethod, CashAmount, CardAmount, SaleType, ReferenceNumber) 
+                   VALUES (@SaleNumber, @InvoiceNumber, @BranchID, @TillPointID, @CashierID, @SaleDate, @Subtotal, @TaxAmount, @TotalAmount, @PaymentMethod, @CashAmount, @CardAmount, 'UserDefined', @ReferenceNumber);
+                   SELECT CAST(SCOPE_IDENTITY() AS INT)"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@SaleNumber", "UD-" & DateTime.Now.ToString("yyyyMMddHHmmss"))
+            cmd.Parameters.AddWithValue("@InvoiceNumber", DBNull.Value)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
+            cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+            cmd.Parameters.AddWithValue("@SaleDate", DateTime.Today)
+            cmd.Parameters.AddWithValue("@Subtotal", subtotal)
+            cmd.Parameters.AddWithValue("@TaxAmount", taxAmount)
+            cmd.Parameters.AddWithValue("@TotalAmount", totalAmount)
+            cmd.Parameters.AddWithValue("@PaymentMethod", paymentMethod)
+            cmd.Parameters.AddWithValue("@CashAmount", If(cashAmount > 0, cashAmount, DBNull.Value))
+            cmd.Parameters.AddWithValue("@CardAmount", If(cardAmount > 0, cardAmount, DBNull.Value))
+            cmd.Parameters.AddWithValue("@ReferenceNumber", DBNull.Value)
+            Return CInt(cmd.ExecuteScalar())
+        End Using
+    End Function
+
+    Private Function GenerateInvoiceNumber(conn As SqlConnection, transaction As SqlTransaction) As String
+        Dim sql = "SELECT ISNULL(MAX(CAST(SUBSTRING(InvoiceNumber, LEN(InvoiceNumber) - 5, 6) AS INT)), 0) + 1 
+                   FROM POS_InvoiceLines 
+                   WHERE InvoiceNumber LIKE @Prefix + '%'"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@Prefix", GetBranchPrefix())
+            Dim nextNumber = CInt(cmd.ExecuteScalar())
+            Return $"{GetBranchPrefix()}{nextNumber.ToString("D6")}"
+        End Using
+    End Function
+
+    Private Sub WriteInvoiceItems(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String, saleID As Integer)
+        ' Write to POS_InvoiceLines
+        Dim sqlPOS = "INSERT INTO POS_InvoiceLines (InvoiceNumber, SalesID, BranchID, ProductID, ItemCode, ProductName, Quantity, UnitPrice, LineTotal, SaleDate, CashierID, CreatedDate) 
+                      VALUES (@InvoiceNumber, @SaleID, @BranchID, @ProductID, @ItemCode, @ProductName, @Quantity, @UnitPrice, @LineTotal, GETDATE(), @CashierID, GETDATE())"
+        
+        ' Also write to Invoices table (for ERP integration)
+        Dim sqlERP = "INSERT INTO Invoices (InvoiceNumber, SalesID, BranchID, ProductID, ItemCode, ProductName, Quantity, UnitPrice, LineTotal, SaleDate, CashierID, CreatedDate) 
+                      VALUES (@InvoiceNumber, @SaleID, @BranchID, @ProductID, @ItemCode, @ProductName, @Quantity, @UnitPrice, @LineTotal, GETDATE(), @CashierID, GETDATE())"
+        
+        For Each row As DataRow In _cartItems.Rows
+            ' Insert into POS_InvoiceLines
+            Using cmd As New SqlCommand(sqlPOS, conn, transaction)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                cmd.Parameters.AddWithValue("@SaleID", saleID)
+                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                cmd.Parameters.AddWithValue("@ProductID", row("ProductID"))
+                cmd.Parameters.AddWithValue("@ItemCode", If(IsDBNull(row("ItemCode")), DBNull.Value, row("ItemCode")))
+                cmd.Parameters.AddWithValue("@ProductName", row("Product"))
+                cmd.Parameters.AddWithValue("@Quantity", row("Qty"))
+                cmd.Parameters.AddWithValue("@UnitPrice", row("Price"))
+                cmd.Parameters.AddWithValue("@LineTotal", row("Total"))
+                cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                cmd.ExecuteNonQuery()
+            End Using
+            
+            ' Insert into Invoices (ERP table)
+            Using cmd As New SqlCommand(sqlERP, conn, transaction)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                cmd.Parameters.AddWithValue("@SaleID", saleID)
+                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                cmd.Parameters.AddWithValue("@ProductID", row("ProductID"))
+                cmd.Parameters.AddWithValue("@ItemCode", If(IsDBNull(row("ItemCode")), DBNull.Value, row("ItemCode")))
+                cmd.Parameters.AddWithValue("@ProductName", row("Product"))
+                cmd.Parameters.AddWithValue("@Quantity", row("Qty"))
+                cmd.Parameters.AddWithValue("@UnitPrice", row("Price"))
+                cmd.Parameters.AddWithValue("@LineTotal", row("Total"))
+                cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                cmd.ExecuteNonQuery()
+            End Using
+        Next
+    End Sub
+
+    Private Sub UpdateStock(conn As SqlConnection, transaction As SqlTransaction)
+        Dim sql = "UPDATE Demo_Retail_Product SET CurrentStock = CurrentStock - @Quantity WHERE ProductID = @ProductID AND BranchID = @BranchID"
+        For Each row As DataRow In _cartItems.Rows
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@Quantity", row("Qty"))
+                cmd.Parameters.AddWithValue("@ProductID", row("ProductID"))
+                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                cmd.ExecuteNonQuery()
+            End Using
+        Next
+    End Sub
+
+    Private Sub CreateJournalEntries(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, totalAmount As Decimal)
+        Dim journalDate = DateTime.Now
+        Dim subtotal = CalculateSubtotal()
+        Dim vatAmount = CalculateTax(subtotal)
+
+        ' Get ledger IDs for journal entries
+        Dim cashLedgerID = GetLedgerID(conn, transaction, "Cash")
+        Dim bankLedgerID = GetLedgerID(conn, transaction, "Bank")
+        Dim salesRevenueLedgerID = GetLedgerID(conn, transaction, "Sales Revenue")
+        Dim vatOutputLedgerID = GetLedgerID(conn, transaction, "VAT Output")
+        Dim costOfSalesLedgerID = GetLedgerID(conn, transaction, "Cost of Sales")
+        Dim inventoryLedgerID = GetLedgerID(conn, transaction, "Inventory")
+
+        ' 1. DEBIT: Cash/Bank (Asset)
+        If cashAmount > 0 Then
+            InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, cashLedgerID, cashAmount, 0, $"User Defined Order {invoiceNumber} - Cash")
+        End If
+        If cardAmount > 0 Then
+            InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, bankLedgerID, cardAmount, 0, $"User Defined Order {invoiceNumber} - Card")
+        End If
+
+        ' 2. CREDIT: Sales Revenue
+        InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, salesRevenueLedgerID, 0, subtotal, $"User Defined Order {invoiceNumber}")
+
+        ' 3. CREDIT: VAT Output
+        InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, vatOutputLedgerID, 0, vatAmount, $"VAT on User Defined Order {invoiceNumber}")
+
+        ' 4. DEBIT: Cost of Sales & CREDIT: Inventory (per product)
+        For Each row As DataRow In _cartItems.Rows
+            Dim qty = CDec(row("Qty"))
+            Dim productID = CInt(row("ProductID"))
+            Dim productName = row("Product").ToString()
+            Dim avgCost = GetAverageCost(conn, transaction, productID, _branchID)
+            Dim totalCost = qty * avgCost
+            
+            If totalCost > 0 Then
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, costOfSalesLedgerID, totalCost, 0, $"COGS for {productName}")
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, inventoryLedgerID, 0, totalCost, $"Inventory reduction for {productName}")
+            End If
+        Next
+    End Sub
+
+    Private Function GetLedgerID(conn As SqlConnection, transaction As SqlTransaction, ledgerName As String) As Integer
+        Dim sql = "SELECT TOP 1 LedgerID FROM Ledgers WHERE LedgerName = @LedgerName"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@LedgerName", ledgerName)
+            Dim result = cmd.ExecuteScalar()
+            If result IsNot Nothing Then
+                Return CInt(result)
+            Else
+                ' Create ledger if it doesn't exist
+                Dim insertSql = "INSERT INTO Ledgers (LedgerName, LedgerType, IsActive) VALUES (@LedgerName, 'Asset', 1); SELECT CAST(SCOPE_IDENTITY() AS INT)"
+                Using cmdInsert As New SqlCommand(insertSql, conn, transaction)
+                    cmdInsert.Parameters.AddWithValue("@LedgerName", ledgerName)
+                    Return CInt(cmdInsert.ExecuteScalar())
+                End Using
+            End If
+        End Using
+    End Function
+
+    Private Function GetAverageCost(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, branchID As Integer) As Decimal
+        Try
+            Dim sql = "SELECT TOP 1 ISNULL(CostPrice, 0) FROM Demo_Retail_Price WHERE ProductID = @ProductID AND (BranchID = @BranchID OR BranchID = 0) ORDER BY BranchID DESC"
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@ProductID", productID)
+                cmd.Parameters.AddWithValue("@BranchID", branchID)
+                Dim result = cmd.ExecuteScalar()
+                Return If(result IsNot Nothing AndAlso Not IsDBNull(result), CDec(result), 0D)
+            End Using
+        Catch
+            Return 0D
+        End Try
+    End Function
+
+    Private Sub InsertJournalEntry(conn As SqlConnection, transaction As SqlTransaction, journalDate As DateTime, journalType As String, reference As String, ledgerID As Integer, debit As Decimal, credit As Decimal, description As String)
+        Dim sql = "INSERT INTO GeneralJournal (TransactionDate, JournalType, Reference, LedgerID, Debit, Credit, Description, BranchID, CreatedBy, CreatedDate) VALUES (@Date, @Type, @Ref, @LedgerID, @Debit, @Credit, @Desc, @BranchID, @CreatedBy, GETDATE())"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@Date", journalDate)
+            cmd.Parameters.AddWithValue("@Type", journalType)
+            cmd.Parameters.AddWithValue("@Ref", reference)
+            cmd.Parameters.AddWithValue("@LedgerID", ledgerID)
+            cmd.Parameters.AddWithValue("@Debit", debit)
+            cmd.Parameters.AddWithValue("@Credit", credit)
+            cmd.Parameters.AddWithValue("@Desc", description)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
+            cmd.ExecuteNonQuery()
+        End Using
+    End Sub
+
+    ''' <summary>
+    ''' Opens priority management dialog for current subcategory
+    ''' Requires supervisor authentication
+    ''' </summary>
+    Private Sub SetItemPriority()
+        Try
+            ' Check if we're viewing products (not categories or subcategories)
+            If _currentView <> "products" OrElse _currentSubCategoryId = 0 Then
+                MessageBox.Show("Please select a subcategory first to manage item priorities.", "No Subcategory Selected", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+
+            ' Authenticate supervisor
+            Dim authDialog As New SupervisorAuthDialog(_connectionString)
+            If authDialog.ShowDialog(Me) <> DialogResult.OK Then
+                Return
+            End If
+
+            ' Open priority management dialog
+            Dim priorityDialog As New ItemPriorityManagementDialog(
+                _connectionString,
+                _branchID,
+                _currentSubCategoryId,
+                _currentSubCategoryName,
+                authDialog.AuthenticatedUsername
+            )
+
+            If priorityDialog.ShowDialog(Me) = DialogResult.OK Then
+                ' Refresh product display to show new priority order
+                ShowProductsForSubCategory(_currentSubCategoryId, _currentSubCategoryName)
+                MessageBox.Show("Item priorities updated successfully! Products are now displayed in priority order.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+
+        Catch ex As Exception
+            MessageBox.Show($"Error managing item priorities: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 End Class

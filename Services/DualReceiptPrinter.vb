@@ -53,7 +53,7 @@ Public Class DualReceiptPrinter
             Dim totalAmount As Decimal = If(receiptData.ContainsKey("TotalAmount"), CDec(receiptData("TotalAmount")), 0D)
             
             AddHandler printDoc.PrintPage, Sub(sender, e)
-                Dim font As New Font("Courier New", 8)
+                ' ALL FONTS BOLD FOR BETTER VISIBILITY
                 Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
                 Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
                 Dim yPos As Single = 5
@@ -66,25 +66,25 @@ Public Class DualReceiptPrinter
                 yPos += 22
                 
                 ' Branch info
-                e.Graphics.DrawString(receiptData("BranchName").ToString(), font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString(receiptData("BranchName").ToString(), fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Date and time
-                e.Graphics.DrawString(CType(receiptData("SaleDateTime"), DateTime).ToString("dd/MM/yyyy HH:mm:ss"), font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString(CType(receiptData("SaleDateTime"), DateTime).ToString("dd/MM/yyyy HH:mm:ss"), fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Invoice number
-                e.Graphics.DrawString($"Invoice: {receiptData("InvoiceNumber")}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Invoice: {receiptData("InvoiceNumber")}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Till and Cashier
-                e.Graphics.DrawString($"Till: {receiptData("TillNumber")}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Till: {receiptData("TillNumber")}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
-                e.Graphics.DrawString($"Cashier: {receiptData("CashierName")}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Cashier: {receiptData("CashierName")}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 18
                 
                 ' Separator
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Column headers
@@ -101,28 +101,28 @@ Public Class DualReceiptPrinter
                     Dim lineTotal = CDec(row("Total"))
                     
                     Dim line = String.Format("{0,-17} {1,3} {2,5:N2} {3,6:N2}", itemName, qty, price, lineTotal)
-                    e.Graphics.DrawString(line, font, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString(line, fontBold, Brushes.Black, leftMargin, yPos)
                     yPos += 14
                 Next
                 
                 ' Separator
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Totals
-                e.Graphics.DrawString($"Subtotal:                 R {subtotal:N2}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Subtotal:                 R {subtotal:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"Tax (15%):                R {taxAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Tax (15%):                R {taxAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
                 e.Graphics.DrawString($"TOTAL:                    R {totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 18
                 
                 ' Payment info
-                e.Graphics.DrawString($"Payment: {paymentMethod}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Payment: {paymentMethod}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
                 
                 If paymentMethod = "CASH" OrElse paymentMethod = "SPLIT" Then
-                    e.Graphics.DrawString($"Cash Tendered:            R {cashAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"Cash Tendered:            R {cashAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                     yPos += 14
                     If changeAmount > 0 Then
                         e.Graphics.DrawString($"CHANGE:                   R {changeAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
@@ -131,12 +131,12 @@ Public Class DualReceiptPrinter
                 End If
                 
                 If paymentMethod = "SPLIT" Then
-                    e.Graphics.DrawString($"Card Amount:              R {cardAmount:N2}", font, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"Card Amount:              R {cardAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                     yPos += 14
                 End If
                 
                 yPos += 10
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Barcode for returns (7-digit format, research-based settings)
@@ -162,13 +162,13 @@ Public Class DualReceiptPrinter
                 yPos += 14
                 
                 Dim footer1 = "Thank you for your purchase!"
-                Dim footer1Size = e.Graphics.MeasureString(footer1, font)
-                e.Graphics.DrawString(footer1, font, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
+                Dim footer1Size = e.Graphics.MeasureString(footer1, fontBold)
+                e.Graphics.DrawString(footer1, fontBold, Brushes.Black, (302 - footer1Size.Width) / 2, yPos)
                 yPos += 14
                 
                 Dim footer2 = "Please come again!"
-                Dim footer2Size = e.Graphics.MeasureString(footer2, font)
-                e.Graphics.DrawString(footer2, font, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
+                Dim footer2Size = e.Graphics.MeasureString(footer2, fontBold)
+                e.Graphics.DrawString(footer2, fontBold, Brushes.Black, (302 - footer2Size.Width) / 2, yPos)
             End Sub
             
             ' Print to default thermal printer

@@ -29,6 +29,8 @@ Partial Class CustomerOrderDialog
     Friend WithEvents grpOrderDetails As GroupBox
     Friend WithEvents txtSpecialInstructions As TextBox
     Friend WithEvents lblSpecialInstructions As Label
+    Friend WithEvents txtNotes As TextBox
+    Friend WithEvents lblNotes As Label
     Friend WithEvents txtColour As TextBox
     Friend WithEvents lblColour As Label
     Friend WithEvents txtPicture As TextBox
@@ -69,6 +71,8 @@ Partial Class CustomerOrderDialog
         Me.grpOrderDetails = New System.Windows.Forms.GroupBox()
         Me.txtSpecialInstructions = New System.Windows.Forms.TextBox()
         Me.lblSpecialInstructions = New System.Windows.Forms.Label()
+        Me.txtNotes = New System.Windows.Forms.TextBox()
+        Me.lblNotes = New System.Windows.Forms.Label()
         Me.txtColour = New System.Windows.Forms.TextBox()
         Me.lblColour = New System.Windows.Forms.Label()
         Me.txtPicture = New System.Windows.Forms.TextBox()
@@ -216,6 +220,8 @@ Partial Class CustomerOrderDialog
         '
         Me.grpOrderDetails.Controls.Add(Me.txtSpecialInstructions)
         Me.grpOrderDetails.Controls.Add(Me.lblSpecialInstructions)
+        Me.grpOrderDetails.Controls.Add(Me.txtNotes)
+        Me.grpOrderDetails.Controls.Add(Me.lblNotes)
         Me.grpOrderDetails.Controls.Add(Me.txtColour)
         Me.grpOrderDetails.Controls.Add(Me.lblColour)
         Me.grpOrderDetails.Controls.Add(Me.txtPicture)
@@ -260,7 +266,7 @@ Partial Class CustomerOrderDialog
         Me.txtSpecialInstructions.Location = New System.Drawing.Point(15, 90)
         Me.txtSpecialInstructions.Multiline = True
         Me.txtSpecialInstructions.Name = "txtSpecialInstructions"
-        Me.txtSpecialInstructions.Size = New System.Drawing.Size(640, 100)
+        Me.txtSpecialInstructions.Size = New System.Drawing.Size(640, 80)
         Me.txtSpecialInstructions.TabIndex = 6
         '
         'lblSpecialInstructions
@@ -273,10 +279,29 @@ Partial Class CustomerOrderDialog
         Me.lblSpecialInstructions.TabIndex = 5
         Me.lblSpecialInstructions.Text = "Special Instructions:"
         '
+        'txtNotes
+        '
+        Me.txtNotes.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtNotes.Location = New System.Drawing.Point(15, 200)
+        Me.txtNotes.Multiline = True
+        Me.txtNotes.Name = "txtNotes"
+        Me.txtNotes.Size = New System.Drawing.Size(640, 60)
+        Me.txtNotes.TabIndex = 8
+        '
+        'lblNotes
+        '
+        Me.lblNotes.AutoSize = True
+        Me.lblNotes.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblNotes.Location = New System.Drawing.Point(15, 178)
+        Me.lblNotes.Name = "lblNotes"
+        Me.lblNotes.Size = New System.Drawing.Size(47, 19)
+        Me.lblNotes.TabIndex = 7
+        Me.lblNotes.Text = "Notes:"
+        '
         'txtColour
         '
         Me.txtColour.Font = New System.Drawing.Font("Segoe UI", 10.0!)
-        Me.txtColour.Location = New System.Drawing.Point(80, 195)
+        Me.txtColour.Location = New System.Drawing.Point(80, 270)
         Me.txtColour.Name = "txtColour"
         Me.txtColour.Size = New System.Drawing.Size(250, 25)
         Me.txtColour.TabIndex = 8

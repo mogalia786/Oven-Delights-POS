@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <asmv1:assembly xsi:schemaLocation="urn:schemas-microsoft-com:asm.v1 assembly.adaptive.xsd" manifestVersion="1.0" xmlns:asmv1="urn:schemas-microsoft-com:asm.v1" xmlns="urn:schemas-microsoft-com:asm.v2" xmlns:asmv2="urn:schemas-microsoft-com:asm.v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:co.v1="urn:schemas-microsoft-com:clickonce.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3" xmlns:dsig="http://www.w3.org/2000/09/xmldsig#" xmlns:co.v2="urn:schemas-microsoft-com:clickonce.v2">
-  <asmv1:assemblyIdentity name="Overn-Delights-POS.exe" version="1.0.0.42" publicKeyToken="0000000000000000" language="neutral" processorArchitecture="msil" type="win32" />
+  <asmv1:assemblyIdentity name="Overn-Delights-POS.exe" version="1.0.0.79" publicKeyToken="0000000000000000" language="neutral" processorArchitecture="msil" type="win32" />
   <application />
   <entryPoint>
     <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
@@ -42,14 +42,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Overn-Delights-POS.exe" size="516544">
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Overn-Delights-POS.exe" size="576448">
       <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.0" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>t2a9KWNjiibZ1ljGoRS/X16raGkvfMbugQ/1Xt/sWfI=</dsig:DigestValue>
+        <dsig:DigestValue>oevtDUTUpNHSm7GoYY/WCC0s9yQ91NoDHVsNl6mCMDE=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>
@@ -71,13 +71,13 @@
       <dsig:DigestValue>FJORByFpg4cbp1YIvo//mINsVhfwGaSs8wlVJkAGWV0=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="Overn-Delights-POS.exe.config" size="1172">
+  <file name="Overn-Delights-POS.exe.config" size="1418">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>IN6d2dkHz7IO4oK30pa1ViVXVWUJwEE0xTNwBRSbjuA=</dsig:DigestValue>
+      <dsig:DigestValue>ZQvFJBzmSwMQXqORiC9x60s3Zj4D08wSl4jxxuUet8Y=</dsig:DigestValue>
     </hash>
   </file>
 </asmv1:assembly>

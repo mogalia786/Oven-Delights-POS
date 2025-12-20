@@ -132,12 +132,8 @@ Public Class PaymentTenderForm
         Me.ShowInTaskbar = True
         Me.ControlBox = True
         
-        ' Scale based on screen size
-        Dim screenWidth = Screen.PrimaryScreen.WorkingArea.Width
-        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formWidth = Math.Min(1200, CInt(screenWidth * 0.8))
-        Dim formHeight = Math.Min(900, CInt(screenHeight * 0.85))
-        Me.Size = New Size(formWidth, formHeight)
+        ' Fixed size for consistent display on all screens
+        Me.Size = New Size(600, 650)
         Me.StartPosition = FormStartPosition.CenterScreen
     End Sub
     
@@ -147,8 +143,8 @@ Public Class PaymentTenderForm
         ' Scale based on screen size
         Dim screenWidth = Screen.PrimaryScreen.WorkingArea.Width
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formWidth = Math.Min(1200, CInt(screenWidth * 0.8))
-        Dim formHeight = Math.Min(700, CInt(screenHeight * 0.75))
+        Dim formWidth = Math.Min(1000, CInt(screenWidth * 0.8))
+        Dim formHeight = Math.Min(600, CInt(screenHeight * 0.75))
         
         Me.WindowState = FormWindowState.Normal
         Me.Size = New Size(formWidth, formHeight)
@@ -157,46 +153,46 @@ Public Class PaymentTenderForm
         ' Header with Iron Man theme - centered and compact
         Dim pnlHeader As New Panel With {
             .Dock = DockStyle.Top,
-            .Height = 140,
+            .Height = 100,
             .BackColor = Color.Transparent,
-            .Padding = New Padding(20, 15, 20, 15)
+            .Padding = New Padding(20, 10, 20, 10)
         }
         
         Dim lblTitle As New Label With {
             .Text = "💳 SELECT PAYMENT METHOD",
-            .Font = New Font("Segoe UI", 36, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
             .ForeColor = _ironGold,
             .AutoSize = False,
             .Width = formWidth - 40,
-            .Height = 60,
+            .Height = 40,
             .TextAlign = ContentAlignment.MiddleCenter
         }
-        lblTitle.Location = New Point(20, 15)
+        lblTitle.Location = New Point(20, 10)
         
         Dim lblAmount As New Label With {
             .Text = $"Total: R {_totalAmount:N2}",
-            .Font = New Font("Segoe UI", 32, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
             .ForeColor = _ironRed,
             .AutoSize = False,
             .Width = formWidth - 40,
-            .Height = 50,
+            .Height = 40,
             .TextAlign = ContentAlignment.MiddleCenter
         }
-        lblAmount.Location = New Point(20, 80)
+        lblAmount.Location = New Point(20, 55)
         pnlHeader.Controls.AddRange({lblTitle, lblAmount})
         
         ' Grid layout for tender buttons (5 horizontal rectangles in 1 row)
         Dim pnlButtons As New Panel With {
-            .Location = New Point(40, 150),
-            .Size = New Size(formWidth - 80, 380),
+            .Location = New Point(40, 110),
+            .Size = New Size(formWidth - 80, 280),
             .BackColor = Color.Transparent
         }
         
-        Dim gap As Integer = 20
+        Dim gap As Integer = 15
         Dim totalGaps = gap * 4 ' 4 gaps between 5 buttons
         Dim availableWidth = formWidth - 80 - totalGaps ' Subtract padding and gaps
         Dim buttonWidth = availableWidth \ 5
-        Dim buttonHeight = 380 ' Fixed height for better proportions
+        Dim buttonHeight = 280 ' Reduced height to fit cancel button
         Dim buttonSize As New Size(buttonWidth, buttonHeight)
         
         ' Helper function to create professional tender button
@@ -216,25 +212,25 @@ Public Class PaymentTenderForm
             ' Add icon label - centered in upper portion
             Dim lblIcon As New Label With {
                 .Text = icon,
-                .Font = New Font("Segoe UI", 80),
+                .Font = New Font("Segoe UI", 60),
                 .ForeColor = Color.White,
                 .BackColor = Color.Transparent,
                 .AutoSize = True,
                 .TextAlign = ContentAlignment.MiddleCenter
             }
-            lblIcon.Location = New Point((buttonSize.Width - lblIcon.PreferredWidth) \ 2, 80)
+            lblIcon.Location = New Point((buttonSize.Width - lblIcon.PreferredWidth) \ 2, 50)
             btn.Controls.Add(lblIcon)
             
             ' Add text label - centered below icon
             Dim lblText As New Label With {
                 .Text = text,
-                .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+                .Font = New Font("Segoe UI", 18, FontStyle.Bold),
                 .ForeColor = Color.White,
                 .BackColor = Color.Transparent,
                 .AutoSize = True,
                 .TextAlign = ContentAlignment.MiddleCenter
             }
-            lblText.Location = New Point((buttonSize.Width - lblText.PreferredWidth) \ 2, 240)
+            lblText.Location = New Point((buttonSize.Width - lblText.PreferredWidth) \ 2, 180)
             btn.Controls.Add(lblText)
             
             AddHandler btn.Click, Sub() clickHandler()
@@ -262,13 +258,13 @@ Public Class PaymentTenderForm
         pnlButtons.Controls.AddRange({btnCash, btnCard, btnEFT, btnManual, btnSplit})
         
         ' Cancel button at bottom - full width, more compact
-        Dim pnlBottom As New Panel With {.Dock = DockStyle.Bottom, .Height = 90, .BackColor = Color.Transparent, .Padding = New Padding(40, 10, 40, 10)}
+        Dim pnlBottom As New Panel With {.Dock = DockStyle.Bottom, .Height = 70, .BackColor = Color.Transparent, .Padding = New Padding(40, 5, 40, 5)}
         Dim btnCancel As New Button With {
             .Text = "✖ CANCEL",
             .Dock = DockStyle.Fill,
             .BackColor = _ironRed,
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 20, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -331,8 +327,8 @@ Public Class PaymentTenderForm
     Private Sub ShowEFTSlip()
         Me.Controls.Clear()
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formHeight = Math.Min(800, CInt(screenHeight * 0.85))
-        Me.Size = New Size(600, formHeight)
+        Dim formHeight = Math.Min(650, CInt(screenHeight * 0.85))
+        Me.Size = New Size(550, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Header
@@ -482,37 +478,59 @@ Public Class PaymentTenderForm
     
     Private Sub ShowCashKeypad(amountDue As Decimal, title As String)
         Me.Controls.Clear()
-        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formHeight = Math.Min(750, CInt(screenHeight * 0.8))
-        Me.Size = New Size(600, formHeight)
+        ' Fixed size to ensure all controls are visible
+        Me.Size = New Size(550, 600)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Adjust header height for split payments
-        Dim headerHeight = If(_paymentMethod = "SPLIT", 150, 120)
+        Dim headerHeight = If(_paymentMethod = "SPLIT", 120, 100)
         Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = headerHeight, .BackColor = _green}
         
         ' Add CASH DUE label for split payments (centered at top, no amount)
         If _paymentMethod = "SPLIT" Then
             Dim lblCashDue As New Label With {
                 .Text = "CASH DUE",
-                .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+                .Font = New Font("Segoe UI", 18, FontStyle.Bold),
                 .ForeColor = Color.Yellow,
                 .AutoSize = True,
                 .TextAlign = ContentAlignment.MiddleCenter
             }
             ' Center the label
-            lblCashDue.Location = New Point((600 - lblCashDue.Width) \ 2, 10)
+            lblCashDue.Location = New Point((550 - lblCashDue.Width) \ 2, 5)
             pnlHeader.Controls.Add(lblCashDue)
         End If
         
-        Dim lblAmountDue As New Label With {.Text = $"AMOUNT DUE: R{amountDue:N2}", .Font = New Font("Segoe UI", 18, FontStyle.Bold), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, If(_paymentMethod = "SPLIT", 50, 15))}
-        Dim lblTendered As New Label With {.Text = "TENDERED: R0.00", .Font = New Font("Segoe UI", 16), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(20, If(_paymentMethod = "SPLIT", 80, 50)), .Name = "lblTendered"}
-        Dim lblChange As New Label With {.Text = "CHANGE: R0.00", .Font = New Font("Segoe UI", 20, FontStyle.Bold), .ForeColor = Color.Yellow, .AutoSize = True, .Location = New Point(20, If(_paymentMethod = "SPLIT", 110, 80)), .Name = "lblChange"}
+        Dim lblAmountDue As New Label With {
+            .Text = $"AMOUNT DUE: R{amountDue:N2}",
+            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .AutoSize = False,
+            .Size = New Size(500, 25),
+            .Location = New Point(20, If(_paymentMethod = "SPLIT", 35, 10))
+        }
+        Dim lblTendered As New Label With {
+            .Text = "TENDERED: R0.00",
+            .Font = New Font("Segoe UI", 12),
+            .ForeColor = Color.White,
+            .AutoSize = False,
+            .Size = New Size(500, 25),
+            .Location = New Point(20, If(_paymentMethod = "SPLIT", 60, 35)),
+            .Name = "lblTendered"
+        }
+        Dim lblChange As New Label With {
+            .Text = "CHANGE: R0.00",
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .ForeColor = Color.Yellow,
+            .AutoSize = False,
+            .Size = New Size(500, 30),
+            .Location = New Point(20, If(_paymentMethod = "SPLIT", 85, 60)),
+            .Name = "lblChange"
+        }
         
         pnlHeader.Controls.AddRange({lblAmountDue, lblTendered, lblChange})
         
         ' Make text box accept keyboard input - position below header
-        Dim txtAmount As New TextBox With {.Font = New Font("Segoe UI", 48, FontStyle.Bold), .TextAlign = HorizontalAlignment.Right, .Location = New Point(50, headerHeight + 10), .Size = New Size(500, 80), .Text = "0.00", .ReadOnly = False, .BackColor = Color.White, .ForeColor = _darkBlue, .Name = "txtAmount"}
+        Dim txtAmount As New TextBox With {.Font = New Font("Segoe UI", 36, FontStyle.Bold), .TextAlign = HorizontalAlignment.Right, .Location = New Point(25, headerHeight + 5), .Size = New Size(500, 60), .Text = "0.00", .ReadOnly = False, .BackColor = Color.White, .ForeColor = _darkBlue, .Name = "txtAmount"}
         
         ' Handle keyboard input and update change calculation
         AddHandler txtAmount.TextChanged, Sub()
@@ -545,19 +563,19 @@ Public Class PaymentTenderForm
         txtAmount.Focus() ' Set focus so keyboard works immediately
         
         ' Calculate numpad position to avoid overlap with bottom buttons
-        Dim numpadTop = headerHeight + 120 ' Below text box
-        Dim numpadHeight = Math.Min(350, formHeight - numpadTop - 110) ' Leave space for buttons
-        Dim pnlKeypad As New Panel With {.Location = New Point(100, numpadTop), .Size = New Size(400, numpadHeight)}
-        Dim buttonSize As New Size(120, 70)
+        Dim numpadTop = headerHeight + 75 ' Below text box
+        Dim numpadHeight = 280 ' Reduced height for numpad
+        Dim pnlKeypad As New Panel With {.Location = New Point(75, numpadTop), .Size = New Size(400, numpadHeight)}
+        Dim buttonSize As New Size(110, 60)
         Dim buttons(,) As String = {{"7", "8", "9"}, {"4", "5", "6"}, {"1", "2", "3"}, {".", "0", "⌫"}}
         
-        Dim keySpacingX = 130
-        Dim keySpacingY = 80
+        Dim keySpacingX = 120
+        Dim keySpacingY = 70
         
         For row = 0 To 3
             For col = 0 To 2
                 Dim btnText = buttons(row, col)
-                Dim btn As New Button With {.Text = btnText, .Size = buttonSize, .Location = New Point(col * keySpacingX, row * keySpacingY), .Font = New Font("Segoe UI", 24, FontStyle.Bold), .BackColor = Color.White, .ForeColor = _darkBlue, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+                Dim btn As New Button With {.Text = btnText, .Size = buttonSize, .Location = New Point(col * keySpacingX, row * keySpacingY), .Font = New Font("Segoe UI", 20, FontStyle.Bold), .BackColor = Color.White, .ForeColor = _darkBlue, .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
                 btn.FlatAppearance.BorderColor = _lightGray
                 AddHandler btn.Click, Sub(s, e)
                     Dim clickedBtn = CType(s, Button)
@@ -582,9 +600,9 @@ Public Class PaymentTenderForm
             Next
         Next
         
-        Dim pnlButtons As New Panel With {.Dock = DockStyle.Bottom, .Height = 90, .BackColor = _lightGray}
+        Dim pnlButtons As New Panel With {.Dock = DockStyle.Bottom, .Height = 70, .BackColor = _lightGray}
         
-        Dim btnConfirm As New Button With {.Text = "✓ CONFIRM", .Size = New Size(250, 60), .Location = New Point(50, 15), .BackColor = _green, .ForeColor = Color.White, .Font = New Font("Segoe UI", 16, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        Dim btnConfirm As New Button With {.Text = "✓ CONFIRM", .Size = New Size(230, 50), .Location = New Point(30, 10), .BackColor = _green, .ForeColor = Color.White, .Font = New Font("Segoe UI", 14, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnConfirm.FlatAppearance.BorderSize = 0
         AddHandler btnConfirm.Click, Sub()
             Dim amount As Decimal
@@ -611,7 +629,7 @@ Public Class PaymentTenderForm
             End If
         End Sub
         
-        Dim btnBack As New Button With {.Text = "← BACK", .Size = New Size(250, 60), .Location = New Point(320, 15), .BackColor = ColorTranslator.FromHtml("#E74C3C"), .ForeColor = Color.White, .Font = New Font("Segoe UI", 16, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        Dim btnBack As New Button With {.Text = "← BACK", .Size = New Size(230, 50), .Location = New Point(270, 10), .BackColor = ColorTranslator.FromHtml("#E74C3C"), .ForeColor = Color.White, .Font = New Font("Segoe UI", 14, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnBack.FlatAppearance.BorderSize = 0
         AddHandler btnBack.Click, Sub() ShowPaymentMethodSelection()
         
@@ -626,8 +644,8 @@ Public Class PaymentTenderForm
     Private Sub ProcessCardTransaction(amount As Decimal)
         Me.Controls.Clear()
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formHeight = Math.Min(600, CInt(screenHeight * 0.7))
-        Me.Size = New Size(700, formHeight)
+        Dim formHeight = Math.Min(550, CInt(screenHeight * 0.7))
+        Me.Size = New Size(600, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         Dim pnlMain As New Panel With {.Dock = DockStyle.Fill, .BackColor = _darkBlue}
@@ -704,7 +722,7 @@ Public Class PaymentTenderForm
         Me.Controls.Clear()
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
         Dim formHeight = Math.Min(500, CInt(screenHeight * 0.6))
-        Me.Size = New Size(700, formHeight)
+        Me.Size = New Size(600, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         Dim pnlMain As New Panel With {.Dock = DockStyle.Fill, .BackColor = ColorTranslator.FromHtml("#3498DB")} ' Blue
@@ -765,8 +783,8 @@ Public Class PaymentTenderForm
     Private Sub ShowCardSuccess(amount As Decimal)
         Me.Controls.Clear()
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formHeight = Math.Min(700, CInt(screenHeight * 0.75))
-        Me.Size = New Size(700, formHeight)
+        Dim formHeight = Math.Min(600, CInt(screenHeight * 0.75))
+        Me.Size = New Size(600, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Gradient background colors
@@ -963,8 +981,8 @@ Public Class PaymentTenderForm
         Me.WindowState = FormWindowState.Normal
         Dim screenWidth = Screen.PrimaryScreen.WorkingArea.Width
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formWidth = Math.Min(900, CInt(screenWidth * 0.7))
-        Dim formHeight = Math.Min(800, CInt(screenHeight * 0.85))
+        Dim formWidth = Math.Min(700, CInt(screenWidth * 0.7))
+        Dim formHeight = Math.Min(650, CInt(screenHeight * 0.85))
         Me.Size = New Size(formWidth, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         Me.FormBorderStyle = FormBorderStyle.FixedDialog
@@ -1266,22 +1284,21 @@ Public Class PaymentTenderForm
     End Function
     
     Private Function GenerateInvoiceNumber(conn As SqlConnection, transaction As SqlTransaction) As String
-        ' Generate numeric-only invoice number: 5 + TransactionType + 5-digit sequence (7 digits total)
-        ' Example: invoice 1 -> "5100001" (5=prefix, 1=Sale, 00001=sequence)
-        ' Transaction type codes: 1=Sale, 4=Return, 2=Order
-        ' 7-digit format matches working barcode from yesterday
+        ' Generate numeric-only invoice number: BranchID + 5-digit sequence (6 digits total)
+        ' Example: Branch 6, invoice 1 -> "600001"
+        ' Numeric only for better barcode scanning with Free 3 of 9 font
         
         Dim sql As String = "
             SELECT ISNULL(MAX(CAST(RIGHT(InvoiceNumber, 5) AS INT)), 0) + 1 
             FROM Demo_Sales WITH (TABLOCKX)
-            WHERE InvoiceNumber LIKE @pattern AND LEN(InvoiceNumber) = 7"
+            WHERE InvoiceNumber LIKE @pattern AND LEN(InvoiceNumber) = 6"
         
-        Dim pattern As String = "51%"
+        Dim pattern As String = $"{_branchID}%"
         
         Using cmd As New SqlCommand(sql, conn, transaction)
             cmd.Parameters.AddWithValue("@pattern", pattern)
             Dim nextNumber As Integer = Convert.ToInt32(cmd.ExecuteScalar())
-            Return $"51{nextNumber.ToString().PadLeft(5, "0"c)}"
+            Return $"{_branchID}{nextNumber.ToString().PadLeft(5, "0"c)}"
         End Using
     End Function
     
@@ -1505,9 +1522,17 @@ Public Class PaymentTenderForm
             Dim avgCost = GetAverageCost(conn, transaction, productID, _branchID)
             Dim totalCost = qty * avgCost
             
+            ' Get product name safely - check if column exists
+            Dim productName As String = "Product"
+            If _cartItems.Columns.Contains("ProductName") Then
+                productName = row("ProductName").ToString()
+            ElseIf _cartItems.Columns.Contains("Product") Then
+                productName = row("Product").ToString()
+            End If
+            
             If totalCost > 0 Then
-                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, costOfSalesLedgerID, totalCost, 0, $"COGS for {row("ProductName")}")
-                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, inventoryLedgerID, 0, totalCost, $"Inventory reduction for {row("ProductName")}")
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, costOfSalesLedgerID, totalCost, 0, $"COGS for {productName}")
+                InsertJournalEntry(conn, transaction, journalDate, "Sales Journal", invoiceNumber, inventoryLedgerID, 0, totalCost, $"Inventory reduction for {productName}")
             End If
         Next
     End Sub

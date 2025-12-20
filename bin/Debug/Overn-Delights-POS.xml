@@ -42,8 +42,7 @@ Overn-Delights-POS
 </member>
 <member name="M:Overn_Delights_POS.BarcodeGenerator.GenerateBarcode(System.String)">
  <summary>
- Generates EAN-13 barcode for order numbers (same format as product barcodes)
- Example: "6000009" -> Padded to "0000006000009" -> EAN-13 barcode
+ Generates Code 39 barcode using font (simple and reliable)
  </summary>
 </member>
 <member name="T:Overn_Delights_POS.CategoryNavigationService">
@@ -65,6 +64,7 @@ Overn-Delights-POS
 <member name="M:Overn_Delights_POS.CategoryNavigationService.LoadProducts(System.Int32,System.Int32,System.Int32)">
  <summary>
  Load products for a specific subcategory and branch
+ Ordered by DisplayPriority (branch-specific) then alphabetically
  </summary>
 </member>
 <member name="M:Overn_Delights_POS.CategoryNavigationService.SearchProducts(System.String,System.Int32)">
@@ -228,7 +228,7 @@ Overn-Delights-POS
  Smooth fade-in animation for product cards
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintOrderReceiptToThermalPrinter(System.String,System.String,System.String,System.String,System.DateTime,System.TimeSpan,System.String,System.String,System.Decimal,System.Decimal,System.String,System.String)">
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintOrderReceiptToThermalPrinter(System.String,System.String,System.String,System.String,System.DateTime,System.TimeSpan,System.String,System.String,System.Decimal,System.Decimal,System.String,System.String,System.String)">
  <summary>
  Print order receipt to thermal printer (80mm)
  </summary>
@@ -243,6 +243,12 @@ Overn-Delights-POS
  Public method to perform day-end from cash-up dialog
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.SetItemPriority">
+ <summary>
+ Opens priority management dialog for current subcategory
+ Requires supervisor authentication
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptDual(System.String,System.DateTime,System.Decimal)">
  <summary>
  Print receipt to thermal slip printer ONLY (default printer)
@@ -252,6 +258,11 @@ Overn-Delights-POS
  <summary>
  LEGACY: Print receipt to default printer (Epson thermal slip printer - 80mm)
  This method is kept for reference but replaced by PrintReceiptDual
+ </summary>
+</member>
+<member name="T:Overn_Delights_POS.UserDefinedOrderData">
+ <summary>
+ Data structure to hold User Defined Order header information
  </summary>
 </member>
 <member name="T:Overn_Delights_POS.ResponsiveHelper">

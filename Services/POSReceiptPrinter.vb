@@ -417,9 +417,24 @@ Public Class POSReceiptPrinter
             e.Graphics.DrawString($"Balance Due:                R {balanceOwing:N2}", boldFont, Brushes.Black, _leftMargin, y)
             y += 20
             
-            ' Important notice
+            ' Barcode for order collection
             e.Graphics.DrawString(New String("-"c, 48), font, Brushes.Black, _leftMargin, y)
             y += 18
+            Try
+                Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(orderNo, 180, 60)
+                ' Center the barcode (assuming 300px width for continuous printer)
+                e.Graphics.DrawImage(barcodeImage, CInt((300 - 180) / 2), y)
+                y += 65
+                barcodeImage.Dispose()
+            Catch ex As Exception
+                ' Fallback if barcode generation fails
+                e.Graphics.DrawString($"Order: {orderNo}", boldFont, Brushes.Black, _leftMargin, y)
+                y += 20
+            End Try
+            
+            ' Important notice
+            e.Graphics.DrawString("SCAN BARCODE TO COLLECT", boldFont, Brushes.Black, _leftMargin, y)
+            y += 16
             e.Graphics.DrawString("PLEASE BRING THIS RECEIPT WHEN", boldFont, Brushes.Black, _leftMargin, y)
             y += 16
             e.Graphics.DrawString("COLLECTING YOUR ORDER", boldFont, Brushes.Black, _leftMargin, y)

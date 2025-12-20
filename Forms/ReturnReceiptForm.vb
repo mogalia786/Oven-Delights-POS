@@ -20,14 +20,22 @@ Public Class ReturnReceiptForm
     Private _branchID As Integer
     Private _cashierName As String
     Private _barcodeImage As Bitmap
+    Private _customerName As String
+    Private _customerSurname As String
+    Private _customerCell As String
+    Private _returnReason As String
 
-    Public Sub New(returnNumber As String, returnItems As DataTable, totalRefund As Decimal, branchID As Integer, cashierName As String)
+    Public Sub New(returnNumber As String, returnItems As DataTable, totalRefund As Decimal, branchID As Integer, cashierName As String, Optional customerName As String = "", Optional customerSurname As String = "", Optional customerCell As String = "", Optional returnReason As String = "")
         MyBase.New()
         _returnNumber = returnNumber
         _returnItems = returnItems
         _totalRefund = totalRefund
         _branchID = branchID
         _cashierName = cashierName
+        _customerName = customerName
+        _customerSurname = customerSurname
+        _customerCell = customerCell
+        _returnReason = returnReason
         
         ' Generate barcode
         Dim barcodeGen As New BarcodeGenerator()
@@ -274,28 +282,51 @@ Public Class ReturnReceiptForm
             printDoc.DefaultPageSettings.PaperSize = New Printing.PaperSize("80mm", 315, 1200)
             
             AddHandler printDoc.PrintPage, Sub(sender, e)
-                Dim font As New Font("Courier New", 8)
+                ' ALL FONTS BOLD FOR BETTER VISIBILITY
                 Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 10, FontStyle.Bold)
                 Dim leftMargin As Integer = 10
                 Dim yPos As Integer = 10
                 
                 ' Header
-                e.Graphics.DrawString("OVEN DELIGHTS", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                e.Graphics.DrawString("RETURN RECEIPT", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("OVEN DELIGHTS", fontLarge, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                e.Graphics.DrawString("RETURN RECEIPT", fontLarge, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Return details
-                e.Graphics.DrawString($"Return #: {_returnNumber}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Return #: {_returnNumber}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"Cashier: {_cashierName}", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Cashier: {_cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
+                
+                ' Customer Details
+                If Not String.IsNullOrWhiteSpace(_customerName) Then
+                    e.Graphics.DrawString("CUSTOMER DETAILS:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString($"Name: {_customerName} {_customerSurname}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString($"Cell: {_customerCell}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                End If
+                
+                ' Return Reason
+                If Not String.IsNullOrWhiteSpace(_returnReason) Then
+                    e.Graphics.DrawString("REASON FOR RETURN:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString(_returnReason, fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                End If
                 
                 ' Items
                 e.Graphics.DrawString("RETURNED ITEMS:", fontBold, Brushes.Black, leftMargin, yPos)
@@ -306,23 +337,23 @@ Public Class ReturnReceiptForm
                     Dim price As Decimal = CDec(row("UnitPrice"))
                     Dim total As Decimal = CDec(row("LineTotal"))
                     
-                    e.Graphics.DrawString($"{qty:0.00} x {itemName}", font, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"{qty:0.00} x {itemName}", fontBold, Brushes.Black, leftMargin, yPos)
                     yPos += 14
-                    e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", font, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", fontBold, Brushes.Black, leftMargin, yPos)
                     yPos += 14
                 Next
                 
                 yPos += 5
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
                 ' Total
-                e.Graphics.DrawString($"TOTAL REFUND:         R {_totalRefund:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"TOTAL REFUND:         R {_totalRefund:N2}", fontLarge, Brushes.Black, leftMargin, yPos)
                 yPos += 20
                 
-                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
-                e.Graphics.DrawString("Thank you", font, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("Thank you", fontBold, Brushes.Black, leftMargin, yPos)
             End Sub
             
             printDoc.Print()

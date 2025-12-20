@@ -15,7 +15,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <IsWebBootstrapper>false</IsWebBootstrapper>
-    <PublishUrl>E:\ODV33\</PublishUrl>
+    <PublishUrl>E:\ODV69\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
@@ -25,7 +25,7 @@
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
-    <ApplicationRevision>42</ApplicationRevision>
+    <ApplicationRevision>79</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
@@ -184,6 +184,20 @@
     </Compile>
     <Compile Include="Forms\OnScreenKeyboard.vb">
       <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Forms\UserDefinedOrderDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\CollectUserDefinedDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Services\UserDefinedOrderPrinter.vb" />
+    <Compile Include="Models\UserDefinedOrderData.vb" />
+    <Compile Include="Forms\SupervisorAuthDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\ItemPriorityManagementDialog.vb">
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="ResponsiveHelper.vb" />
     <Compile Include="ApplicationEvents.vb" />

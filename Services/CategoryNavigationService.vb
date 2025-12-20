@@ -84,6 +84,7 @@ Public Class CategoryNavigationService
 
     ''' <summary>
     ''' Load products for a specific subcategory and branch
+    ''' Ordered by DisplayPriority (branch-specific) then alphabetically
     ''' </summary>
     Public Function LoadProducts(categoryId As Integer, subCategoryId As Integer, branchId As Integer) As DataTable
         Dim dt As New DataTable()
@@ -104,7 +105,8 @@ Public Class CategoryNavigationService
                 ISNULL(p.CurrentStock, 0) AS QtyOnHand,
                 0 AS ReorderLevel,
                 c.CategoryName,
-                sc.SubCategoryName
+                sc.SubCategoryName,
+                price.DisplayPriority
             FROM Demo_Retail_Product p
             INNER JOIN Categories c ON c.CategoryID = p.CategoryID
             INNER JOIN SubCategories sc ON sc.SubCategoryID = p.SubCategoryID
@@ -115,7 +117,10 @@ Public Class CategoryNavigationService
               AND p.BranchID = @BranchID
               AND p.IsActive = 1
               AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
-            ORDER BY p.Name"
+            ORDER BY 
+                CASE WHEN price.DisplayPriority IS NULL THEN 1 ELSE 0 END,
+                price.DisplayPriority ASC,
+                p.Name ASC"
 
         Using conn As New SqlConnection(_connectionString)
             Using cmd As New SqlCommand(sql, conn)

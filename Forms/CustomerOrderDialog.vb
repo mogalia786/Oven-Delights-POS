@@ -315,6 +315,8 @@ Public Class CustomerOrderDialog
                 Return
             End If
             
+            Dim customerFound As Boolean = False
+            
             Using conn As New SqlConnection(_connString)
                 conn.Open()
                 Dim sql = "SELECT FirstName, Surname, Email FROM POS_Customers WHERE CellNumber = @CellNumber AND IsActive = 1"
@@ -323,6 +325,7 @@ Public Class CustomerOrderDialog
                     Using reader = cmd.ExecuteReader()
                         If reader.Read() Then
                             ' Customer found - auto-populate with visual feedback
+                            customerFound = True
                             txtCustomerName.Text = reader("FirstName").ToString()
                             txtCustomerSurname.Text = reader("Surname").ToString()
                             If Not IsDBNull(reader("Email")) Then
@@ -349,6 +352,14 @@ Public Class CustomerOrderDialog
                     End Using
                 End Using
             End Using
+            
+            ' If customer not found, prompt to capture details
+            If Not customerFound Then
+                ' Show message and focus on name field
+                MessageBox.Show("Customer not found. Please enter customer details.", "New Customer", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                txtCustomerName.Focus()
+            End If
+            
         Catch ex As Exception
             ' Silently fail - customer not found is OK
             System.Diagnostics.Debug.WriteLine($"Customer lookup error: {ex.Message}")
@@ -403,8 +414,8 @@ Public Class CustomerOrderDialog
         End Try
     End Sub
 
-    Public Function GetOrderData() As (CustomerName As String, CustomerSurname As String, CustomerPhone As String, ReadyDate As DateTime, ReadyTime As TimeSpan, DepositAmount As Decimal, CollectionDay As String, SpecialInstructions As String, Colour As String, Picture As String, AmendedTotal As Decimal)
-        Return (txtCustomerName.Text.Trim(), txtCustomerSurname.Text.Trim(), txtCellNumber.Text.Trim(), dtpReadyDate.Value.Date, dtpReadyTime.Value.TimeOfDay, CDec(Me.Tag), txtCollectionDay.Text, txtSpecialInstructions.Text.Trim(), txtColour.Text.Trim(), txtPicture.Text.Trim(), _amendedTotal)
+    Public Function GetOrderData() As (CustomerName As String, CustomerSurname As String, CustomerPhone As String, ReadyDate As DateTime, ReadyTime As TimeSpan, DepositAmount As Decimal, CollectionDay As String, SpecialInstructions As String, Notes As String, Colour As String, Picture As String, AmendedTotal As Decimal)
+        Return (txtCustomerName.Text.Trim(), txtCustomerSurname.Text.Trim(), txtCellNumber.Text.Trim(), dtpReadyDate.Value.Date, dtpReadyTime.Value.TimeOfDay, CDec(Me.Tag), txtCollectionDay.Text, txtSpecialInstructions.Text.Trim(), txtNotes.Text.Trim(), txtColour.Text.Trim(), txtPicture.Text.Trim(), _amendedTotal)
     End Function
 
     Private Sub SaveCustomerToDatabase()

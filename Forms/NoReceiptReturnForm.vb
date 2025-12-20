@@ -145,14 +145,14 @@ Public Class NoReceiptReturnForm
             .BackColor = Color.FromArgb(240, 240, 240)
         }
 
-        ' Stock Option Checkbox
+        ' Stock Option Checkbox - DEFAULT UNCHECKED
         chkReturnToStock = New CheckBox With {
             .Text = "☑ Return items to stock (uncheck for writeoff)",
             .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .Location = New Point(20, 370),
             .Size = New Size(500, 30),
-            .Checked = True,
-            .ForeColor = _green
+            .Checked = False,
+            .ForeColor = _red
         }
 
         ' Customer Details Section
@@ -367,7 +367,7 @@ Public Class NoReceiptReturnForm
 
             If String.IsNullOrWhiteSpace(barcode) Then Return
 
-            ' Lookup product by barcode
+            ' Lookup product by barcode using wildcard search
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
                 Dim sql = "
@@ -378,9 +378,10 @@ Public Class NoReceiptReturnForm
                         pr.SellingPrice
                     FROM Demo_Retail_Product p
                     LEFT JOIN Demo_Retail_Price pr ON p.ProductID = pr.ProductID AND pr.BranchID = @BranchID
-                    WHERE (p.SKU = @Barcode OR p.Barcode = @Barcode)
+                    WHERE (p.SKU LIKE '%' + @Barcode + '%' OR p.Barcode LIKE '%' + @Barcode + '%')
                       AND p.BranchID = @BranchID
-                      AND p.IsActive = 1"
+                      AND p.IsActive = 1
+                      AND ISNULL(pr.SellingPrice, 0) > 0"
 
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@Barcode", barcode)
@@ -844,8 +845,13 @@ Public Class NoReceiptReturnForm
     
     Private Sub ShowReturnReceipt(returnNumber As String, totalRefund As Decimal)
         Try
-            ' Create return receipt form
-            Dim receiptForm As New ReturnReceiptForm(returnNumber, _returnItems, totalRefund, _branchID, _cashierName)
+            ' Create return receipt form with customer details and return reason
+            Dim customerFullName = txtCustomerName.Text.Trim()
+            Dim customerSurname = txtCustomerSurname.Text.Trim()
+            Dim customerCell = txtCellNumber.Text.Trim()
+            Dim returnReason = txtReturnReason.Text.Trim()
+            
+            Dim receiptForm As New ReturnReceiptForm(returnNumber, _returnItems, totalRefund, _branchID, _cashierName, customerFullName, customerSurname, customerCell, returnReason)
             receiptForm.ShowDialog()
         Catch ex As Exception
             MessageBox.Show($"Return processed successfully!{vbCrLf}Return Number: {returnNumber}{vbCrLf}Refund Amount: R {totalRefund:N2}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
