@@ -10,6 +10,7 @@ Public Class UserDefinedOrderPrinter
     Private _branchName As String
     Private _branchAddress As String
     Private _branchPhone As String
+    Private _vatRegistrationNumber As String
 
     Public Sub New(connectionString As String, branchID As Integer)
         _connectionString = connectionString
@@ -21,14 +22,15 @@ Public Class UserDefinedOrderPrinter
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                Dim sql = "SELECT BranchName, Address, PhoneNumber FROM Branches WHERE BranchID = @BranchID"
+                Dim sql = "SELECT BranchName, Address, Phone, RegistrationNum FROM Branches WHERE BranchID = @BranchID"
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@BranchID", _branchID)
                     Using reader = cmd.ExecuteReader()
                         If reader.Read() Then
                             _branchName = If(IsDBNull(reader("BranchName")), "Oven Delights", reader("BranchName").ToString())
                             _branchAddress = If(IsDBNull(reader("Address")), "", reader("Address").ToString())
-                            _branchPhone = If(IsDBNull(reader("PhoneNumber")), "", reader("PhoneNumber").ToString())
+                            _branchPhone = If(IsDBNull(reader("Phone")), "", reader("Phone").ToString())
+                            _vatRegistrationNumber = If(IsDBNull(reader("RegistrationNum")), "", reader("RegistrationNum").ToString())
                         End If
                     End Using
                 End Using
@@ -37,6 +39,7 @@ Public Class UserDefinedOrderPrinter
             _branchName = "Oven Delights"
             _branchAddress = ""
             _branchPhone = ""
+            _vatRegistrationNumber = ""
         End Try
     End Sub
 
@@ -92,6 +95,14 @@ Public Class UserDefinedOrderPrinter
                     yPos += 15
                 End If
                 
+                If Not String.IsNullOrEmpty(_vatRegistrationNumber) Then
+                    e.Graphics.DrawString($"VAT Reg: {_vatRegistrationNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                Else
+                    e.Graphics.DrawString("VAT Reg not available", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                End If
+                
                 Dim collectText = "*** COLLECT FROM THIS BRANCH ***"
                 Dim collectSize = e.Graphics.MeasureString(collectText, fontLarge)
                 e.Graphics.DrawString(collectText, fontLarge, Brushes.Black, (302 - collectSize.Width) / 2, yPos)
@@ -118,7 +129,9 @@ Public Class UserDefinedOrderPrinter
                 ' Order details
                 e.Graphics.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
-                e.Graphics.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm:ss}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Ordered Date: {DateTime.Now:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString($"Ordered Time: {DateTime.Now:HH:mm:ss}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 e.Graphics.DrawString($"Cashier: {cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 18
@@ -309,6 +322,14 @@ Public Class UserDefinedOrderPrinter
                     yPos += 15
                 End If
                 
+                If Not String.IsNullOrEmpty(_vatRegistrationNumber) Then
+                    e.Graphics.DrawString($"VAT Reg: {_vatRegistrationNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                Else
+                    e.Graphics.DrawString("VAT Reg not available", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                End If
+                
                 Dim collectText = "*** COLLECTED FROM THIS BRANCH ***"
                 Dim collectSize = e.Graphics.MeasureString(collectText, fontLarge)
                 e.Graphics.DrawString(collectText, fontLarge, Brushes.Black, (302 - collectSize.Width) / 2, yPos)
@@ -332,12 +353,12 @@ Public Class UserDefinedOrderPrinter
                 e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Pickup details
+                ' Order details
                 e.Graphics.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
-                e.Graphics.DrawString($"Pickup Date: {DateTime.Now:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Ordered Date: {DateTime.Now:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
-                e.Graphics.DrawString($"Pickup Time: {DateTime.Now:HH:mm:ss}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"Ordered Time: {DateTime.Now:HH:mm:ss}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 e.Graphics.DrawString($"Collected By: {cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 18

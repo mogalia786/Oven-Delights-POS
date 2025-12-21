@@ -15,6 +15,7 @@ Public Class ReturnLineItemsForm
     Private _invoiceLines As New DataTable()
     Private _returnItems As New List(Of ReturnLineItem)
     Private _hasItems As Boolean = False
+    Private _orderType As String = "RegularSale"
 
     Private flpLineItems As FlowLayoutPanel
     Private txtCustomerName As TextBox
@@ -41,12 +42,13 @@ Public Class ReturnLineItemsForm
         Public Property RestockItem As Boolean
     End Class
 
-    Public Sub New(invoiceNumber As String, branchID As Integer, tillPointID As Integer, cashierID As Integer, supervisorID As Integer)
+    Public Sub New(invoiceNumber As String, branchID As Integer, tillPointID As Integer, cashierID As Integer, supervisorID As Integer, Optional orderType As String = "RegularSale")
         _invoiceNumber = invoiceNumber
         _branchID = branchID
         _tillPointID = tillPointID
         _cashierID = cashierID
         _supervisorID = supervisorID
+        _orderType = orderType
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
 
         InitializeComponent()
@@ -250,22 +252,62 @@ Public Class ReturnLineItemsForm
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
 
-                ' Load from POS_InvoiceLines - this is the source of truth
-                Dim sql = "
-                    SELECT 
-                        ProductID,
-                        ItemCode,
-                        ProductName,
-                        Quantity,
-                        UnitPrice,
-                        LineTotal
-                    FROM POS_InvoiceLines
-                    WHERE InvoiceNumber = @InvoiceNumber
-                    AND Quantity > 0
-                    ORDER BY ProductName"
+                Dim sql As String = ""
+                
+                ' Load items based on order type
+                Select Case _orderType
+                    Case "RegularSale"
+                        ' Load from POS_InvoiceLines for regular sales
+                        sql = "
+                            SELECT 
+                                ProductID,
+                                ItemCode,
+                                ProductName,
+                                Quantity,
+                                UnitPrice,
+                                LineTotal
+                            FROM POS_InvoiceLines
+                            WHERE InvoiceNumber = @OrderNumber
+                            AND Quantity > 0
+                            ORDER BY ProductName"
+                    
+                    Case "CakeOrder"
+                        ' Load from POS_CustomOrderItems for cake orders
+                        sql = "
+                            SELECT 
+                                oi.ProductID,
+                                CAST(oi.ProductID AS NVARCHAR) AS ItemCode,
+                                oi.ProductName,
+                                oi.Quantity,
+                                oi.UnitPrice,
+                                oi.LineTotal
+                            FROM POS_CustomOrderItems oi
+                            INNER JOIN POS_CustomOrders o ON oi.OrderID = o.OrderID
+                            WHERE o.OrderNumber = @OrderNumber
+                            AND o.OrderStatus = 'Delivered'
+                            AND oi.Quantity > 0
+                            ORDER BY oi.ProductName"
+                    
+                    Case "UserDefinedOrder"
+                        ' Load from POS_UserDefinedOrderItems for user-defined orders
+                        sql = "
+                            SELECT 
+                                oi.ProductID,
+                                oi.ProductCode AS ItemCode,
+                                oi.ProductName,
+                                oi.Quantity,
+                                oi.UnitPrice,
+                                oi.LineTotal
+                            FROM POS_UserDefinedOrderItems oi
+                            INNER JOIN POS_UserDefinedOrders o ON oi.UserDefinedOrderID = o.UserDefinedOrderID
+                            WHERE o.OrderNumber = @OrderNumber
+                            AND o.Status = 'PickedUp'
+                            AND oi.Quantity > 0
+                            ORDER BY oi.ProductName"
+                End Select
 
                 Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                    cmd.Parameters.AddWithValue("@OrderNumber", _invoiceNumber)
                     Using adapter As New SqlDataAdapter(cmd)
                         adapter.Fill(_invoiceLines)
                     End Using
@@ -281,7 +323,7 @@ Public Class ReturnLineItemsForm
             DisplayLineItems()
 
         Catch ex As Exception
-            MessageBox.Show($"Error loading invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Error loading order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             _hasItems = False
         End Try
     End Sub

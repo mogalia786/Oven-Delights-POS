@@ -249,6 +249,21 @@ Overn-Delights-POS
  Requires supervisor authentication
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.CreateBoxItems">
+ <summary>
+ Opens box items dialog to create a box with multiple items
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.LoadBoxItems(System.String)">
+ <summary>
+ Loads all items from a box barcode into the cart
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.GetProductIDFromBarcode(System.String)">
+ <summary>
+ Gets ProductID from barcode
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptDual(System.String,System.DateTime,System.Decimal)">
  <summary>
  Print receipt to thermal slip printer ONLY (default printer)

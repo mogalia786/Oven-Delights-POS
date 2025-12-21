@@ -868,10 +868,10 @@ Public Class POSMainForm_REDESIGN
         _tileHeight = CInt(_tileWidth * 0.7) ' Maintain aspect ratio
 
         ' Ensure minimum size and maximum for readability
-        If _tileWidth < 100 Then _tileWidth = 100
-        If _tileHeight < 70 Then _tileHeight = 70
-        If _tileWidth > 180 Then _tileWidth = 180
-        If _tileHeight > 126 Then _tileHeight = 126
+        If _tileWidth < 120 Then _tileWidth = 120
+        If _tileHeight < 85 Then _tileHeight = 85
+        If _tileWidth > 200 Then _tileWidth = 200
+        If _tileHeight > 140 Then _tileHeight = 140
 
         Debug.WriteLine($"[SCREEN SCALING] Screen: {_screenWidth}x{_screenHeight}, Scale Factor: {_scaleFactor:F2}, Tile: {_tileWidth}x{_tileHeight}")
     End Sub
@@ -1224,7 +1224,7 @@ Public Class POSMainForm_REDESIGN
         Dim isLowStock = stock <= reorderLevel
 
         ' Fixed compact sizing - no scaling to prevent size changes
-        Dim cardWidth As Integer = 140
+        Dim cardWidth As Integer = 160
         Dim cardHeight As Integer = 100
 
         Dim card As New Panel With {
@@ -1236,8 +1236,8 @@ Public Class POSMainForm_REDESIGN
             .Tag = New With {productID, itemCode, productName, price, stock}
         }
 
-        ' Fixed compact font sizes
-        Dim codeFontSize As Single = 8
+        ' Fixed compact font sizes - smaller item code, larger name area
+        Dim codeFontSize As Single = 7
         Dim nameFontSize As Single = 9
         Dim priceFontSize As Single = 11
         Dim stockFontSize As Single = 7
@@ -1247,7 +1247,8 @@ Public Class POSMainForm_REDESIGN
             .Font = New Font("Segoe UI", codeFontSize, FontStyle.Bold),
             .ForeColor = _darkBlue,
             .Location = New Point(4, 4),
-            .AutoSize = True
+            .Size = New Size(50, 14),
+            .AutoEllipsis = True
         }
 
         Dim lblName As New Label With {
@@ -1359,10 +1360,11 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("F12", "📦 Collect", CType(Sub() OrderCollection(), Action)),
             Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
             Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
+            Tuple.Create("", "📦 Box Items", CType(Sub() CreateBoxItems(), Action)),
             Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 15 ' 12 F-keys + 2 User Defined buttons + 1 Set Priority button
+        Dim visibleCount = 16 ' 12 F-keys + 4 additional buttons
         ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
         Dim leftMargin = 5
@@ -1415,6 +1417,13 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub ProcessBarcodeScan(itemCode As String)
         Try
+            ' Check if this is a box barcode (format: BranchID900001, e.g., 6900001)
+            ' Box barcodes have '9' as second character and are 7+ digits
+            If itemCode.Length >= 7 AndAlso itemCode.Length <= 8 AndAlso IsNumeric(itemCode) AndAlso itemCode.Substring(1, 1) = "9" Then
+                LoadBoxItems(itemCode)
+                Return
+            End If
+
             ' Query Demo_Retail_Product and get VAT-inclusive price from Demo_Retail_Price
             ' Use the scanned/typed itemCode as the ItemCode to prevent duplicates
             ' Match product card behavior: only search products at current branch
@@ -2345,32 +2354,70 @@ Public Class POSMainForm_REDESIGN
                 End Using
             End Using
 
-            ' Scan invoice barcode using colorful barcode scanner dialog
-            Dim invoiceNumber As String = ""
-            Using barcodeDialog As New BarcodeScannerDialog("SCAN RECEIPT BARCODE", "Scan the barcode from the sales receipt")
+            ' Scan invoice/order barcode using colorful barcode scanner dialog
+            Dim scannedNumber As String = ""
+            Using barcodeDialog As New BarcodeScannerDialog("SCAN RECEIPT BARCODE", "Scan the barcode from the sales receipt or order slip")
                 If barcodeDialog.ShowDialog() <> DialogResult.OK Then Return
-                invoiceNumber = barcodeDialog.ScannedBarcode
+                scannedNumber = barcodeDialog.ScannedBarcode
             End Using
 
-            If String.IsNullOrWhiteSpace(invoiceNumber) Then Return
+            If String.IsNullOrWhiteSpace(scannedNumber) Then Return
 
-            ' Validate invoice exists and get sale details
+            ' Check what type of receipt was scanned: Regular Sale, Cake Order, or User-Defined Order
+            Dim orderType As String = ""
+            Dim orderFound As Boolean = False
+            
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                Dim sql = "SELECT SaleID, InvoiceNumber, TotalAmount FROM Demo_Sales WHERE InvoiceNumber = @InvoiceNumber"
-                Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber.Trim())
+                
+                ' 1. Check if it's a regular sale invoice
+                Dim sqlSale = "SELECT SaleID, InvoiceNumber, TotalAmount FROM Demo_Sales WHERE InvoiceNumber = @Number"
+                Using cmd As New SqlCommand(sqlSale, conn)
+                    cmd.Parameters.AddWithValue("@Number", scannedNumber.Trim())
                     Using reader = cmd.ExecuteReader()
-                        If Not reader.Read() Then
-                            MessageBox.Show("Invoice not found. Please check the barcode and try again.", "Invalid Invoice", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                            Return
+                        If reader.Read() Then
+                            orderFound = True
+                            orderType = "RegularSale"
                         End If
                     End Using
                 End Using
+                
+                ' 2. Check if it's a cake order
+                If Not orderFound Then
+                    Dim sqlCake = "SELECT OrderID, OrderNumber FROM POS_CustomOrders WHERE OrderNumber = @Number AND OrderStatus = 'Delivered'"
+                    Using cmd As New SqlCommand(sqlCake, conn)
+                        cmd.Parameters.AddWithValue("@Number", scannedNumber.Trim())
+                        Using reader = cmd.ExecuteReader()
+                            If reader.Read() Then
+                                orderFound = True
+                                orderType = "CakeOrder"
+                            End If
+                        End Using
+                    End Using
+                End If
+                
+                ' 3. Check if it's a user-defined order
+                If Not orderFound Then
+                    Dim sqlUserDefined = "SELECT UserDefinedOrderID, OrderNumber FROM POS_UserDefinedOrders WHERE OrderNumber = @Number AND Status = 'PickedUp'"
+                    Using cmd As New SqlCommand(sqlUserDefined, conn)
+                        cmd.Parameters.AddWithValue("@Number", scannedNumber.Trim())
+                        Using reader = cmd.ExecuteReader()
+                            If reader.Read() Then
+                                orderFound = True
+                                orderType = "UserDefinedOrder"
+                            End If
+                        End Using
+                    End Using
+                End If
             End Using
+            
+            If Not orderFound Then
+                MessageBox.Show("Order/Invoice not found. Please check the barcode and try again.", "Invalid Receipt", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
 
-            ' Open ReturnLineItemsForm with the invoice number (it will auto-load items)
-            Using returnForm As New ReturnLineItemsForm(invoiceNumber.Trim(), _branchID, _tillPointID, _cashierID, supervisorID)
+            ' Open ReturnLineItemsForm with the scanned number and order type
+            Using returnForm As New ReturnLineItemsForm(scannedNumber.Trim(), _branchID, _tillPointID, _cashierID, supervisorID, orderType)
                 returnForm.ShowDialog()
             End Using
         Catch ex As Exception
@@ -4968,9 +5015,9 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Function CreateCategoryTile(categoryId As Integer, categoryName As String, productCount As Integer) As Button
-        ' Compact category tile with smaller font to prevent cutoff
+        ' Larger category tile with smaller font to prevent word wrapping
         ' Responsive font size based on text length
-        Dim fontSize As Single = If(categoryName.Length > 15, 9, If(categoryName.Length > 10, 10, 11))
+        Dim fontSize As Single = If(categoryName.Length > 15, 8, If(categoryName.Length > 10, 9, 10))
 
         Dim btn As New Button With {
             .Text = categoryName.ToUpper(),
@@ -5004,9 +5051,9 @@ Public Class POSMainForm_REDESIGN
     End Function
 
     Private Function CreateSubCategoryTile(subCategoryId As Integer, subCategoryName As String, productCount As Integer) As Button
-        ' Compact subcategory tile with smaller font to prevent cutoff
+        ' Larger subcategory tile with smaller font to prevent word wrapping
         ' Responsive font size based on text length
-        Dim fontSize As Single = If(subCategoryName.Length > 15, 8, If(subCategoryName.Length > 10, 9, 10))
+        Dim fontSize As Single = If(subCategoryName.Length > 15, 7, If(subCategoryName.Length > 10, 8, 9))
 
         Dim btn As New Button With {
             .Text = subCategoryName.ToUpper(),
@@ -6456,4 +6503,122 @@ Public Class POSMainForm_REDESIGN
             MessageBox.Show($"Error managing item priorities: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
+
+    ''' <summary>
+    ''' Opens box items dialog to create a box with multiple items
+    ''' </summary>
+    Private Sub CreateBoxItems()
+        Try
+            Dim boxDialog As New BoxItemsDialog(_connectionString, _branchID, _cashierName)
+            boxDialog.ShowDialog(Me)
+        Catch ex As Exception
+            MessageBox.Show($"Error creating box items: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Loads all items from a box barcode into the cart
+    ''' </summary>
+    Private Sub LoadBoxItems(boxBarcode As String)
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+
+                ' Get all items in the box
+                Dim sql = "
+                    SELECT 
+                        ItemBarcode,
+                        ProductName,
+                        Quantity,
+                        Price
+                    FROM BoxedItems
+                    WHERE BoxBarcode = @BoxBarcode
+                      AND BranchID = @BranchID
+                      AND IsActive = 1
+                    ORDER BY BoxItemID"
+
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BoxBarcode", boxBarcode)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+
+                    Dim itemCount As Integer = 0
+                    Using reader = cmd.ExecuteReader()
+                        While reader.Read()
+                            Dim itemBarcode = reader("ItemBarcode").ToString()
+                            Dim productName = reader("ProductName").ToString()
+                            Dim quantity = CDec(reader("Quantity"))
+                            Dim price = CDec(reader("Price"))
+
+                            ' Get ProductID from barcode
+                            Dim productID = GetProductIDFromBarcode(itemBarcode)
+                            If productID > 0 Then
+                                ' Add each item to cart with its quantity
+                                For i = 1 To CInt(quantity)
+                                    AddProductToCart(productID, itemBarcode, productName, price)
+                                Next
+                                itemCount += 1
+                            End If
+                        End While
+                    End Using
+
+                    If itemCount > 0 Then
+                        txtBarcodeScanner.BackColor = _green
+                        MessageBox.Show($"Box loaded successfully! {itemCount} item(s) added to cart.", "Box Loaded", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        Task.Delay(200).ContinueWith(Sub()
+                                                         Me.Invoke(Sub()
+                                                                       txtBarcodeScanner.Clear()
+                                                                       txtBarcodeScanner.BackColor = Color.White
+                                                                       txtBarcodeScanner.Focus()
+                                                                   End Sub)
+                                                     End Sub)
+                    Else
+                        txtBarcodeScanner.BackColor = _red
+                        MessageBox.Show($"Box not found: {boxBarcode}", "Box Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                        Task.Delay(200).ContinueWith(Sub()
+                                                         Me.Invoke(Sub()
+                                                                       txtBarcodeScanner.Clear()
+                                                                       txtBarcodeScanner.BackColor = Color.White
+                                                                       txtBarcodeScanner.Focus()
+                                                                   End Sub)
+                                                     End Sub)
+                    End If
+                End Using
+            End Using
+
+        Catch ex As Exception
+            MessageBox.Show($"Error loading box items: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            txtBarcodeScanner.Clear()
+            txtBarcodeScanner.Focus()
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' Gets ProductID from barcode
+    ''' </summary>
+    Private Function GetProductIDFromBarcode(barcode As String) As Integer
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "
+                    SELECT TOP 1 ProductID
+                    FROM Demo_Retail_Product
+                    WHERE (Barcode = @Barcode OR SKU = @Barcode)
+                      AND BranchID = @BranchID
+                      AND IsActive = 1"
+
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@Barcode", barcode)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+
+                    Dim result = cmd.ExecuteScalar()
+                    If result IsNot Nothing Then
+                        Return CInt(result)
+                    End If
+                End Using
+            End Using
+        Catch ex As Exception
+            ' Return 0 if error
+        End Try
+        Return 0
+    End Function
 End Class
