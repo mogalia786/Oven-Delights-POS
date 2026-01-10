@@ -207,7 +207,7 @@ Public Class BoxItemsDialog
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
-                
+
                 ' Get the highest sequence number for this branch today
                 Dim sql = "
                     SELECT MAX(CAST(RIGHT(BoxBarcode, 5) AS INT)) AS MaxSeq
@@ -215,11 +215,11 @@ Public Class BoxItemsDialog
                     WHERE BranchID = @BranchID
                       AND BoxBarcode LIKE @BranchPattern
                       AND CAST(CreatedDate AS DATE) = CAST(GETDATE() AS DATE)"
-                
+
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@BranchID", _branchID)
                     cmd.Parameters.AddWithValue("@BranchPattern", $"{_branchID}9%")
-                    
+
                     Dim result = cmd.ExecuteScalar()
                     If result IsNot Nothing AndAlso Not IsDBNull(result) Then
                         Return CInt(result) + 1
