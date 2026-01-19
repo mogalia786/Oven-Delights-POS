@@ -584,76 +584,25 @@ Public Class NoReceiptReturnForm
                 totalRefund += CDec(row("LineTotal"))
             Next
             
-            ' Ask for payment method
-            Dim paymentDialog As New Form With {
-                .Text = "Refund Payment Method",
-                .Size = New Size(400, 200),
-                .StartPosition = FormStartPosition.CenterParent,
-                .FormBorderStyle = FormBorderStyle.FixedDialog,
-                .MaximizeBox = False,
-                .MinimizeBox = False
-            }
-            
-            Dim lblPrompt As New Label With {
-                .Text = $"Refund Amount: R {totalRefund:N2}{vbCrLf}Select refund payment method:",
-                .Location = New Point(20, 20),
-                .Size = New Size(350, 40),
-                .Font = New Font("Arial", 10, FontStyle.Bold)
-            }
-            paymentDialog.Controls.Add(lblPrompt)
-            
-            Dim btnCash As New Button With {
-                .Text = "CASH",
-                .Location = New Point(50, 80),
-                .Size = New Size(120, 50),
-                .Font = New Font("Arial", 12, FontStyle.Bold),
-                .BackColor = Color.FromArgb(46, 204, 113),
-                .ForeColor = Color.White,
-                .FlatStyle = FlatStyle.Flat
-            }
-            AddHandler btnCash.Click, Sub()
-                                          _paymentMethod = "Cash"
-                                          _cashAmount = totalRefund
-                                          _cardAmount = 0
-                                          paymentDialog.DialogResult = DialogResult.OK
-                                          paymentDialog.Close()
-                                      End Sub
-            paymentDialog.Controls.Add(btnCash)
-            
-            Dim btnCard As New Button With {
-                .Text = "CARD",
-                .Location = New Point(230, 80),
-                .Size = New Size(120, 50),
-                .Font = New Font("Arial", 12, FontStyle.Bold),
-                .BackColor = Color.FromArgb(52, 152, 219),
-                .ForeColor = Color.White,
-                .FlatStyle = FlatStyle.Flat
-            }
-            AddHandler btnCard.Click, Sub()
-                                          _paymentMethod = "Card"
-                                          _cashAmount = 0
-                                          _cardAmount = totalRefund
-                                          paymentDialog.DialogResult = DialogResult.OK
-                                          paymentDialog.Close()
-                                      End Sub
-            paymentDialog.Controls.Add(btnCard)
-            
-            If paymentDialog.ShowDialog() <> DialogResult.OK Then
-                Return
-            End If
-
-            ' Process return transaction
+            ' Process return transaction first
             Dim returnNumber = ProcessReturnTransaction(totalRefund)
 
             If Not String.IsNullOrEmpty(returnNumber) Then
-                ' Open cash drawer
-                OpenCashDrawer()
-                
-                ' Show return receipt
-                ShowReturnReceipt(returnNumber, totalRefund)
-                
-                Me.DialogResult = DialogResult.OK
-                Me.Close()
+                ' Show tender selection screen (Cash/Card/EFT) - matches payment screen design
+                Using tenderForm As New ReturnTenderForm(returnNumber, _returnItems, totalRefund, _branchID, _cashierName, txtCustomerName.Text, txtCustomerSurname.Text, txtCellNumber.Text, txtReturnReason.Text)
+                    If tenderForm.ShowDialog() = DialogResult.OK Then
+                        ' Tender form handles:
+                        ' 1. Tender method selection
+                        ' 2. Receipt printing
+                        ' 3. Cash drawer opening (if cash)
+                        
+                        Me.DialogResult = DialogResult.OK
+                        Me.Close()
+                    Else
+                        ' User cancelled tender - return already recorded in database
+                        MessageBox.Show("Return recorded but tender cancelled. Please process refund manually.", "Tender Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    End If
+                End Using
             End If
 
         Catch ex As Exception

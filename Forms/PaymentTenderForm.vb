@@ -326,50 +326,50 @@ Public Class PaymentTenderForm
     
     Private Sub ShowEFTSlip()
         Me.Controls.Clear()
-        Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formHeight = Math.Min(650, CInt(screenHeight * 0.85))
-        Me.Size = New Size(550, formHeight)
+        ' Fixed size for 1024x768 POS screen
+        Me.Size = New Size(600, 700)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         ' Header
-        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 80, .BackColor = ColorTranslator.FromHtml("#3498DB")}
+        Dim pnlHeader As New Panel With {.Dock = DockStyle.Top, .Height = 60, .BackColor = ColorTranslator.FromHtml("#3498DB")}
         Dim lblHeader As New Label With {
             .Text = "🏦 EFT PAYMENT SLIP",
-            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 20, FontStyle.Bold),
             .ForeColor = Color.White,
             .TextAlign = ContentAlignment.MiddleCenter,
             .Dock = DockStyle.Fill
         }
         pnlHeader.Controls.Add(lblHeader)
         
-        ' Slip content
+        ' Slip content - reduced size to fit screen with buttons visible
         Dim pnlSlip As New Panel With {
-            .Location = New Point(50, 100),
-            .Size = New Size(500, 550),
+            .Location = New Point(50, 75),
+            .Size = New Size(500, 450),
             .BackColor = Color.White,
-            .BorderStyle = BorderStyle.FixedSingle
+            .BorderStyle = BorderStyle.FixedSingle,
+            .AutoScroll = True
         }
         
-        Dim yPos = 20
+        Dim yPos = 15
         
         ' Bank details
         Dim lblBankHeader As New Label With {
             .Text = "BANK DETAILS",
-            .Font = New Font("Courier New", 14, FontStyle.Bold),
-            .Location = New Point(150, yPos),
+            .Font = New Font("Courier New", 12, FontStyle.Bold),
+            .Location = New Point(160, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblBankHeader)
-        yPos += 40
+        yPos += 30
         
         Dim lblSeparator1 As New Label With {
             .Text = "========================================",
-            .Font = New Font("Courier New", 10),
+            .Font = New Font("Courier New", 9),
             .Location = New Point(50, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblSeparator1)
-        yPos += 30
+        yPos += 25
         
         ' Bank info
         Dim bankInfo() As String = {
@@ -383,58 +383,58 @@ Public Class PaymentTenderForm
         For Each info As String In bankInfo
             Dim lblInfo As New Label With {
                 .Text = info,
-                .Font = New Font("Courier New", 11),
-                .Location = New Point(80, yPos),
+                .Font = New Font("Courier New", 10),
+                .Location = New Point(70, yPos),
                 .AutoSize = True
             }
             pnlSlip.Controls.Add(lblInfo)
-            yPos += 30
+            yPos += 25
         Next
         
         yPos += 10
         Dim lblSeparator2 As New Label With {
             .Text = "========================================",
-            .Font = New Font("Courier New", 10),
+            .Font = New Font("Courier New", 9),
             .Location = New Point(50, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblSeparator2)
-        yPos += 40
+        yPos += 30
         
         ' Payment details
         Dim lblPaymentHeader As New Label With {
             .Text = "PAYMENT DETAILS",
-            .Font = New Font("Courier New", 14, FontStyle.Bold),
-            .Location = New Point(140, yPos),
+            .Font = New Font("Courier New", 12, FontStyle.Bold),
+            .Location = New Point(150, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblPaymentHeader)
-        yPos += 40
+        yPos += 35
         
         Dim lblAmount As New Label With {
             .Text = $"Amount Due: R{_totalAmount:N2}",
-            .Font = New Font("Courier New", 14, FontStyle.Bold),
+            .Font = New Font("Courier New", 12, FontStyle.Bold),
             .ForeColor = ColorTranslator.FromHtml("#E67E22"),
-            .Location = New Point(120, yPos),
+            .Location = New Point(110, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblAmount)
-        yPos += 40
+        yPos += 35
         
         Dim lblReference As New Label With {
             .Text = $"Reference: INV-{DateTime.Now:yyyyMMddHHmmss}",
-            .Font = New Font("Courier New", 11),
-            .Location = New Point(80, yPos),
+            .Font = New Font("Courier New", 10),
+            .Location = New Point(70, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblReference)
-        yPos += 40
+        yPos += 35
         
         Dim lblInstructions As New Label With {
             .Text = "Use reference number for payment",
-            .Font = New Font("Courier New", 10),
+            .Font = New Font("Courier New", 9),
             .ForeColor = ColorTranslator.FromHtml("#E74C3C"),
-            .Location = New Point(80, yPos),
+            .Location = New Point(70, yPos),
             .AutoSize = True
         }
         pnlSlip.Controls.Add(lblInstructions)
@@ -442,13 +442,26 @@ Public Class PaymentTenderForm
         ' Buttons
         Dim pnlButtons As New Panel With {.Dock = DockStyle.Bottom, .Height = 80, .BackColor = _lightGray}
         
+        Dim btnPrint As New Button With {
+            .Text = "🖨️ PRINT SLIP",
+            .Size = New Size(160, 60),
+            .Location = New Point(20, 10),
+            .BackColor = ColorTranslator.FromHtml("#3498DB"),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnPrint.FlatAppearance.BorderSize = 0
+        AddHandler btnPrint.Click, Sub() PrintEFTSlip()
+        
         Dim btnConfirm As New Button With {
             .Text = "✓ CONFIRM PAYMENT",
-            .Size = New Size(250, 60),
-            .Location = New Point(50, 10),
+            .Size = New Size(180, 60),
+            .Location = New Point(190, 10),
             .BackColor = ColorTranslator.FromHtml("#27AE60"),
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
@@ -457,18 +470,18 @@ Public Class PaymentTenderForm
         
         Dim btnBack As New Button With {
             .Text = "← BACK",
-            .Size = New Size(250, 60),
-            .Location = New Point(320, 10),
+            .Size = New Size(160, 60),
+            .Location = New Point(380, 10),
             .BackColor = ColorTranslator.FromHtml("#E74C3C"),
             .ForeColor = Color.White,
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
         btnBack.FlatAppearance.BorderSize = 0
         AddHandler btnBack.Click, Sub() ShowPaymentMethodSelection()
         
-        pnlButtons.Controls.AddRange({btnConfirm, btnBack})
+        pnlButtons.Controls.AddRange({btnPrint, btnConfirm, btnBack})
         
         Me.Controls.AddRange({pnlHeader, pnlSlip, pnlButtons})
         Application.DoEvents()
@@ -939,7 +952,14 @@ Public Class PaymentTenderForm
                         Dim salesID = InsertSale(conn, transaction, invoiceNumber)
                         InsertInvoiceLineItems(conn, transaction, salesID, invoiceNumber)
                         UpdateStock(conn, transaction)
-                        PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
+                        
+                        ' For EFT payments, record as Pending (do NOT post to journals/ledgers yet)
+                        If _paymentMethod = "EFT" Then
+                            RecordEFTPayment(conn, transaction, salesID, invoiceNumber)
+                        Else
+                            ' For other payment methods, post to journals/ledgers immediately
+                            PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
+                        End If
                         
                         ' If this is an order collection, update order status to Delivered
                         If _isOrderCollection AndAlso _orderID > 0 Then
@@ -1572,6 +1592,52 @@ Public Class PaymentTenderForm
         End Using
     End Sub
     
+    Private Sub RecordEFTPayment(conn As SqlConnection, transaction As SqlTransaction, salesID As Integer, invoiceNumber As String)
+        Try
+            ' Generate payment reference
+            Dim paymentReference As String = $"INV-{DateTime.Now:yyyyMMddHHmmss}"
+            
+            ' Determine transaction type
+            Dim transactionType As String = "Sale"
+            If _isOrderCollection Then
+                transactionType = "CakeOrder"
+            End If
+            
+            ' Get branch name
+            Dim branchName As String = ""
+            Dim branchSql = "SELECT BranchName FROM Branches WHERE BranchID = @BranchID"
+            Using cmdBranch As New SqlCommand(branchSql, conn, transaction)
+                cmdBranch.Parameters.AddWithValue("@BranchID", _branchID)
+                Dim result = cmdBranch.ExecuteScalar()
+                If result IsNot Nothing Then branchName = result.ToString()
+            End Using
+            
+            ' Record EFT payment as Pending
+            Using cmd As New SqlCommand("sp_RecordEFTPayment", conn, transaction)
+                cmd.CommandType = CommandType.StoredProcedure
+                cmd.Parameters.AddWithValue("@PaymentReference", paymentReference)
+                cmd.Parameters.AddWithValue("@TransactionType", transactionType)
+                cmd.Parameters.AddWithValue("@TransactionID", salesID)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                cmd.Parameters.AddWithValue("@OrderNumber", If(_isOrderCollection, _orderNumber, DBNull.Value))
+                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                cmd.Parameters.AddWithValue("@BranchName", branchName)
+                cmd.Parameters.AddWithValue("@TillPointID", _tillPointID)
+                cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                cmd.Parameters.AddWithValue("@CashierName", _cashierName)
+                cmd.Parameters.AddWithValue("@Amount", _totalAmount)
+                cmd.Parameters.AddWithValue("@CustomerName", DBNull.Value)
+                cmd.Parameters.AddWithValue("@CustomerSurname", DBNull.Value)
+                cmd.Parameters.AddWithValue("@CustomerCell", DBNull.Value)
+                cmd.Parameters.AddWithValue("@Notes", "EFT payment - awaiting bank confirmation")
+                cmd.ExecuteNonQuery()
+            End Using
+        Catch ex As Exception
+            ' Log error but don't block the sale
+            System.Diagnostics.Debug.WriteLine($"Error recording EFT payment: {ex.Message}")
+        End Try
+    End Sub
+    
     Private Function GetAverageCost(conn As SqlConnection, transaction As SqlTransaction, productID As Integer, branchID As Integer) As Decimal
         Try
             ' Get cost price from Demo_Retail_Price table
@@ -1594,6 +1660,85 @@ Public Class PaymentTenderForm
             Return 0D
         End Try
     End Function
+    
+    ''' <summary>
+    ''' Print EFT payment slip to thermal printer
+    ''' </summary>
+    Private Sub PrintEFTSlip()
+        Try
+            Dim printDoc As New Printing.PrintDocument()
+            printDoc.DefaultPageSettings.PaperSize = New Printing.PaperSize("80mm", 302, 1200)
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
+                Dim yPos As Single = 5
+                Dim leftMargin As Single = 5
+                
+                ' Header
+                Dim headerText = "OVEN DELIGHTS"
+                Dim headerSize = e.Graphics.MeasureString(headerText, fontLarge)
+                e.Graphics.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
+                yPos += 22
+                
+                Dim eftTitle = "EFT PAYMENT SLIP"
+                Dim eftTitleSize = e.Graphics.MeasureString(eftTitle, fontLarge)
+                e.Graphics.DrawString(eftTitle, fontLarge, Brushes.Black, (302 - eftTitleSize.Width) / 2, yPos)
+                yPos += 22
+                
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Bank details
+                e.Graphics.DrawString("BANK DETAILS:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("Bank: ABSA Bank", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("Account Name: Oven Delights (Pty) Ltd", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("Account Number: 4012345678", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("Branch Code: 632005", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("Account Type: Business Cheque", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Payment details
+                e.Graphics.DrawString("PAYMENT DETAILS:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString($"Amount Due: R {_totalAmount:N2}", fontLarge, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                e.Graphics.DrawString($"Reference: INV-{DateTime.Now:yyyyMMddHHmmss}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString("Use reference number for payment", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Cashier: {_cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                Dim footer = "Thank you!"
+                Dim footerSize = e.Graphics.MeasureString(footer, fontBold)
+                e.Graphics.DrawString(footer, fontBold, Brushes.Black, (302 - footerSize.Width) / 2, yPos)
+            End Sub
+            
+            printDoc.Print()
+            MessageBox.Show("EFT payment slip printed successfully!", "Print Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            
+        Catch ex As Exception
+            MessageBox.Show($"Print error: {ex.Message}", "Print Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
     
     ''' <summary>
     ''' Print receipt to thermal slip printer ONLY (default printer)

@@ -115,7 +115,7 @@ Public Class UserDefinedOrderDialog
 
         ' Cake Colour
         Dim lblCakeColour As New Label With {
-            .Text = "Cake Colour:",
+            .Text = "Cake Colour (Optional):",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
             .Location = New Point(20, yPos),
             .Size = New Size(200, 25)
@@ -130,7 +130,7 @@ Public Class UserDefinedOrderDialog
 
         ' Special Request
         Dim lblSpecialRequest As New Label With {
-            .Text = "Special Request:",
+            .Text = "Special Request (Optional):",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
             .Location = New Point(20, yPos),
             .Size = New Size(200, 25)
@@ -375,6 +375,17 @@ Public Class UserDefinedOrderDialog
                         cmdInsert.Parameters.AddWithValue("@CustomerSurname", If(String.IsNullOrEmpty(CustomerSurname), DBNull.Value, CustomerSurname))
                         cmdInsert.ExecuteNonQuery()
                     End Using
+                Else
+                    ' Customer exists - update surname if provided and different
+                    If Not String.IsNullOrWhiteSpace(CustomerSurname) Then
+                        Dim updateSql = "UPDATE POS_Customers SET Surname = @CustomerSurname, FirstName = @CustomerName, LastOrderDate = GETDATE() WHERE CellNumber = @CellNumber"
+                        Using cmdUpdate As New SqlCommand(updateSql, conn)
+                            cmdUpdate.Parameters.AddWithValue("@CellNumber", CustomerCellNumber)
+                            cmdUpdate.Parameters.AddWithValue("@CustomerName", CustomerName)
+                            cmdUpdate.Parameters.AddWithValue("@CustomerSurname", CustomerSurname)
+                            cmdUpdate.ExecuteNonQuery()
+                        End Using
+                    End If
                 End If
             End Using
         End Using

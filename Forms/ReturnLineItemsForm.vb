@@ -10,6 +10,7 @@ Public Class ReturnLineItemsForm
     Private _branchID As Integer
     Private _tillPointID As Integer
     Private _cashierID As Integer
+    Private _cashierName As String
     Private _supervisorID As Integer
     Private _connectionString As String
     Private _invoiceLines As New DataTable()
@@ -50,6 +51,21 @@ Public Class ReturnLineItemsForm
         _supervisorID = supervisorID
         _orderType = orderType
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
+        
+        ' Get cashier name
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT FullName FROM Users WHERE UserID = @UserID"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@UserID", cashierID)
+                    Dim result = cmd.ExecuteScalar()
+                    _cashierName = If(result IsNot Nothing, result.ToString(), "Cashier")
+                End Using
+            End Using
+        Catch ex As Exception
+            _cashierName = "Cashier"
+        End Try
 
         InitializeComponent()
         LoadInvoiceLines()
@@ -587,18 +603,26 @@ Public Class ReturnLineItemsForm
                         ' Save customer if new
                         SaveCustomer(conn, transaction)
 
-                        ' Show return receipt with customer details and reason
-                        Using receiptForm As New ReturnReceiptForm(returnNumber, receiptItems, totalReturn, _branchID, "Cashier", txtCustomerName.Text, "", txtPhone.Text, txtReason.Text)
-                            receiptForm.ShowDialog()
+                        ' Show tender selection screen (Cash/Card/EFT)
+                        Using tenderForm As New ReturnTenderForm(returnNumber, receiptItems, totalReturn, _branchID, _cashierName, txtCustomerName.Text, "", txtPhone.Text, txtReason.Text)
+                            If tenderForm.ShowDialog() = DialogResult.OK Then
+                                ' Tender form handles:
+                                ' 1. Tender method selection
+                                ' 2. Receipt printing
+                                ' 3. Cash drawer opening (if cash)
+                                
+                                ' Reprint amended original invoice
+                                ReprintAmendedInvoice(conn)
+                                
+                                Me.DialogResult = DialogResult.OK
+                                Me.Close()
+                            Else
+                                ' User cancelled tender - rollback transaction
+                                transaction.Rollback()
+                                MessageBox.Show("Return cancelled - no refund processed.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                                Return
+                            End If
                         End Using
-                        
-                        ' Reprint amended original invoice
-                        ReprintAmendedInvoice(conn)
-
-                        ' TODO: Open cash drawer
-
-                        Me.DialogResult = DialogResult.OK
-                        Me.Close()
 
                     Catch ex As Exception
                         transaction.Rollback()

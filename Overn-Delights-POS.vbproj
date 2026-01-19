@@ -166,6 +166,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\ReturnReceiptForm.vb" />
+    <Compile Include="Forms\ReturnTenderForm.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\NoReceiptReturnForm.vb">
       <SubType>Form</SubType>
     </Compile>

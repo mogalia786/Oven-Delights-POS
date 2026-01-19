@@ -610,24 +610,24 @@ Public Class CakeOrderFormNew
         }
         lblInvoiceTotal = New Label With {
             .Text = "R 0.00",
-            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .ForeColor = ColorTranslator.FromHtml("#27AE60"),
-            .Location = New Point(xTotals + 160, 8),
+            .Location = New Point(xTotals + 160, 10),
             .Width = 150,
             .TextAlign = ContentAlignment.MiddleRight
         }
         pnlFooter.Controls.AddRange({lblInvoiceTotalLabel, lblInvoiceTotal})
         
         Dim lblDepositLabel As New Label With {
-            .Text = "Deposit paid:",
-            .Font = New Font("Segoe UI", 9, FontStyle.Bold),
+            .Text = "Deposit Paid:",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
             .Location = New Point(xTotals, 35),
             .Width = 150
         }
         txtDeposit = New TextBox With {
-            .Font = New Font("Segoe UI", 10),
-            .Location = New Point(xTotals + 160, 33),
-            .Width = 100,
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Location = New Point(xTotals + 160, 35),
+            .Width = 150,
             .Text = "0.00",
             .TextAlign = HorizontalAlignment.Right
         }
@@ -637,14 +637,14 @@ Public Class CakeOrderFormNew
         Dim lblBalanceLabel As New Label With {
             .Text = "Balance Owing:",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
-            .Location = New Point(xTotals, 58),
+            .Location = New Point(xTotals, 60),
             .Width = 150
         }
         lblBalance = New Label With {
             .Text = "R 0.00",
-            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .ForeColor = ColorTranslator.FromHtml("#E74C3C"),
-            .Location = New Point(xTotals + 160, 56),
+            .Location = New Point(xTotals + 160, 60),
             .Width = 150,
             .TextAlign = ContentAlignment.MiddleRight
         }

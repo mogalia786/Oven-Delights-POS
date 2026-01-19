@@ -264,6 +264,11 @@ Overn-Delights-POS
  Gets ProductID from barcode
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintEFTSlip">
+ <summary>
+ Print EFT payment slip to thermal printer
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptDual(System.String,System.DateTime,System.Decimal)">
  <summary>
  Print receipt to thermal slip printer ONLY (default printer)
