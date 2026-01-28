@@ -769,6 +769,41 @@ Public Class PaymentTenderForm
                         InsertInvoiceLineItems(conn, transaction, salesID, invoiceNumber)
                         PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
                         
+                        ' Post to GL (General Ledger) - wrapped in TRY-CATCH so sale completes even if GL fails
+                        Try
+                            Dim totalCost = CalculateTotalCost(conn, transaction)
+                            
+                            ' Determine EFT amount (if payment method is EFT, card amount is actually EFT)
+                            Dim eftAmount As Decimal = 0
+                            Dim actualCardAmount As Decimal = _cardAmount
+                            
+                            If _paymentMethod = "EFT" Then
+                                eftAmount = _cardAmount
+                                actualCardAmount = 0
+                            End If
+                            
+                            Using cmdGL As New SqlCommand("sp_POS_PostSaleToGL", conn, transaction)
+                                cmdGL.CommandType = CommandType.StoredProcedure
+                                cmdGL.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                                cmdGL.Parameters.AddWithValue("@SaleDate", DateTime.Today)
+                                cmdGL.Parameters.AddWithValue("@BranchID", _branchID)
+                                cmdGL.Parameters.AddWithValue("@CashierID", _cashierID)
+                                cmdGL.Parameters.AddWithValue("@Subtotal", _subtotal)
+                                cmdGL.Parameters.AddWithValue("@TaxAmount", _taxAmount)
+                                cmdGL.Parameters.AddWithValue("@TotalAmount", _totalAmount)
+                                cmdGL.Parameters.AddWithValue("@CashAmount", _cashAmount)
+                                cmdGL.Parameters.AddWithValue("@CardAmount", actualCardAmount)
+                                cmdGL.Parameters.AddWithValue("@EFTAmount", eftAmount)
+                                cmdGL.Parameters.AddWithValue("@TotalCost", totalCost)
+                                cmdGL.Parameters.AddWithValue("@CreatedBy", _cashierID)
+                                cmdGL.ExecuteNonQuery()
+                            End Using
+                        Catch glEx As Exception
+                            ' GL posting failed but sale succeeded - show error
+                            MessageBox.Show($"Sale completed but GL posting failed:{vbCrLf}{glEx.Message}", "GL Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                            Debug.WriteLine($"GL Posting Error: {glEx.Message}")
+                        End Try
+                        
                         ' If this is an order collection, update order status to Delivered
                         If _isOrderCollection AndAlso _orderID > 0 Then
                             Dim updateOrderSql = "UPDATE POS_CustomOrders SET OrderStatus = 'Delivered', CollectionDate = GETDATE() WHERE OrderID = @OrderID"

@@ -1449,34 +1449,29 @@ Public Class PaymentTenderForm
     
     Private Sub CreateJournalEntries(conn As SqlConnection, transaction As SqlTransaction, invoiceNumber As String)
         Try
-            ' Check if GeneralJournal table exists
-            Dim checkTable = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'GeneralJournal'"
-            Using cmdCheck As New SqlCommand(checkTable, conn, transaction)
-                Dim tableExists = CInt(cmdCheck.ExecuteScalar()) > 0
-                If Not tableExists Then
-                    ' GeneralJournal table doesn't exist, skip journal entries
-                    Return
-                End If
-            End Using
-            
-            Dim cashAccountID = GetAccountID(conn, transaction, "Cash")
-            Dim bankAccountID = GetAccountID(conn, transaction, "Bank")
-            Dim salesAccountID = GetAccountID(conn, transaction, "Sales")
-            Dim vatAccountID = GetAccountID(conn, transaction, "VAT")
-            Dim cosAccountID = GetAccountID(conn, transaction, "Cost of Sales")
-            Dim inventoryAccountID = GetAccountID(conn, transaction, "Inventory")
-            
-            If _cashAmount > 0 Then InsertJournalEntry(conn, transaction, invoiceNumber, cashAccountID, "Cash", _cashAmount, 0, "Sale - Cash")
-            If _cardAmount > 0 Then InsertJournalEntry(conn, transaction, invoiceNumber, bankAccountID, "Bank", _cardAmount, 0, "Sale - Card")
-            InsertJournalEntry(conn, transaction, invoiceNumber, salesAccountID, "Sales", 0, _subtotal, "Sale")
-            InsertJournalEntry(conn, transaction, invoiceNumber, vatAccountID, "VAT", 0, _taxAmount, "VAT")
-            
+            ' Calculate total cost of items sold
             Dim totalCost = CalculateTotalCost(conn, transaction)
-            InsertJournalEntry(conn, transaction, invoiceNumber, cosAccountID, "Cost of Sales", totalCost, 0, "COGS")
-            InsertJournalEntry(conn, transaction, invoiceNumber, inventoryAccountID, "Inventory", 0, totalCost, "Inventory")
+            
+            ' Call the new GL posting stored procedure
+            Using cmd As New SqlCommand("sp_POS_PostSaleToGL", conn, transaction)
+                cmd.CommandType = CommandType.StoredProcedure
+                cmd.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
+                cmd.Parameters.AddWithValue("@SaleDate", DateTime.Today)
+                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                cmd.Parameters.AddWithValue("@CashierID", _cashierID)
+                cmd.Parameters.AddWithValue("@Subtotal", _subtotal)
+                cmd.Parameters.AddWithValue("@TaxAmount", _taxAmount)
+                cmd.Parameters.AddWithValue("@TotalAmount", _totalAmount)
+                cmd.Parameters.AddWithValue("@CashAmount", _cashAmount)
+                cmd.Parameters.AddWithValue("@CardAmount", _cardAmount)
+                cmd.Parameters.AddWithValue("@TotalCost", totalCost)
+                cmd.Parameters.AddWithValue("@CreatedBy", $"Cashier_{_cashierID}")
+                
+                cmd.ExecuteNonQuery()
+            End Using
         Catch ex As Exception
-            ' If journal entries fail, continue anyway (sale is more important)
-            ' Log error but don't throw
+            ' Log error but don't throw - sale is more important than GL posting
+            System.Diagnostics.Debug.WriteLine($"GL Posting Error: {ex.Message}")
         End Try
     End Sub
     
