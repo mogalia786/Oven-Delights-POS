@@ -50,6 +50,39 @@ Public Class DayEndService
     End Function
     
     ''' <summary>
+    ''' Check if till is locked by ERP finalize (LockedByFinalize = 1 for today)
+    ''' </summary>
+    Public Function IsTillLocked(tillPointID As Integer) As Boolean
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                
+                Dim sql = "
+                    SELECT LockedByFinalize 
+                    FROM TillDayEnd 
+                    WHERE TillPointID = @TillPointID 
+                    AND BusinessDate = @Today"
+                
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@TillPointID", tillPointID)
+                    cmd.Parameters.AddWithValue("@Today", DateTime.Today)
+                    
+                    Dim result = cmd.ExecuteScalar()
+                    If result IsNot Nothing AndAlso Not IsDBNull(result) Then
+                        ' If LockedByFinalize = 1, till is locked
+                        Return CBool(result) = True
+                    End If
+                End Using
+            End Using
+            
+            Return False
+            
+        Catch ex As Exception
+            Throw New Exception("Failed to check till lock status: " & ex.Message, ex)
+        End Try
+    End Function
+    
+    ''' <summary>
     ''' Check if current till has already completed day-end for today
     ''' </summary>
     Public Function IsTodayDayEndComplete(tillPointID As Integer) As Boolean

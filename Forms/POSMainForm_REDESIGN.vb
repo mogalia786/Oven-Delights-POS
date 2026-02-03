@@ -212,10 +212,10 @@ Public Class POSMainForm_REDESIGN
         AddHandler btnCashUp.Click, AddressOf PerformCashUp
 
         Dim btnLogout As New Button With {
-            .Text = "🚪 EXIT",
+            .Text = "🚪 LOGOUT",
             .Font = New Font("Segoe UI", 10, FontStyle.Bold),
             .Size = New Size(110, 40),
-            .BackColor = _red,
+            .BackColor = Color.FromArgb(220, 53, 69),
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand,
@@ -223,7 +223,7 @@ Public Class POSMainForm_REDESIGN
         }
         btnLogout.Location = New Point(pnlTop.Width - 130, 15)
         btnLogout.FlatAppearance.BorderSize = 0
-        AddHandler btnLogout.Click, Sub() Me.Close()
+        AddHandler btnLogout.Click, AddressOf PerformLogout
 
         Dim lblCashier As New Label With {
             .Text = $"👤 {_cashierName} | Till: {GetTillNumber()}",
@@ -2719,6 +2719,27 @@ Public Class POSMainForm_REDESIGN
         End If
     End Sub
 
+    Private Sub PerformLogout(sender As Object, e As EventArgs)
+        Try
+            ' Confirm logout
+            Dim result = MessageBox.Show("Are you sure you want to logout?", "Confirm Logout", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+            
+            If result = DialogResult.Yes Then
+                ' Hide this form
+                Me.Hide()
+                
+                ' Show login form
+                Dim loginForm As New LoginForm()
+                loginForm.ShowDialog()
+                
+                ' Close this form after login form is closed
+                Me.Close()
+            End If
+        Catch ex As Exception
+            MessageBox.Show($"Error during logout: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
         _messageTimer?.Stop()
         _messageTimer?.Dispose()
@@ -3325,22 +3346,20 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.White
         }
 
-        ' Day End button (replaces Print)
-        Dim btnDayEnd As New Button With {
-            .Text = "📊 DAY END",
+        ' Print Cash-Up Report button
+        Dim btnPrint As New Button With {
+            .Text = "🖨️ PRINT REPORT",
             .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .Size = New Size(150, 50),
             .Location = New Point(30, 15),
-            .BackColor = _orange,
+            .BackColor = _green,
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat,
             .Cursor = Cursors.Hand
         }
-        btnDayEnd.FlatAppearance.BorderSize = 0
-        AddHandler btnDayEnd.Click, Sub()
-                                        cashUpForm.Close()
-                                        ' Call the day end function directly
-                                        PerformDayEnd(totalCashInTill)
+        btnPrint.FlatAppearance.BorderSize = 0
+        AddHandler btnPrint.Click, Sub()
+                                        PrintCashUpReport(totalCashInTill, cashFloat, totalCash, totalOrderCash, totalCard, totalOrderCard, total, transactions, totalReturns, totalReturnAmount, firstSale, lastSale, cakeOrderTransactions, cakeOrderDeposits, cakeOrderCollections, generalOrderTransactions, generalOrderDeposits, generalOrderCollections)
                                     End Sub
 
         ' Close button
@@ -3371,20 +3390,20 @@ Public Class POSMainForm_REDESIGN
         btnLogout.FlatAppearance.BorderSize = 0
         AddHandler btnLogout.Click, Sub()
                                         cashUpForm.Close()
-                                        Me.DialogResult = DialogResult.OK
-                                        Me.Close()
+                                        PerformLogout(Nothing, Nothing)
                                     End Sub
 
-        pnlButtons.Controls.AddRange({btnDayEnd, btnClose, btnLogout})
+        pnlButtons.Controls.AddRange({btnPrint, btnClose, btnLogout})
 
         cashUpForm.Controls.AddRange({pnlHeader, pnlContent, pnlButtons})
         cashUpForm.ShowDialog()
     End Sub
 
-    Private Sub PrintCashUpReport(transactions As Integer, subtotal As Decimal, tax As Decimal, total As Decimal,
-                                   totalCash As Decimal, totalCard As Decimal, totalReturns As Integer,
-                                   totalReturnAmount As Decimal, firstSale As DateTime, lastSale As DateTime,
-                                   cashFloat As Decimal, totalOrderCash As Decimal, totalOrderCard As Decimal, totalCashInTill As Decimal)
+    Private Sub PrintCashUpReport(totalCashInTill As Decimal, cashFloat As Decimal, totalCash As Decimal, totalOrderCash As Decimal,
+                                   totalCard As Decimal, totalOrderCard As Decimal, total As Decimal, transactions As Integer,
+                                   totalReturns As Integer, totalReturnAmount As Decimal, firstSale As DateTime, lastSale As DateTime,
+                                   cakeOrderTransactions As Integer, cakeOrderDeposits As Decimal, cakeOrderCollections As Decimal,
+                                   generalOrderTransactions As Integer, generalOrderDeposits As Decimal, generalOrderCollections As Decimal)
         Try
             ' Build receipt text for 80mm thermal printer (42 characters wide)
             Dim receipt As New System.Text.StringBuilder()
@@ -3405,6 +3424,11 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine()
             receipt.AppendLine($"Total Transactions:          {transactions,10}")
             receipt.AppendLine()
+            
+            ' Calculate subtotal and tax from total
+            Dim subtotal As Decimal = total / 1.15D
+            Dim tax As Decimal = total - subtotal
+            
             receipt.AppendLine($"Subtotal:              R{subtotal,14:N2}")
             receipt.AppendLine($"VAT (15%):             R{tax,14:N2}")
             receipt.AppendLine()
@@ -3419,7 +3443,6 @@ Public Class POSMainForm_REDESIGN
             receipt.AppendLine("----------------------------------------")
             receipt.AppendLine($"TOTAL SALES:           R{total,14:N2}")
             receipt.AppendLine("========================================")
-            receipt.AppendLine()
             receipt.AppendLine("PAYMENT BREAKDOWN")
             receipt.AppendLine("========================================")
             receipt.AppendLine()
@@ -3432,6 +3455,30 @@ Public Class POSMainForm_REDESIGN
                 receipt.AppendLine($"Card (Orders):         R{totalOrderCard,14:N2}")
             End If
             receipt.AppendLine()
+
+            ' Order Details Section
+            If cakeOrderTransactions > 0 Or generalOrderTransactions > 0 Then
+                receipt.AppendLine("========================================")
+                receipt.AppendLine("ORDER DETAILS")
+                receipt.AppendLine("========================================")
+                receipt.AppendLine()
+                
+                If cakeOrderTransactions > 0 Then
+                    receipt.AppendLine("CAKE ORDERS:")
+                    receipt.AppendLine($"  Transactions:               {cakeOrderTransactions,10}")
+                    receipt.AppendLine($"  Deposits:          R{cakeOrderDeposits,14:N2}")
+                    receipt.AppendLine($"  Collections:       R{cakeOrderCollections,14:N2}")
+                    receipt.AppendLine()
+                End If
+                
+                If generalOrderTransactions > 0 Then
+                    receipt.AppendLine("GENERAL ORDERS:")
+                    receipt.AppendLine($"  Transactions:               {generalOrderTransactions,10}")
+                    receipt.AppendLine($"  Deposits:          R{generalOrderDeposits,14:N2}")
+                    receipt.AppendLine($"  Collections:       R{generalOrderCollections,14:N2}")
+                    receipt.AppendLine()
+                End If
+            End If
             receipt.AppendLine("========================================")
             receipt.AppendLine("CASH FLOAT")
             receipt.AppendLine("========================================")

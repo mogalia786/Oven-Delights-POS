@@ -657,13 +657,51 @@ Public Class PaymentTenderForm
     Private Sub ProcessCardTransaction(amount As Decimal)
         Me.Controls.Clear()
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
-        Dim formHeight = Math.Min(550, CInt(screenHeight * 0.7))
+        Dim formHeight = Math.Min(600, CInt(screenHeight * 0.75))
         Me.Size = New Size(600, formHeight)
         Me.StartPosition = FormStartPosition.CenterScreen
         
         Dim pnlMain As New Panel With {.Dock = DockStyle.Fill, .BackColor = _darkBlue}
         
-        Dim lblIcon As New Label With {.Text = "💳", .Font = New Font("Segoe UI", 100), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(280, 30)}
+        ' Testing Mode Selection Panel
+        Dim pnlTestMode As New Panel With {
+            .Location = New Point(20, 10),
+            .Size = New Size(560, 60),
+            .BackColor = ColorTranslator.FromHtml("#34495E"),
+            .BorderStyle = BorderStyle.FixedSingle
+        }
+        
+        Dim lblTestMode As New Label With {
+            .Text = "Terminal Mode:",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .ForeColor = Color.White,
+            .AutoSize = True,
+            .Location = New Point(10, 8)
+        }
+        
+        Dim rdoUnattended As New RadioButton With {
+            .Text = "Unattended (Terminal 10 - Virtual Auto-Approved)",
+            .Font = New Font("Segoe UI", 9),
+            .ForeColor = Color.White,
+            .AutoSize = True,
+            .Location = New Point(10, 30),
+            .Checked = True,
+            .Name = "rdoUnattended"
+        }
+        
+        Dim rdoAttended As New RadioButton With {
+            .Text = "Attended (Terminal 7 - Real PED Card Swipe)",
+            .Font = New Font("Segoe UI", 9),
+            .ForeColor = ColorTranslator.FromHtml("#F39C12"),
+            .AutoSize = True,
+            .Location = New Point(300, 30),
+            .Name = "rdoAttended"
+        }
+        
+        pnlTestMode.Controls.AddRange({lblTestMode, rdoUnattended, rdoAttended})
+        pnlMain.Controls.Add(pnlTestMode)
+        
+        Dim lblIcon As New Label With {.Text = "💳", .Font = New Font("Segoe UI", 100), .ForeColor = Color.White, .AutoSize = True, .Location = New Point(280, 80)}
         
         ' Show appropriate label based on payment type
         Dim amountLabel = If(_paymentMethod = "SPLIT", "Balance Outstanding:", "Amount Due:")
@@ -672,17 +710,17 @@ Public Class PaymentTenderForm
             .Font = New Font("Segoe UI", 18, FontStyle.Bold),
             .ForeColor = Color.White,
             .AutoSize = True,
-            .Location = New Point(230, 150)
+            .Location = New Point(230, 200)
         }
         
-        Dim lblAmount As New Label With {.Text = amount.ToString("C2"), .Font = New Font("Segoe UI", 48, FontStyle.Bold), .ForeColor = ColorTranslator.FromHtml("#F39C12"), .AutoSize = True, .Location = New Point(240, 190)}
+        Dim lblAmount As New Label With {.Text = amount.ToString("C2"), .Font = New Font("Segoe UI", 48, FontStyle.Bold), .ForeColor = ColorTranslator.FromHtml("#F39C12"), .AutoSize = True, .Location = New Point(240, 240)}
         
         Dim lblInstruction As New Label With {
             .Text = "INSERT OR TAP CARD",
             .Font = New Font("Segoe UI", 28, FontStyle.Bold),
             .ForeColor = Color.White,
             .AutoSize = True,
-            .Location = New Point(150, 280)
+            .Location = New Point(150, 330)
         }
         
         Dim lblWaiting As New Label With {
@@ -690,7 +728,7 @@ Public Class PaymentTenderForm
             .Font = New Font("Segoe UI", 16),
             .ForeColor = ColorTranslator.FromHtml("#BDC3C7"),
             .AutoSize = True,
-            .Location = New Point(220, 340)
+            .Location = New Point(220, 390)
         }
         
         pnlMain.Controls.AddRange({lblIcon, lblAmountLabel, lblAmount, lblInstruction, lblWaiting})
@@ -702,7 +740,7 @@ Public Class PaymentTenderForm
                 .Font = New Font("Segoe UI", 16, FontStyle.Bold),
                 .ForeColor = _green,
                 .AutoSize = True,
-                .Location = New Point(220, 390)
+                .Location = New Point(220, 440)
             }
             pnlMain.Controls.Add(lblCashTendered)
             
@@ -711,7 +749,7 @@ Public Class PaymentTenderForm
                 .Font = New Font("Segoe UI", 12),
                 .ForeColor = ColorTranslator.FromHtml("#E67E22"),
                 .AutoSize = True,
-                .Location = New Point(180, 430)
+                .Location = New Point(180, 480)
             }
             pnlMain.Controls.Add(lblWarning)
         End If
@@ -721,11 +759,35 @@ Public Class PaymentTenderForm
         Me.Refresh()
         Me.Invalidate()
         
+        ' FNB Paypoint Terminal Integration
+        ' UNATTENDED MODE (Virtual Terminal - Terminal 10):
+        '   - Client ID: MP7BQIe0TMxgxzhpGghkNF303zhmYnjA
+        '   - Client Secret: Tf3ac4dLR9DGmBfwipmjy6tjUmLv6tma
+        '   - Site ID: UT02
+        '   - Terminal ID: 10 (Virtual - Auto-approved)
+        '   - Endpoint: https://test.figment.co.za:49410/api
+        '   - Use for testing without FNB agent present
+        '
+        ' ATTENDED MODE (Real PED Terminal - Terminal 7):
+        '   - Same credentials as above
+        '   - Same Site ID: UT02
+        '   - Terminal ID: 7 (Real PED - Requires actual card swipe)
+        '   - Endpoint: https://test.figment.co.za:49410/api
+        '   - Requires FNB agent to swipe actual card at physical terminal 7
+        '   - Schedule via Teams call at 2 PM with FNB agent
+        
         ' Simulate PayPoint - show processing then success
         Dim timer As New Timer With {.Interval = 3000}
         AddHandler timer.Tick, Sub()
             timer.Stop()
-            ' TODO: Replace with actual PayPoint integration
+            ' Get selected mode
+            Dim isAttendedMode = CType(pnlTestMode.Controls("rdoAttended"), RadioButton).Checked
+            ' TODO: Replace with actual PayPoint integration using selected mode
+            ' If isAttendedMode Then
+            '     ' Connect to real terminal - requires FNB agent present
+            ' Else
+            '     ' Connect to virtual terminal POS 10 - auto-approved
+            ' End If
             ShowCardProcessing(amount)
         End Sub
         timer.Start()

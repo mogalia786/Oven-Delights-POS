@@ -229,6 +229,22 @@ Public Class LoginForm
                                         Return
                                     End If
                                     
+                                    ' CHECK IF TILLS ARE LOCKED BY ERP FINALIZE
+                                    Try
+                                        Dim dayEndService As New DayEndService()
+                                        If dayEndService.IsTillLocked(Me.TillPointID) Then
+                                            MessageBox.Show("🔒 ALL TILLS LOCKED 🔒" & vbCrLf & vbCrLf &
+                                                          "Day-end has been finalized by Finance." & vbCrLf & vbCrLf &
+                                                          "Contact Administrator to reset day-end in ERP:" & vbCrLf &
+                                                          "Administration > Reset Day End",
+                                                          "Tills Locked", MessageBoxButtons.OK, MessageBoxIcon.Stop)
+                                            Return
+                                        End If
+                                    Catch ex As Exception
+                                        MessageBox.Show($"Till lock check failed: {ex.Message}" & vbCrLf & "Please contact support.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                                        Return
+                                    End Try
+                                    
                                     ' DAY END CONTROL: Check if previous day is complete for all tills
                                     Try
                                         Dim dayEndService As New DayEndService()

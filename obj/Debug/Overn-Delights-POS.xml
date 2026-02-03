@@ -78,6 +78,11 @@ Overn-Delights-POS
  Returns True if all complete, False if any incomplete
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.DayEndService.IsTillLocked(System.Int32)">
+ <summary>
+ Check if till is locked by ERP finalize (LockedByFinalize = 1 for today)
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.DayEndService.IsTodayDayEndComplete(System.Int32)">
  <summary>
  Check if current till has already completed day-end for today
