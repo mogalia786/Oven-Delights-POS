@@ -698,7 +698,7 @@ Public Class NoReceiptReturnForm
                                     
                                     ' Get ProductID from ItemCode by looking up in Demo_Retail_Product
                                     Dim productID As Integer = 0
-                                    Dim sqlGetProdID = "SELECT TOP 1 ProductID FROM Demo_Retail_Product WHERE (SKU = @ItemCode OR Barcode = @ItemCode) AND BranchID = @BranchID"
+                                    Dim sqlGetProdID = "SELECT TOP 1 ProductID FROM Demo_Retail_Product WHERE (SKU = @ItemCode OR Barcode = @ItemCode) AND BranchID = @BranchID AND IsActive = 1"
                                     Using cmdGetID As New SqlCommand(sqlGetProdID, conn, transaction)
                                         cmdGetID.Parameters.AddWithValue("@ItemCode", itemCode)
                                         cmdGetID.Parameters.AddWithValue("@BranchID", _branchID)
