@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oven Delights POS - Touch Screen</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        /* Main Product Panel - Takes up most of the screen */
+        .main-panel {
+            flex: 1;
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow-y: auto;
+        }
+
+        .breadcrumb {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0f4ff;
+            border-radius: 10px;
+        }
+
+        .breadcrumb span {
+            cursor: pointer;
+        }
+
+        .breadcrumb span:hover {
+            text-decoration: underline;
+        }
+
+        /* Grid for Categories/Subcategories/Products */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 10px;
+        }
+
+        .grid-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .grid-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .grid-item:active {
+            transform: translateY(-2px);
+        }
+
+        .grid-item.product {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .grid-item.subcategory {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .product-price {
+            font-size: 18px;
+            margin-top: 10px;
+            opacity: 0.9;
+        }
+
+        /* Cart Panel - Right side */
+        .cart-panel {
+            width: 350px;
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cart-header {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .cart-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .cart-total {
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            background: #f0f4ff;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .btn-checkout {
+            padding: 25px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-checkout:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn-checkout:active {
+            transform: translateY(-1px);
+        }
+
+        /* Quantity Dialog Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 30px;
+            padding: 50px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+            text-align: center;
+        }
+
+        .modal-title {
+            font-size: 36px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+
+        .quantity-input {
+            width: 100%;
+            padding: 30px;
+            font-size: 48px;
+            text-align: center;
+            border: 3px solid #667eea;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+
+        .quantity-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .btn-number {
+            padding: 40px;
+            font-size: 36px;
+            font-weight: bold;
+            background: #f0f4ff;
+            border: 3px solid #667eea;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-number:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-number:active {
+            transform: scale(0.95);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 20px;
+        }
+
+        .btn-modal {
+            flex: 1;
+            padding: 35px;
+            font-size: 32px;
+            font-weight: bold;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-yes {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-no {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+        }
+
+        .btn-modal:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        .btn-modal:active {
+            transform: translateY(-1px);
+        }
+
+        /* Back Button */
+        .btn-back {
+            display: inline-block;
+            padding: 15px 30px;
+            background: #6c757d;
+            color: white;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 20px;
+            border: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-back:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Main Product Panel -->
+        <div class="main-panel">
+            <button class="btn-back" id="btnBack" style="display: none;">← Back</button>
+            <div class="breadcrumb" id="breadcrumb">Categories</div>
+            <div class="grid-container" id="gridContainer">
+                <!-- Content will be dynamically loaded here -->
+            </div>
+        </div>
+
+        <!-- Cart Panel -->
+        <div class="cart-panel">
+            <div class="cart-header">🛒 Cart</div>
+            <div class="cart-items" id="cartItems">
+                <p style="text-align: center; color: #999; padding: 40px;">Cart is empty</p>
+            </div>
+            <div class="cart-total">
+                Total: R <span id="cartTotal">0.00</span>
+            </div>
+            <button class="btn-checkout">CHECKOUT</button>
+        </div>
+    </div>
+
+    <!-- Quantity Modal -->
+    <div class="modal" id="quantityModal">
+        <div class="modal-content">
+            <div class="modal-title" id="modalTitle">Enter Quantity</div>
+            <input type="text" class="quantity-input" id="quantityInput" value="1" readonly>
+            <div class="quantity-buttons">
+                <button class="btn-number" onclick="addNumber('1')">1</button>
+                <button class="btn-number" onclick="addNumber('2')">2</button>
+                <button class="btn-number" onclick="addNumber('3')">3</button>
+                <button class="btn-number" onclick="addNumber('4')">4</button>
+                <button class="btn-number" onclick="addNumber('5')">5</button>
+                <button class="btn-number" onclick="addNumber('6')">6</button>
+                <button class="btn-number" onclick="addNumber('7')">7</button>
+                <button class="btn-number" onclick="addNumber('8')">8</button>
+                <button class="btn-number" onclick="addNumber('9')">9</button>
+                <button class="btn-number" onclick="clearQuantity()">C</button>
+                <button class="btn-number" onclick="addNumber('0')">0</button>
+                <button class="btn-number" onclick="backspace()">⌫</button>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-modal btn-no" onclick="closeModal()">NO</button>
+                <button class="btn-modal btn-yes" onclick="confirmQuantity()">YES</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock Data
+        const categories = [
+            { id: 1, name: 'Cakes' },
+            { id: 2, name: 'Pastries' },
+            { id: 3, name: 'Breads' },
+            { id: 4, name: 'Beverages' },
+            { id: 5, name: 'Desserts' },
+            { id: 6, name: 'Savory' }
+        ];
+
+        const subcategories = {
+            1: [
+                { id: 11, name: 'Birthday Cakes' },
+                { id: 12, name: 'Wedding Cakes' },
+                { id: 13, name: 'Cupcakes' },
+                { id: 14, name: 'Cheesecakes' }
+            ],
+            2: [
+                { id: 21, name: 'Croissants' },
+                { id: 22, name: 'Danish' },
+                { id: 23, name: 'Tarts' },
+                { id: 24, name: 'Pies' }
+            ],
+            3: [
+                { id: 31, name: 'White Bread' },
+                { id: 32, name: 'Whole Wheat' },
+                { id: 33, name: 'Sourdough' },
+                { id: 34, name: 'Rolls' }
+            ],
+            4: [
+                { id: 41, name: 'Coffee' },
+                { id: 42, name: 'Tea' },
+                { id: 43, name: 'Smoothies' },
+                { id: 44, name: 'Soft Drinks' }
+            ],
+            5: [
+                { id: 51, name: 'Ice Cream' },
+                { id: 52, name: 'Puddings' },
+                { id: 53, name: 'Cookies' },
+                { id: 54, name: 'Brownies' }
+            ],
+            6: [
+                { id: 61, name: 'Sandwiches' },
+                { id: 62, name: 'Quiches' },
+                { id: 63, name: 'Sausage Rolls' },
+                { id: 64, name: 'Pizza' }
+            ]
+        };
+
+        const products = {
+            11: [
+                { id: 111, name: 'Chocolate Birthday Cake', price: 250.00 },
+                { id: 112, name: 'Vanilla Birthday Cake', price: 220.00 },
+                { id: 113, name: 'Red Velvet Cake', price: 280.00 },
+                { id: 114, name: 'Funfetti Cake', price: 240.00 }
+            ],
+            12: [
+                { id: 121, name: '3-Tier Wedding Cake', price: 1500.00 },
+                { id: 122, name: '5-Tier Wedding Cake', price: 2500.00 },
+                { id: 123, name: 'Cupcake Tower', price: 800.00 }
+            ],
+            21: [
+                { id: 211, name: 'Plain Croissant', price: 25.00 },
+                { id: 212, name: 'Chocolate Croissant', price: 30.00 },
+                { id: 213, name: 'Almond Croissant', price: 35.00 }
+            ],
+            31: [
+                { id: 311, name: 'White Loaf', price: 18.00 },
+                { id: 312, name: 'White Rolls (6 pack)', price: 22.00 }
+            ],
+            41: [
+                { id: 411, name: 'Cappuccino', price: 32.00 },
+                { id: 412, name: 'Latte', price: 35.00 },
+                { id: 413, name: 'Espresso', price: 25.00 },
+                { id: 414, name: 'Americano', price: 28.00 }
+            ]
+        };
+
+        // State
+        let currentView = 'categories';
+        let currentCategory = null;
+        let currentSubcategory = null;
+        let selectedProduct = null;
+        let cart = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            showCategories();
+        });
+
+        function showCategories() {
+            currentView = 'categories';
+            currentCategory = null;
+            currentSubcategory = null;
+            document.getElementById('breadcrumb').textContent = 'Categories';
+            document.getElementById('btnBack').style.display = 'none';
+            
+            const grid = document.getElementById('gridContainer');
+            grid.innerHTML = '';
+            
+            categories.forEach(cat => {
+                const item = document.createElement('div');
+                item.className = 'grid-item';
+                item.textContent = cat.name;
+                item.onclick = () => showSubcategories(cat);
+                grid.appendChild(item);
+            });
+        }
+
+        function showSubcategories(category) {
+            currentView = 'subcategories';
+            currentCategory = category;
+            document.getElementById('breadcrumb').innerHTML = `<span onclick="showCategories()">Categories</span> > ${category.name}`;
+            document.getElementById('btnBack').style.display = 'inline-block';
+            document.getElementById('btnBack').onclick = showCategories;
+            
+            const grid = document.getElementById('gridContainer');
+            grid.innerHTML = '';
+            
+            const subs = subcategories[category.id] || [];
+            subs.forEach(sub => {
+                const item = document.createElement('div');
+                item.className = 'grid-item subcategory';
+                item.textContent = sub.name;
+                item.onclick = () => showProducts(sub);
+                grid.appendChild(item);
+            });
+        }
+
+        function showProducts(subcategory) {
+            currentView = 'products';
+            currentSubcategory = subcategory;
+            document.getElementById('breadcrumb').innerHTML = `<span onclick="showCategories()">Categories</span> > <span onclick="showSubcategories(currentCategory)">${currentCategory.name}</span> > ${subcategory.name}`;
+            document.getElementById('btnBack').onclick = () => showSubcategories(currentCategory);
+            
+            const grid = document.getElementById('gridContainer');
+            grid.innerHTML = '';
+            
+            const prods = products[subcategory.id] || [];
+            if (prods.length === 0) {
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; font-size: 24px; color: #999; padding: 50px;">No products available</p>';
+                return;
+            }
+            
+            prods.forEach(prod => {
+                const item = document.createElement('div');
+                item.className = 'grid-item product';
+                item.innerHTML = `
+                    ${prod.name}
+                    <div class="product-price">R ${prod.price.toFixed(2)}</div>
+                `;
+                item.onclick = () => openQuantityModal(prod);
+                grid.appendChild(item);
+            });
+        }
+
+        function openQuantityModal(product) {
+            selectedProduct = product;
+            document.getElementById('modalTitle').textContent = product.name;
+            document.getElementById('quantityInput').value = '1';
+            document.getElementById('quantityModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('quantityModal').classList.remove('active');
+            selectedProduct = null;
+        }
+
+        function addNumber(num) {
+            const input = document.getElementById('quantityInput');
+            if (input.value === '0' || input.value === '1') {
+                input.value = num;
+            } else {
+                input.value += num;
+            }
+        }
+
+        function clearQuantity() {
+            document.getElementById('quantityInput').value = '1';
+        }
+
+        function backspace() {
+            const input = document.getElementById('quantityInput');
+            if (input.value.length > 1) {
+                input.value = input.value.slice(0, -1);
+            } else {
+                input.value = '1';
+            }
+        }
+
+        function confirmQuantity() {
+            const quantity = parseInt(document.getElementById('quantityInput').value);
+            if (quantity > 0 && selectedProduct) {
+                addToCart(selectedProduct, quantity);
+                closeModal();
+            }
+        }
+
+        function addToCart(product, quantity) {
+            const existingItem = cart.find(item => item.product.id === product.id);
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cart.push({ product, quantity });
+            }
+            updateCart();
+        }
+
+        function updateCart() {
+            const cartItems = document.getElementById('cartItems');
+            const cartTotal = document.getElementById('cartTotal');
+            
+            if (cart.length === 0) {
+                cartItems.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">Cart is empty</p>';
+                cartTotal.textContent = '0.00';
+                return;
+            }
+            
+            let total = 0;
+            cartItems.innerHTML = '';
+            
+            cart.forEach((item, index) => {
+                const itemTotal = item.product.price * item.quantity;
+                total += itemTotal;
+                
+                const div = document.createElement('div');
+                div.className = 'cart-item';
+                div.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px;">${item.product.name}</div>
+                    <div style="display: flex; justify-content: space-between; color: #666;">
+                        <span>${item.quantity} x R${item.product.price.toFixed(2)}</span>
+                        <span style="font-weight: bold; color: #667eea;">R${itemTotal.toFixed(2)}</span>
+                    </div>
+                `;
+                cartItems.appendChild(div);
+            });
+            
+            cartTotal.textContent = total.toFixed(2);
+        }
+    </script>
+</body>
+</html>

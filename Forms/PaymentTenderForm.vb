@@ -25,9 +25,6 @@ Public Class PaymentTenderForm
     Private _orderNumber As String = ""
     Private _orderColour As String = ""
     Private _orderPicture As String = ""
-    Private _cardMaskedPan As String = ""
-    Private _cardType As String = ""
-    Private _cardApprovalCode As String = ""
     
     ' Public properties to expose payment details
     Public ReadOnly Property PaymentMethod As String
@@ -51,24 +48,6 @@ Public Class PaymentTenderForm
     Public ReadOnly Property ChangeAmount As Decimal
         Get
             Return _changeAmount
-        End Get
-    End Property
-    
-    Public ReadOnly Property CardMaskedPan As String
-        Get
-            Return _cardMaskedPan
-        End Get
-    End Property
-    
-    Public ReadOnly Property CardType As String
-        Get
-            Return _cardType
-        End Get
-    End Property
-    
-    Public ReadOnly Property CardApprovalCode As String
-        Get
-            Return _cardApprovalCode
         End Get
     End Property
     
@@ -877,11 +856,6 @@ Public Class PaymentTenderForm
     End Sub
     
     Private Sub ShowCardSuccess(amount As Decimal)
-        ' Populate card details (simulated for now - will be from FNB response when integrated)
-        _cardMaskedPan = "528497xxxxxx5593"
-        _cardType = "MASTERCARD"
-        _cardApprovalCode = DateTime.Now.ToString("HHmmss")
-        
         Me.Controls.Clear()
         Dim screenHeight = Screen.PrimaryScreen.WorkingArea.Height
         Dim formHeight = Math.Min(600, CInt(screenHeight * 0.75))
@@ -1048,41 +1022,6 @@ Public Class PaymentTenderForm
                             ' For other payment methods, post to journals/ledgers immediately
                             PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
                         End If
-                        
-                        ' Post to GL (General Ledger) - wrapped in TRY-CATCH so sale completes even if GL fails
-                        Try
-                            Dim totalCost = CalculateTotalCost(conn, transaction)
-                            
-                            ' Determine EFT amount (if payment method is EFT, card amount is actually EFT)
-                            Dim eftAmount As Decimal = 0
-                            Dim actualCardAmount As Decimal = _cardAmount
-                            
-                            If _paymentMethod = "EFT" Then
-                                eftAmount = _cardAmount
-                                actualCardAmount = 0
-                            End If
-                            
-                            Using cmdGL As New SqlCommand("sp_POS_PostSaleToGL", conn, transaction)
-                                cmdGL.CommandType = CommandType.StoredProcedure
-                                cmdGL.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
-                                cmdGL.Parameters.AddWithValue("@SaleDate", DateTime.Today)
-                                cmdGL.Parameters.AddWithValue("@BranchID", _branchID)
-                                cmdGL.Parameters.AddWithValue("@CashierID", _cashierID)
-                                cmdGL.Parameters.AddWithValue("@Subtotal", _subtotal)
-                                cmdGL.Parameters.AddWithValue("@TaxAmount", _taxAmount)
-                                cmdGL.Parameters.AddWithValue("@TotalAmount", _totalAmount)
-                                cmdGL.Parameters.AddWithValue("@CashAmount", _cashAmount)
-                                cmdGL.Parameters.AddWithValue("@CardAmount", actualCardAmount)
-                                cmdGL.Parameters.AddWithValue("@EFTAmount", eftAmount)
-                                cmdGL.Parameters.AddWithValue("@TotalCost", totalCost)
-                                cmdGL.Parameters.AddWithValue("@CreatedBy", _cashierID)
-                                cmdGL.ExecuteNonQuery()
-                            End Using
-                        Catch glEx As Exception
-                            ' GL posting failed but sale succeeded - show error
-                            MessageBox.Show($"Sale completed but GL posting failed:{vbCrLf}{glEx.Message}", "GL Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                            Debug.WriteLine($"GL Posting Error: {glEx.Message}")
-                        End Try
                         
                         ' If this is an order collection, update order status to Delivered
                         If _isOrderCollection AndAlso _orderID > 0 Then
@@ -1862,7 +1801,7 @@ Public Class PaymentTenderForm
     ''' Print receipt to thermal slip printer ONLY (default printer)
     ''' </summary>
     Private Sub PrintReceiptDual(invoiceNumber As String, saleDateTime As DateTime, changeAmount As Decimal)
-        ' Print to thermal slip printer - dual copies with card details
+        ' Print to thermal slip printer only
         Dim dualPrinter As New DualReceiptPrinter(_connectionString, _branchID)
         Dim receiptData As New Dictionary(Of String, Object) From {
             {"InvoiceNumber", invoiceNumber},
@@ -1876,15 +1815,12 @@ Public Class PaymentTenderForm
             {"CardAmount", _cardAmount},
             {"Subtotal", _subtotal},
             {"TaxAmount", _taxAmount},
-            {"TotalAmount", _totalAmount},
-            {"CardMaskedPan", _cardMaskedPan},
-            {"CardType", _cardType},
-            {"CardApprovalCode", _cardApprovalCode}
+            {"TotalAmount", _totalAmount}
         }
         
-        ' Print to thermal printer using DualReceiptPrinter (which prints customer + merchant copies)
+        ' Print ONLY to thermal printer (not continuous)
         Try
-            dualPrinter.PrintDualReceipt(receiptData, _cartItems)
+            dualPrinter.PrintToThermalPrinter(receiptData, _cartItems)
         Catch ex As Exception
             MessageBox.Show($"Thermal printer error: {ex.Message}", "Printer Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End Try

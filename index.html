@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oven Delights POS - Futuristic Touch Screen</title>
+    <link rel="stylesheet" href="pos_styles.css">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="top-bar">
+        <div class="logo">🍰 OVEN DELIGHTS POS</div>
+        <div class="cashier-info">👤 John Doe | Till: 001</div>
+        <div class="top-buttons">
+            <button class="btn-cashup">💰 CASH UP</button>
+            <button class="btn-exit">🚪 EXIT</button>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Product Panel -->
+        <div class="product-panel">
+            <div class="breadcrumb" id="breadcrumb">Categories</div>
+            <div class="grid-container" id="gridContainer"></div>
+        </div>
+
+        <!-- Cart Panel -->
+        <div class="cart-panel">
+            <div class="cart-header">🛒 CART</div>
+            <div class="cart-items" id="cartItems">
+                <p class="empty-cart">Cart is empty</p>
+            </div>
+            <div class="cart-totals">
+                <div class="total-row">
+                    <span>Subtotal:</span>
+                    <span id="subtotal">R 0.00</span>
+                </div>
+                <div class="total-row">
+                    <span>VAT (15%):</span>
+                    <span id="vat">R 0.00</span>
+                </div>
+                <div class="total-row total-main">
+                    <span>TOTAL:</span>
+                    <span id="total">R 0.00</span>
+                </div>
+            </div>
+            <button class="btn-pay" onclick="openTenderScreen()">💳 PAY NOW (F12)</button>
+        </div>
+    </div>
+
+    <!-- F-Key Shortcuts Bar -->
+    <div class="fkey-bar">
+        <button class="fkey" onclick="alert('F1 - Help')"><span>F1</span>Help</button>
+        <button class="fkey" onclick="alert('F2 - Search')"><span>F2</span>Search</button>
+        <button class="fkey" onclick="alert('F3 - Customer')"><span>F3</span>Customer</button>
+        <button class="fkey" onclick="alert('F4 - Hold')"><span>F4</span>Hold</button>
+        <button class="fkey" onclick="alert('F5 - Recall')"><span>F5</span>Recall</button>
+        <button class="fkey" onclick="alert('F6 - Void')"><span>F6</span>Void</button>
+        <button class="fkey" onclick="alert('F7 - Discount')"><span>F7</span>Discount</button>
+        <button class="fkey" onclick="alert('F8 - Remove')"><span>F8</span>Remove</button>
+        <button class="fkey" onclick="alert('F9 - Return')"><span>F9</span>Return</button>
+        <button class="fkey" onclick="alert('F10 - Cake Order')"><span>F10</span>Cake</button>
+        <button class="fkey" onclick="alert('F11 - Order')"><span>F11</span>Order</button>
+        <button class="fkey" onclick="openTenderScreen()"><span>F12</span>Pay</button>
+    </div>
+
+    <!-- Quantity Modal -->
+    <div class="modal" id="quantityModal">
+        <div class="modal-content">
+            <div class="modal-title" id="modalTitle">Enter Quantity</div>
+            <input type="text" class="quantity-input" id="quantityInput" value="1" readonly>
+            <div class="quantity-buttons">
+                <button class="btn-number" onclick="addNumber('1')">1</button>
+                <button class="btn-number" onclick="addNumber('2')">2</button>
+                <button class="btn-number" onclick="addNumber('3')">3</button>
+                <button class="btn-number" onclick="addNumber('4')">4</button>
+                <button class="btn-number" onclick="addNumber('5')">5</button>
+                <button class="btn-number" onclick="addNumber('6')">6</button>
+                <button class="btn-number" onclick="addNumber('7')">7</button>
+                <button class="btn-number" onclick="addNumber('8')">8</button>
+                <button class="btn-number" onclick="addNumber('9')">9</button>
+                <button class="btn-number" onclick="clearQuantity()">C</button>
+                <button class="btn-number" onclick="addNumber('0')">0</button>
+                <button class="btn-number" onclick="backspace()">⌫</button>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-modal btn-no" onclick="closeModal()">NO</button>
+                <button class="btn-modal btn-yes" onclick="confirmQuantity()">YES</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tender Screen Modal -->
+    <div class="modal" id="tenderModal">
+        <div class="tender-content" id="tenderContent"></div>
+    </div>
+
+    <script src="pos_script.js"></script>
+</body>
+</html>

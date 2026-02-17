@@ -1,0 +1,360 @@
+﻿<?xml version="1.0"?>
+<doc>
+<assembly>
+<name>
+Overn-Delights-POS
+</name>
+</assembly>
+<members>
+<member name="T:Overn_Delights_POS.My.Resources.Resources">
+<summary>
+  A strongly-typed resource class, for looking up localized strings, etc.
+</summary>
+</member>
+<member name="P:Overn_Delights_POS.My.Resources.Resources.ResourceManager">
+<summary>
+  Returns the cached ResourceManager instance used by this class.
+</summary>
+</member>
+<member name="P:Overn_Delights_POS.My.Resources.Resources.Culture">
+<summary>
+  Overrides the current thread's CurrentUICulture property for all
+  resource lookups using this strongly typed resource class.
+</summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeConverter.ToBarcode(System.String)">
+ <summary>
+ Convert invoice/order number to 13-digit barcode
+ Format: [DocType:1][Branch:2][Sequence:10]
+ Example: "O-OD200-000033" -> "2200000000033"
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeConverter.FromBarcode(System.String)">
+ <summary>
+ Convert 13-digit barcode back to invoice/order number
+ Example: "2200000000033" -> "O-OD200-000033"
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeConverter.AddBranchCode(System.String,System.String)">
+ <summary>
+ Add a new branch code mapping
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.BarcodeGenerator.GenerateBarcode(System.String)">
+ <summary>
+ Generates Code 39 barcode using font (simple and reliable)
+ </summary>
+</member>
+<member name="T:Overn_Delights_POS.CategoryNavigationService">
+ <summary>
+ Service for Category -> SubCategory -> Product navigation
+ Maps to database views: v_POS_Categories, v_POS_SubCategories, v_POS_Products
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.LoadCategories">
+ <summary>
+ Load all categories with product counts
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.LoadSubCategories(System.Int32)">
+ <summary>
+ Load subcategories for a specific category
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.LoadProducts(System.Int32,System.Int32,System.Int32)">
+ <summary>
+ Load products for a specific subcategory and branch
+ Ordered by DisplayPriority (branch-specific) then alphabetically
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CategoryNavigationService.SearchProducts(System.String,System.Int32)">
+ <summary>
+ Search products across all categories by name or code
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.CheckPreviousDayComplete(System.Collections.Generic.List{System.String}@)">
+ <summary>
+ Check if all tills completed day-end for previous business day
+ Returns True if all complete, False if any incomplete
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.IsTillLocked(System.Int32)">
+ <summary>
+ Check if till is locked by ERP finalize (LockedByFinalize = 1 for today)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.IsTodayDayEndComplete(System.Int32)">
+ <summary>
+ Check if current till has already completed day-end for today
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.InitializeTodayDayEnd(System.Int32,System.Int32,System.String)">
+ <summary>
+ Create or update day-end record for today
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.CompleteDayEnd(System.Int32,System.Int32,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.Decimal,System.String)">
+ <summary>
+ Complete day-end for current till
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.SupervisorResetPreviousDay(System.Int32,System.String)">
+ <summary>
+ Supervisor override: Reset incomplete day-ends for previous day
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DayEndService.GetDayEndSummary(System.Int32,System.DateTime)">
+ <summary>
+ Get day-end summary for a specific date and till
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintDualReceipt(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Print receipt to both thermal slip printer (default) and continuous network printer
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToThermalPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Print to thermal slip printer (80mm Epson)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToContinuousPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Print to continuous network printer with XY field positioning from database
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.GetContinuousPrinterConfig">
+ <summary>
+ Get continuous printer configuration from database (uses existing PrinterConfig table)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.GetFieldPositions">
+ <summary>
+ Get field positions from database (uses existing ReceiptTemplateConfig table)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.GetFieldValue(System.String,System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+ <summary>
+ Get field value from receipt data
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintLineItems(System.Drawing.Graphics,System.Data.DataTable,System.Data.DataTable)">
+ <summary>
+ Print line items dynamically on continuous printer
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.MillimetersToHundredthsOfInch(System.Int32)">
+ <summary>
+ Convert millimeters to hundredths of an inch (for PrintDocument)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.GetProductsWithStock(System.Int32)">
+ <summary>
+ Get all products with prices and stock for a branch
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.SearchProducts(System.String,System.Int32)">
+ <summary>
+ Search products by SKU, barcode, or name
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.ProcessSale(Overn_Delights_POS.SaleTransaction)">
+ <summary>
+ Process a sale transaction
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSDataService.GetCategories">
+ <summary>
+ Get categories for filtering
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.LoadCache(System.Int32)">
+ <summary>
+ Load all products and categories into memory for the current branch
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetCategories">
+ <summary>
+ Get all categories
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetSubcategories(System.Int32)">
+ <summary>
+ Get subcategories for a category
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductsByCategory(System.Int32)">
+ <summary>
+ Get products by category
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductsBySubcategory(System.Int32)">
+ <summary>
+ Get products by subcategory
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductByBarcode(System.String)">
+ <summary>
+ Search products by barcode
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetProductBySKU(System.String)">
+ <summary>
+ Search products by SKU
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.SearchProducts(System.String)">
+ <summary>
+ Search products by name
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.GetAllProducts">
+ <summary>
+ Get all products
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.UpdateProductStock(System.Int32,System.Decimal)">
+ <summary>
+ Update stock quantity for a product (after sale)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.RefreshCache">
+ <summary>
+ Refresh cache from database
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ProductCacheService.ClearCache">
+ <summary>
+ Clear cache
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.AnimateFadeIn(System.Windows.Forms.Control)">
+ <summary>
+ Smooth fade-in animation for product cards
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintOrderReceiptToThermalPrinter(System.String,System.String,System.String,System.String,System.DateTime,System.TimeSpan,System.String,System.String,System.Decimal,System.Decimal,System.String,System.String,System.String)">
+ <summary>
+ Print order receipt to thermal printer (80mm)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PrintCollectionReceiptToThermalPrinter(System.String,System.String,System.Decimal,System.Decimal,System.Decimal,System.String,System.Decimal,System.Decimal,System.Decimal)">
+ <summary>
+ Print order collection receipt to thermal printer (80mm)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.PerformDayEnd(System.Decimal)">
+ <summary>
+ Public method to perform day-end from cash-up dialog
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.SetItemPriority">
+ <summary>
+ Opens priority management dialog for current subcategory
+ Requires supervisor authentication
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.CreateBoxItems">
+ <summary>
+ Opens box items dialog to create a box with multiple items
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.LoadBoxItems(System.String)">
+ <summary>
+ Loads all items from a box barcode into the cart
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.GetProductIDFromBarcode(System.String)">
+ <summary>
+ Gets ProductID from barcode
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintEFTSlip">
+ <summary>
+ Print EFT payment slip to thermal printer
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptDual(System.String,System.DateTime,System.Decimal)">
+ <summary>
+ Print receipt to thermal slip printer ONLY (default printer)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.PaymentTenderForm.PrintReceiptToDefaultPrinter_OLD(System.String,System.DateTime,System.Decimal)">
+ <summary>
+ LEGACY: Print receipt to default printer (Epson thermal slip printer - 80mm)
+ This method is kept for reference but replaced by PrintReceiptDual
+ </summary>
+</member>
+<member name="T:Overn_Delights_POS.UserDefinedOrderData">
+ <summary>
+ Data structure to hold User Defined Order header information
+ </summary>
+</member>
+<member name="T:Overn_Delights_POS.ResponsiveHelper">
+ <summary>
+ Universal responsive scaling helper for all forms and dialogs
+ Ensures consistent touch-friendly sizing across all screen sizes
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.Initialize">
+ <summary>
+ Initialize screen scaling - call this once at app startup
+ </summary>
+</member>
+<member name="P:Overn_Delights_POS.ResponsiveHelper.ScaleFactor">
+ <summary>
+ Get current scale factor
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleSize(System.Int32)">
+ <summary>
+ Scale a size value (width or height in pixels)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleFont(System.Single)">
+ <summary>
+ Scale a font size
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleSize(System.Drawing.Size)">
+ <summary>
+ Scale a Size structure
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScalePoint(System.Drawing.Point)">
+ <summary>
+ Scale a Point structure
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.EnsureTouchTarget(System.Drawing.Size)">
+ <summary>
+ Ensure minimum touch target size (40x40 pixels)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.CreateScaledFont(System.String,System.Single,System.Drawing.FontStyle)">
+ <summary>
+ Create a scaled Font
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleForm(System.Windows.Forms.Form,System.Int32,System.Int32)">
+ <summary>
+ Scale a form/dialog to fit screen
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.CreateScaledButton(System.String,System.Int32,System.Int32,System.Int32,System.Int32,System.Drawing.Color,System.Single)">
+ <summary>
+ Create a scaled button with touch-friendly size
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.ResponsiveHelper.ScaleSpacing(System.Int32)">
+ <summary>
+ Get scaled spacing value
+ </summary>
+</member>
+<member name="P:Overn_Delights_POS.ResponsiveHelper.ScreenWidth">
+ <summary>
+ Get screen dimensions
+ </summary>
+</member>
+</members>
+</doc>
