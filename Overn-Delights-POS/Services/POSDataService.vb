@@ -42,7 +42,7 @@ Public Class POSDataService
                 AND (pr.BranchID IS NULL OR pr.BranchID = @BranchID)
                 AND pr.EffectiveFrom <= GETDATE()
                 AND (pr.EffectiveTo IS NULL OR pr.EffectiveTo >= GETDATE())
-            LEFT JOIN dbo.RetailStock s ON p.ProductID = s.ProductID 
+            LEFT JOIN {GetTableName("Retail_Stock")} s ON p.ProductID = s.ProductID 
                 AND s.BranchID = @BranchID
             WHERE p.IsActive = 1 
                 AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
@@ -67,25 +67,31 @@ Public Class POSDataService
     Public Function SearchProducts(searchTerm As String, branchId As Integer) As DataTable
         Dim dt As New DataTable()
         
-        Dim sql As String = $"
+        Dim sql As String = "
             SELECT TOP 50
                 p.ProductID,
-                p.SKU,
+                p.Code,
+                p.ProductCode,
                 p.Name AS ProductName,
-                p.Category,
+                p.Description,
+                p.SKU,
                 p.ProductID AS VariantID,
-                ISNULL(p.ExternalBarcode, p.SKU) AS Barcode,
-                ISNULL(pr.SellingPrice, 0) AS SellingPrice,
-                ISNULL(s.Quantity, 0) AS QtyOnHand
-            FROM {GetTableName("Retail_Product")} p
-            LEFT JOIN {GetTableName("Retail_Price")} pr ON p.ProductID = pr.ProductID 
-                AND (pr.BranchID IS NULL OR pr.BranchID = @BranchID)
-            LEFT JOIN dbo.RetailStock s ON p.ProductID = s.ProductID 
-                AND s.BranchID = @BranchID
-            WHERE p.IsActive = 1 
-                AND (p.BranchID = @BranchID OR p.BranchID IS NULL)
-                AND (p.ProductType IN ('External', 'Internal') OR p.ProductType IS NULL)
-                AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.ExternalBarcode, p.SKU) LIKE @Search)
+                ISNULL(p.Barcode, p.SKU) AS Barcode,
+                ISNULL(
+                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
+                     WHERE ProductID = p.ProductID AND BranchID = @BranchID 
+                     ORDER BY EffectiveFrom DESC),
+                    (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
+                     WHERE ProductID = p.ProductID AND BranchID IS NULL 
+                     ORDER BY EffectiveFrom DESC)
+                ) AS SellingPrice,
+                ISNULL(p.CurrentStock, 0) AS QtyOnHand
+            FROM Demo_Retail_Product p
+            WHERE p.BranchID = @BranchID
+                AND p.IsActive = 1 
+                AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+                AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
+                AND (p.SKU LIKE @Search OR p.Name LIKE @Search OR ISNULL(p.Barcode, p.SKU) LIKE @Search OR p.Code LIKE @Search OR p.ProductCode LIKE @Search)
             ORDER BY p.Name"
 
         Using conn As New SqlConnection(_connectionString)
@@ -151,9 +157,9 @@ Public Class POSDataService
                             cmd.ExecuteNonQuery()
                         End Using
 
-                        ' Update stock (using RetailStock with ProductID)
-                        Dim sqlStock As String = "
-                            UPDATE dbo.RetailStock
+                        ' Update stock (using Demo_Retail_Stock with ProductID)
+                        Dim sqlStock As String = $"
+                            UPDATE {GetTableName("Retail_Stock")}
                             SET Quantity = Quantity - @Quantity,
                                 LastUpdated = GETDATE()
                             WHERE ProductID = @ProductID AND BranchID = @BranchID"
@@ -165,20 +171,64 @@ Public Class POSDataService
                             cmd.ExecuteNonQuery()
                         End Using
 
-                        ' Log stock movement
+                        ' Get cost price for this item
+                        Dim costPrice As Decimal = 0
+                        Dim sqlGetCost As String = "SELECT TOP 1 ISNULL(CostPrice, 0) FROM Demo_Retail_Price WHERE ProductID = @ProductID AND BranchID = @BranchID ORDER BY EffectiveFrom DESC"
+                        Using cmdCost As New SqlCommand(sqlGetCost, conn, trans)
+                            cmdCost.Parameters.AddWithValue("@ProductID", item.VariantID)
+                            cmdCost.Parameters.AddWithValue("@BranchID", saleData.BranchID)
+                            Dim result = cmdCost.ExecuteScalar()
+                            If result IsNot Nothing Then costPrice = Convert.ToDecimal(result)
+                        End Using
+                        
+                        Dim totalCost As Decimal = costPrice * item.Quantity
+                        
+                        ' Log stock movement with cost
                         Dim sqlMovement As String = "
                             INSERT INTO dbo.StockMovements
-                            (MaterialID, BranchID, MovementType, Quantity, Reason, Reference, CreatedBy, CreatedDate)
-                            VALUES (@ProductID, @BranchID, 'Sale', @QtyDelta, 'POS Sale', @SaleNumber, @CashierID, GETDATE())"
+                            (MaterialID, BranchID, MovementType, MovementDate, QuantityIn, QuantityOut, BalanceAfter, 
+                             UnitCost, TotalValue, InventoryArea, ReferenceNumber, Notes, CreatedBy, CreatedDate)
+                            VALUES (@ProductID, @BranchID, 'Sales', GETDATE(), 0, @QtyOut, 
+                                    (SELECT ISNULL(QtyOnHand, 0) FROM Demo_Retail_Stock WHERE VariantID = @ProductID AND BranchID = @BranchID),
+                                    @UnitCost, @TotalCost, 'Retail', @SaleNumber, 'POS Sale', @CashierID, GETDATE())"
 
                         Using cmd As New SqlCommand(sqlMovement, conn, trans)
-                            cmd.Parameters.AddWithValue("@ProductID", item.VariantID) ' VariantID is actually ProductID now
+                            cmd.Parameters.AddWithValue("@ProductID", item.VariantID)
                             cmd.Parameters.AddWithValue("@BranchID", saleData.BranchID)
-                            cmd.Parameters.AddWithValue("@QtyDelta", -item.Quantity)
+                            cmd.Parameters.AddWithValue("@QtyOut", item.Quantity)
+                            cmd.Parameters.AddWithValue("@UnitCost", costPrice)
+                            cmd.Parameters.AddWithValue("@TotalCost", totalCost)
                             cmd.Parameters.AddWithValue("@SaleNumber", saleData.SaleNumber)
                             cmd.Parameters.AddWithValue("@CashierID", saleData.CashierID)
                             cmd.ExecuteNonQuery()
                         End Using
+                        
+                        ' Create Cost of Sales ledger entry (DR Cost of Sales, CR Inventory)
+                        If totalCost > 0 Then
+                            ' DR Cost of Sales
+                            Dim sqlCOGS As String = "INSERT INTO GeneralLedger (BranchID, AccountID, TransactionDate, Description, Debit, Credit, ReferenceType, ReferenceID, CreatedBy, CreatedDate) " &
+                                                   "VALUES (@BranchID, (SELECT AccountID FROM ChartOfAccounts WHERE AccountCode = '5000'), GETDATE(), @Description, @Amount, 0, 'Sale', @SaleID, @CashierID, GETDATE())"
+                            Using cmdCOGS As New SqlCommand(sqlCOGS, conn, trans)
+                                cmdCOGS.Parameters.AddWithValue("@BranchID", saleData.BranchID)
+                                cmdCOGS.Parameters.AddWithValue("@Description", $"Cost of Sales - {item.ProductName}")
+                                cmdCOGS.Parameters.AddWithValue("@Amount", totalCost)
+                                cmdCOGS.Parameters.AddWithValue("@SaleID", saleId)
+                                cmdCOGS.Parameters.AddWithValue("@CashierID", saleData.CashierID)
+                                cmdCOGS.ExecuteNonQuery()
+                            End Using
+                            
+                            ' CR Inventory
+                            Dim sqlInv As String = "INSERT INTO GeneralLedger (BranchID, AccountID, TransactionDate, Description, Debit, Credit, ReferenceType, ReferenceID, CreatedBy, CreatedDate) " &
+                                                  "VALUES (@BranchID, (SELECT AccountID FROM ChartOfAccounts WHERE AccountCode = '1200'), GETDATE(), @Description, 0, @Amount, 'Sale', @SaleID, @CashierID, GETDATE())"
+                            Using cmdInv As New SqlCommand(sqlInv, conn, trans)
+                                cmdInv.Parameters.AddWithValue("@BranchID", saleData.BranchID)
+                                cmdInv.Parameters.AddWithValue("@Description", $"Inventory Reduction - {item.ProductName}")
+                                cmdInv.Parameters.AddWithValue("@Amount", totalCost)
+                                cmdInv.Parameters.AddWithValue("@SaleID", saleId)
+                                cmdInv.Parameters.AddWithValue("@CashierID", saleData.CashierID)
+                                cmdInv.ExecuteNonQuery()
+                            End Using
+                        End If
                     Next
 
                     ' Insert payment

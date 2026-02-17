@@ -10,11 +10,13 @@ Public Class ReturnLineItemsForm
     Private _branchID As Integer
     Private _tillPointID As Integer
     Private _cashierID As Integer
+    Private _cashierName As String
     Private _supervisorID As Integer
     Private _connectionString As String
     Private _invoiceLines As New DataTable()
     Private _returnItems As New List(Of ReturnLineItem)
     Private _hasItems As Boolean = False
+    Private _orderType As String = "RegularSale"
 
     Private flpLineItems As FlowLayoutPanel
     Private txtCustomerName As TextBox
@@ -41,13 +43,29 @@ Public Class ReturnLineItemsForm
         Public Property RestockItem As Boolean
     End Class
 
-    Public Sub New(invoiceNumber As String, branchID As Integer, tillPointID As Integer, cashierID As Integer, supervisorID As Integer)
+    Public Sub New(invoiceNumber As String, branchID As Integer, tillPointID As Integer, cashierID As Integer, supervisorID As Integer, Optional orderType As String = "RegularSale")
         _invoiceNumber = invoiceNumber
         _branchID = branchID
         _tillPointID = tillPointID
         _cashierID = cashierID
         _supervisorID = supervisorID
+        _orderType = orderType
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
+        
+        ' Get cashier name
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT FullName FROM Users WHERE UserID = @UserID"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@UserID", cashierID)
+                    Dim result = cmd.ExecuteScalar()
+                    _cashierName = If(result IsNot Nothing, result.ToString(), "Cashier")
+                End Using
+            End Using
+        Catch ex As Exception
+            _cashierName = "Cashier"
+        End Try
 
         InitializeComponent()
         LoadInvoiceLines()
@@ -156,7 +174,7 @@ Public Class ReturnLineItemsForm
         }
 
         Dim lblPhone As New Label With {
-            .Text = "Phone Number:",
+            .Text = "Cell Number:",
             .Font = New Font("Segoe UI", 11),
             .Location = New Point(500, 395),
             .AutoSize = True
@@ -165,8 +183,10 @@ Public Class ReturnLineItemsForm
         txtPhone = New TextBox With {
             .Font = New Font("Segoe UI", 11),
             .Location = New Point(640, 392),
-            .Width = 200
+            .Width = 200,
+            .MaxLength = 10
         }
+        AddHandler txtPhone.Leave, AddressOf LookupCustomer
 
         Dim lblAddress As New Label With {
             .Text = "Address:",
@@ -248,22 +268,62 @@ Public Class ReturnLineItemsForm
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
 
-                ' Load from POS_InvoiceLines - this is the source of truth
-                Dim sql = "
-                    SELECT 
-                        ProductID,
-                        ItemCode,
-                        ProductName,
-                        Quantity,
-                        UnitPrice,
-                        LineTotal
-                    FROM POS_InvoiceLines
-                    WHERE InvoiceNumber = @InvoiceNumber
-                    AND Quantity > 0
-                    ORDER BY ProductName"
+                Dim sql As String = ""
+                
+                ' Load items based on order type
+                Select Case _orderType
+                    Case "RegularSale"
+                        ' Load from POS_InvoiceLines for regular sales
+                        sql = "
+                            SELECT 
+                                ProductID,
+                                ItemCode,
+                                ProductName,
+                                Quantity,
+                                UnitPrice,
+                                LineTotal
+                            FROM POS_InvoiceLines
+                            WHERE InvoiceNumber = @OrderNumber
+                            AND Quantity > 0
+                            ORDER BY ProductName"
+                    
+                    Case "CakeOrder"
+                        ' Load from POS_CustomOrderItems for cake orders
+                        sql = "
+                            SELECT 
+                                oi.ProductID,
+                                CAST(oi.ProductID AS NVARCHAR) AS ItemCode,
+                                oi.ProductName,
+                                oi.Quantity,
+                                oi.UnitPrice,
+                                oi.LineTotal
+                            FROM POS_CustomOrderItems oi
+                            INNER JOIN POS_CustomOrders o ON oi.OrderID = o.OrderID
+                            WHERE o.OrderNumber = @OrderNumber
+                            AND o.OrderStatus = 'Delivered'
+                            AND oi.Quantity > 0
+                            ORDER BY oi.ProductName"
+                    
+                    Case "UserDefinedOrder"
+                        ' Load from POS_UserDefinedOrderItems for user-defined orders
+                        sql = "
+                            SELECT 
+                                oi.ProductID,
+                                oi.ProductCode AS ItemCode,
+                                oi.ProductName,
+                                oi.Quantity,
+                                oi.UnitPrice,
+                                oi.LineTotal
+                            FROM POS_UserDefinedOrderItems oi
+                            INNER JOIN POS_UserDefinedOrders o ON oi.UserDefinedOrderID = o.UserDefinedOrderID
+                            WHERE o.OrderNumber = @OrderNumber
+                            AND o.Status = 'PickedUp'
+                            AND oi.Quantity > 0
+                            ORDER BY oi.ProductName"
+                End Select
 
                 Using cmd As New SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                    cmd.Parameters.AddWithValue("@OrderNumber", _invoiceNumber)
                     Using adapter As New SqlDataAdapter(cmd)
                         adapter.Fill(_invoiceLines)
                     End Using
@@ -279,7 +339,7 @@ Public Class ReturnLineItemsForm
             DisplayLineItems()
 
         Catch ex As Exception
-            MessageBox.Show($"Error loading invoice: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show($"Error loading order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             _hasItems = False
         End Try
     End Sub
@@ -344,7 +404,7 @@ Public Class ReturnLineItemsForm
                 .Font = New Font("Segoe UI", 9, FontStyle.Bold),
                 .Location = New Point(695, 20),
                 .Size = New Size(20, 20),
-                .Checked = True
+                .Checked = False
             }
 
             Dim btnMinus As New Button With {
@@ -520,28 +580,49 @@ Public Class ReturnLineItemsForm
                         transaction.Commit()
                         Debug.WriteLine($"TRANSACTION COMMITTED SUCCESSFULLY!")
 
-                        ' Convert return items to receipt format
-                        Dim receiptItems As New List(Of ReturnItem)
+                        ' Convert return items to DataTable for receipt
+                        Dim receiptItems As New DataTable()
+                        receiptItems.Columns.Add("ProductID", GetType(Integer))
+                        receiptItems.Columns.Add("ItemCode", GetType(String))
+                        receiptItems.Columns.Add("ProductName", GetType(String))
+                        receiptItems.Columns.Add("Quantity", GetType(Decimal))
+                        receiptItems.Columns.Add("UnitPrice", GetType(Decimal))
+                        receiptItems.Columns.Add("LineTotal", GetType(Decimal))
+                        
                         For Each item In _returnItems
-                            receiptItems.Add(New ReturnItem With {
-                                .ProductID = item.ProductID,
-                                .ItemCode = item.ItemCode,
-                                .ProductName = item.ProductName,
-                                .QtyReturned = item.ReturnQty,
-                                .UnitPrice = item.UnitPrice,
-                                .LineTotal = item.LineTotal
-                            })
+                            receiptItems.Rows.Add(
+                                item.ProductID,
+                                item.ItemCode,
+                                item.ProductName,
+                                item.ReturnQty,
+                                item.UnitPrice,
+                                item.LineTotal
+                            )
                         Next
 
-                        ' Show return receipt
-                        Using receiptForm As New ReturnReceiptForm(returnNumber, DateTime.Now, txtCustomerName.Text, _invoiceNumber, receiptItems, totalReturn, totalTax, txtReason.Text)
-                            receiptForm.ShowDialog()
+                        ' Save customer if new
+                        SaveCustomer(conn, transaction)
+
+                        ' Show tender selection screen (Cash/Card/EFT)
+                        Using tenderForm As New ReturnTenderForm(returnNumber, receiptItems, totalReturn, _branchID, _cashierName, txtCustomerName.Text, "", txtPhone.Text, txtReason.Text)
+                            If tenderForm.ShowDialog() = DialogResult.OK Then
+                                ' Tender form handles:
+                                ' 1. Tender method selection
+                                ' 2. Receipt printing
+                                ' 3. Cash drawer opening (if cash)
+                                
+                                ' Reprint amended original invoice
+                                ReprintAmendedInvoice(conn)
+                                
+                                Me.DialogResult = DialogResult.OK
+                                Me.Close()
+                            Else
+                                ' User cancelled tender - rollback transaction
+                                transaction.Rollback()
+                                MessageBox.Show("Return cancelled - no refund processed.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                                Return
+                            End If
                         End Using
-
-                        ' TODO: Open cash drawer
-
-                        Me.DialogResult = DialogResult.OK
-                        Me.Close()
 
                     Catch ex As Exception
                         transaction.Rollback()
@@ -632,11 +713,86 @@ Public Class ReturnLineItemsForm
         End Using
     End Function
 
+    Private Sub LookupCustomer(sender As Object, e As EventArgs)
+        Dim cellNumber = txtPhone.Text.Trim()
+        If String.IsNullOrWhiteSpace(cellNumber) OrElse cellNumber.Length < 10 Then Return
+
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT FirstName, Surname, Email FROM POS_Customers WHERE CellNumber = @CellNumber"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@CellNumber", cellNumber)
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            ' Customer found - populate fields
+                            txtCustomerName.Text = reader("FirstName").ToString()
+                            txtAddress.Text = If(IsDBNull(reader("Email")), "", reader("Email").ToString())
+                            
+                            ' Visual feedback
+                            txtCustomerName.BackColor = Color.LightGreen
+                            txtAddress.BackColor = Color.LightGreen
+                            Dim timer As New Timer With {.Interval = 500}
+                            AddHandler timer.Tick, Sub()
+                                txtCustomerName.BackColor = Color.White
+                                txtAddress.BackColor = Color.White
+                                timer.Stop()
+                                timer.Dispose()
+                            End Sub
+                            timer.Start()
+                        End If
+                    End Using
+                End Using
+            End Using
+        Catch ex As Exception
+            ' Silently fail - customer lookup is optional
+        End Try
+    End Sub
+
+    Private Sub SaveCustomer(conn As SqlConnection, transaction As SqlTransaction)
+        Dim cellNumber = txtPhone.Text.Trim()
+        If String.IsNullOrWhiteSpace(cellNumber) Then Return
+
+        Try
+            Dim sql = "IF NOT EXISTS (SELECT 1 FROM POS_Customers WHERE CellNumber = @CellNumber)
+                       INSERT INTO POS_Customers (FirstName, Surname, CellNumber, Email, CreatedDate)
+                       VALUES (@FirstName, @Surname, @CellNumber, @Email, GETDATE())
+                       ELSE
+                       UPDATE POS_Customers SET FirstName = @FirstName, Surname = @Surname, Email = @Email
+                       WHERE CellNumber = @CellNumber"
+            
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@FirstName", txtCustomerName.Text.Trim())
+                cmd.Parameters.AddWithValue("@Surname", "")
+                cmd.Parameters.AddWithValue("@CellNumber", cellNumber)
+                cmd.Parameters.AddWithValue("@Email", If(String.IsNullOrWhiteSpace(txtAddress.Text), DBNull.Value, CObj(txtAddress.Text.Trim())))
+                cmd.ExecuteNonQuery()
+            End Using
+        Catch ex As Exception
+            ' Non-critical - continue even if customer save fails
+        End Try
+    End Sub
+
     Private Sub InsertReturnLineItems(conn As SqlConnection, transaction As SqlTransaction, returnID As Integer)
         Debug.WriteLine($"=== InsertReturnLineItems: Processing {_returnItems.Count} items ===")
         
         For Each item In _returnItems
             Debug.WriteLine($"Processing return item: {item.ProductName}, ProductID={item.ProductID}, Qty={item.ReturnQty}")
+            
+            ' Look up VariantID from Demo_Retail_Variant table
+            Dim variantID As Integer = 0
+            Dim lookupSql = "SELECT TOP 1 VariantID FROM Demo_Retail_Variant WHERE ProductID = @ProductID AND IsActive = 1"
+            Using lookupCmd As New SqlCommand(lookupSql, conn, transaction)
+                lookupCmd.Parameters.AddWithValue("@ProductID", item.ProductID)
+                Dim result = lookupCmd.ExecuteScalar()
+                If result IsNot Nothing Then
+                    variantID = CInt(result)
+                    Debug.WriteLine($"Found VariantID={variantID} for ProductID={item.ProductID}")
+                Else
+                    Debug.WriteLine($"WARNING: No variant found for ProductID={item.ProductID}")
+                    Continue For ' Skip this item if no variant exists
+                End If
+            End Using
             
             ' Insert return line item
             Dim sql = "
@@ -645,7 +801,7 @@ Public Class ReturnLineItemsForm
 
             Using cmd As New SqlCommand(sql, conn, transaction)
                 cmd.Parameters.AddWithValue("@ReturnID", returnID)
-                cmd.Parameters.AddWithValue("@VariantID", item.ProductID)
+                cmd.Parameters.AddWithValue("@VariantID", variantID)
                 cmd.Parameters.AddWithValue("@ProductName", item.ProductName)
                 cmd.Parameters.AddWithValue("@Quantity", item.ReturnQty)
                 cmd.Parameters.AddWithValue("@UnitPrice", item.UnitPrice)
@@ -849,6 +1005,103 @@ Public Class ReturnLineItemsForm
             cmd.Parameters.AddWithValue("@BranchID", _branchID)
             cmd.ExecuteNonQuery()
         End Using
+    End Sub
+    
+    Private Sub ReprintAmendedInvoice(conn As SqlConnection)
+        Try
+            ' Get updated invoice details
+            Dim invoiceItems As New DataTable()
+            Dim sql = "
+                SELECT ProductID, ItemCode, ProductName, Quantity, UnitPrice, LineTotal
+                FROM POS_InvoiceLines
+                WHERE InvoiceNumber = @InvoiceNumber
+                ORDER BY ProductID"
+            
+            Using cmd As New SqlCommand(sql, conn)
+                cmd.Parameters.AddWithValue("@InvoiceNumber", _invoiceNumber)
+                Using adapter As New SqlDataAdapter(cmd)
+                    adapter.Fill(invoiceItems)
+                End Using
+            End Using
+            
+            If invoiceItems.Rows.Count = 0 Then
+                ' All items returned - don't reprint
+                Return
+            End If
+            
+            ' Calculate new totals
+            Dim newTotal As Decimal = 0
+            For Each row As DataRow In invoiceItems.Rows
+                newTotal += CDec(row("LineTotal"))
+            Next
+            
+            Dim newSubtotal = Math.Round(newTotal / 1.15D, 2)
+            Dim newVat = Math.Round(newTotal - newSubtotal, 2)
+            
+            ' Print amended invoice
+            Dim printDoc As New Printing.PrintDocument()
+            printDoc.DefaultPageSettings.PaperSize = New Printing.PaperSize("80mm", 315, 1200)
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim font As New Font("Courier New", 8)
+                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim leftMargin As Integer = 10
+                Dim yPos As Integer = 10
+                
+                ' Header
+                e.Graphics.DrawString("OVEN DELIGHTS", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("AMENDED INVOICE", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString($"Invoice: {_invoiceNumber}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"Customer: {txtCustomerName.Text}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString("** ITEMS AFTER RETURN **", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                For Each row As DataRow In invoiceItems.Rows
+                    Dim qty = CDec(row("Quantity"))
+                    Dim product = row("ProductName").ToString()
+                    Dim price = CDec(row("UnitPrice"))
+                    Dim total = CDec(row("LineTotal"))
+                    
+                    e.Graphics.DrawString($"{qty:0.00} x {product}", font, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    e.Graphics.DrawString($"    @ R{price:N2} = R{total:N2}", font, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                Next
+                
+                yPos += 5
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                e.Graphics.DrawString($"Subtotal (excl VAT):  R {newSubtotal:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"VAT (15%):            R {newVat:N2}", font, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                e.Graphics.DrawString($"TOTAL:                R {newTotal:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 20
+                
+                e.Graphics.DrawString("======================================", font, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                e.Graphics.DrawString("Thank you for your business", font, Brushes.Black, leftMargin, yPos)
+            End Sub
+            
+            ' Print directly without preview
+            printDoc.Print()
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error reprinting invoice: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
     End Sub
 
     ' NOTE: Ledger balances are calculated from Journals table, not stored in Ledgers table

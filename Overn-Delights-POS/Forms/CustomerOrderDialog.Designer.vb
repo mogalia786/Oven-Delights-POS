@@ -29,6 +29,12 @@ Partial Class CustomerOrderDialog
     Friend WithEvents grpOrderDetails As GroupBox
     Friend WithEvents txtSpecialInstructions As TextBox
     Friend WithEvents lblSpecialInstructions As Label
+    Friend WithEvents txtNotes As TextBox
+    Friend WithEvents lblNotes As Label
+    Friend WithEvents txtColour As TextBox
+    Friend WithEvents lblColour As Label
+    Friend WithEvents txtPicture As TextBox
+    Friend WithEvents lblPicture As Label
     Friend WithEvents txtCollectionDay As TextBox
     Friend WithEvents lblCollectionDay As Label
     Friend WithEvents dtpReadyTime As DateTimePicker
@@ -44,6 +50,7 @@ Partial Class CustomerOrderDialog
     Friend WithEvents lblTotal As Label
     Friend WithEvents lblTax As Label
     Friend WithEvents lblSubtotal As Label
+    Friend WithEvents btnAmendTotal As Button
     Friend WithEvents pnlBottom As Panel
     Friend WithEvents btnCancel As Button
     Friend WithEvents btnCreateOrder As Button
@@ -64,6 +71,12 @@ Partial Class CustomerOrderDialog
         Me.grpOrderDetails = New System.Windows.Forms.GroupBox()
         Me.txtSpecialInstructions = New System.Windows.Forms.TextBox()
         Me.lblSpecialInstructions = New System.Windows.Forms.Label()
+        Me.txtNotes = New System.Windows.Forms.TextBox()
+        Me.lblNotes = New System.Windows.Forms.Label()
+        Me.txtColour = New System.Windows.Forms.TextBox()
+        Me.lblColour = New System.Windows.Forms.Label()
+        Me.txtPicture = New System.Windows.Forms.TextBox()
+        Me.lblPicture = New System.Windows.Forms.Label()
         Me.txtCollectionDay = New System.Windows.Forms.TextBox()
         Me.lblCollectionDay = New System.Windows.Forms.Label()
         Me.dtpReadyTime = New System.Windows.Forms.DateTimePicker()
@@ -79,6 +92,7 @@ Partial Class CustomerOrderDialog
         Me.lblTotal = New System.Windows.Forms.Label()
         Me.lblTax = New System.Windows.Forms.Label()
         Me.lblSubtotal = New System.Windows.Forms.Label()
+        Me.btnAmendTotal = New System.Windows.Forms.Button()
         Me.pnlBottom = New System.Windows.Forms.Panel()
         Me.btnCancel = New System.Windows.Forms.Button()
         Me.btnCreateOrder = New System.Windows.Forms.Button()
@@ -206,6 +220,12 @@ Partial Class CustomerOrderDialog
         '
         Me.grpOrderDetails.Controls.Add(Me.txtSpecialInstructions)
         Me.grpOrderDetails.Controls.Add(Me.lblSpecialInstructions)
+        Me.grpOrderDetails.Controls.Add(Me.txtNotes)
+        Me.grpOrderDetails.Controls.Add(Me.lblNotes)
+        Me.grpOrderDetails.Controls.Add(Me.txtColour)
+        Me.grpOrderDetails.Controls.Add(Me.lblColour)
+        Me.grpOrderDetails.Controls.Add(Me.txtPicture)
+        Me.grpOrderDetails.Controls.Add(Me.lblPicture)
         Me.grpOrderDetails.Controls.Add(Me.txtCollectionDay)
         Me.grpOrderDetails.Controls.Add(Me.lblCollectionDay)
         Me.grpOrderDetails.Controls.Add(Me.dtpReadyTime)
@@ -246,7 +266,7 @@ Partial Class CustomerOrderDialog
         Me.txtSpecialInstructions.Location = New System.Drawing.Point(15, 90)
         Me.txtSpecialInstructions.Multiline = True
         Me.txtSpecialInstructions.Name = "txtSpecialInstructions"
-        Me.txtSpecialInstructions.Size = New System.Drawing.Size(640, 100)
+        Me.txtSpecialInstructions.Size = New System.Drawing.Size(640, 80)
         Me.txtSpecialInstructions.TabIndex = 6
         '
         'lblSpecialInstructions
@@ -258,6 +278,61 @@ Partial Class CustomerOrderDialog
         Me.lblSpecialInstructions.Size = New System.Drawing.Size(132, 19)
         Me.lblSpecialInstructions.TabIndex = 5
         Me.lblSpecialInstructions.Text = "Special Instructions:"
+        '
+        'txtNotes
+        '
+        Me.txtNotes.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtNotes.Location = New System.Drawing.Point(15, 200)
+        Me.txtNotes.Multiline = True
+        Me.txtNotes.Name = "txtNotes"
+        Me.txtNotes.Size = New System.Drawing.Size(640, 60)
+        Me.txtNotes.TabIndex = 8
+        '
+        'lblNotes
+        '
+        Me.lblNotes.AutoSize = True
+        Me.lblNotes.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblNotes.Location = New System.Drawing.Point(15, 178)
+        Me.lblNotes.Name = "lblNotes"
+        Me.lblNotes.Size = New System.Drawing.Size(47, 19)
+        Me.lblNotes.TabIndex = 7
+        Me.lblNotes.Text = "Notes:"
+        '
+        'txtColour
+        '
+        Me.txtColour.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtColour.Location = New System.Drawing.Point(80, 270)
+        Me.txtColour.Name = "txtColour"
+        Me.txtColour.Size = New System.Drawing.Size(250, 25)
+        Me.txtColour.TabIndex = 8
+        '
+        'lblColour
+        '
+        Me.lblColour.AutoSize = True
+        Me.lblColour.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblColour.Location = New System.Drawing.Point(15, 198)
+        Me.lblColour.Name = "lblColour"
+        Me.lblColour.Size = New System.Drawing.Size(55, 19)
+        Me.lblColour.TabIndex = 7
+        Me.lblColour.Text = "Colour:"
+        '
+        'txtPicture
+        '
+        Me.txtPicture.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.txtPicture.Location = New System.Drawing.Point(420, 195)
+        Me.txtPicture.Name = "txtPicture"
+        Me.txtPicture.Size = New System.Drawing.Size(235, 25)
+        Me.txtPicture.TabIndex = 10
+        '
+        'lblPicture
+        '
+        Me.lblPicture.AutoSize = True
+        Me.lblPicture.Font = New System.Drawing.Font("Segoe UI", 10.0!)
+        Me.lblPicture.Location = New System.Drawing.Point(355, 198)
+        Me.lblPicture.Name = "lblPicture"
+        Me.lblPicture.Size = New System.Drawing.Size(55, 19)
+        Me.lblPicture.TabIndex = 9
+        Me.lblPicture.Text = "Picture:"
         '
         'dtpReadyTime
         '
@@ -327,6 +402,7 @@ Partial Class CustomerOrderDialog
         Me.grpPayment.Controls.Add(Me.lblBalanceDue)
         Me.grpPayment.Controls.Add(Me.txtDepositAmount)
         Me.grpPayment.Controls.Add(Me.lblDepositAmount)
+        Me.grpPayment.Controls.Add(Me.btnAmendTotal)
         Me.grpPayment.Controls.Add(Me.lblTotal)
         Me.grpPayment.Controls.Add(Me.lblTax)
         Me.grpPayment.Controls.Add(Me.lblSubtotal)
@@ -379,6 +455,19 @@ Partial Class CustomerOrderDialog
         Me.lblTotal.Size = New System.Drawing.Size(123, 25)
         Me.lblTotal.TabIndex = 2
         Me.lblTotal.Text = "Total: R0.00"
+        '
+        'btnAmendTotal
+        '
+        Me.btnAmendTotal.BackColor = System.Drawing.Color.FromArgb(CType(CType(243, Byte), Integer), CType(CType(156, Byte), Integer), CType(CType(18, Byte), Integer))
+        Me.btnAmendTotal.FlatStyle = System.Windows.Forms.FlatStyle.Flat
+        Me.btnAmendTotal.Font = New System.Drawing.Font("Segoe UI", 11.0!, System.Drawing.FontStyle.Bold)
+        Me.btnAmendTotal.ForeColor = System.Drawing.Color.White
+        Me.btnAmendTotal.Location = New System.Drawing.Point(280, 75)
+        Me.btnAmendTotal.Name = "btnAmendTotal"
+        Me.btnAmendTotal.Size = New System.Drawing.Size(180, 35)
+        Me.btnAmendTotal.TabIndex = 6
+        Me.btnAmendTotal.Text = "🔢 AMEND TOTAL"
+        Me.btnAmendTotal.UseVisualStyleBackColor = False
         '
         'lblTax
         '
