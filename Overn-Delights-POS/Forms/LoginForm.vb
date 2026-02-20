@@ -17,6 +17,24 @@ Public Class LoginForm
         InitializeComponent()
         LoadColors()
         SetupUI()
+        CheckForUpdates()
+    End Sub
+
+    Private Async Sub CheckForUpdates()
+        Try
+            Await System.Threading.Tasks.Task.Delay(1000)
+            
+            Dim updateService As New AutoUpdateService()
+            Dim updateInfo = Await System.Threading.Tasks.Task.Run(Function() updateService.CheckForUpdates())
+            
+            If updateInfo.IsUpdateAvailable Then
+                Dim updateDialog As New UpdateDialog(updateInfo, updateService)
+                updateDialog.ShowDialog()
+            End If
+        Catch ex As Exception
+            ' Silently fail - don't interrupt login if update check fails
+            Debug.WriteLine($"Update check failed: {ex.Message}")
+        End Try
     End Sub
 
     Private Sub LoadColors()
@@ -73,9 +91,21 @@ Public Class LoginForm
             .ForeColor = Color.FromArgb(240, 240, 240),
             .TextAlign = ContentAlignment.TopCenter,
             .Dock = DockStyle.Bottom,
-            .Height = 40
+            .Height = 60
         }
         titlePanel.Controls.Add(lblSubtitle)
+        
+        ' Version label
+        Dim version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version
+        Dim lblVersion As New Label With {
+            .Text = $"Version {version.Major}.{version.Minor}.{version.Build}.{version.Revision}",
+            .Font = New Font("Segoe UI", 9),
+            .ForeColor = Color.FromArgb(220, 220, 220),
+            .TextAlign = ContentAlignment.BottomCenter,
+            .Dock = DockStyle.Bottom,
+            .Height = 20
+        }
+        titlePanel.Controls.Add(lblVersion)
 
         ' Username field
         Dim lblUsername As New Label With {

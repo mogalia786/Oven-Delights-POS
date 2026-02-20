@@ -126,6 +126,11 @@ Public Class POSMainForm_REDESIGN
             ' Force the scaling system to recalculate based on actual screen
             InitializeScreenScaling()
             HandleFormResize()
+            
+            ' Focus barcode scanner for immediate scanning
+            If txtBarcodeScanner IsNot Nothing Then
+                txtBarcodeScanner.Focus()
+            End If
         Catch ex As Exception
             MessageBox.Show($"Screen detection error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
@@ -1421,11 +1426,14 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub ProcessBarcodeScan(itemCode As String)
         Try
-            ' Check if this is a box barcode (format: BranchID900001, e.g., 6900001)
-            ' Box barcodes have '9' as second character and are 7+ digits
-            If itemCode.Length >= 7 AndAlso itemCode.Length <= 8 AndAlso IsNumeric(itemCode) AndAlso itemCode.Substring(1, 1) = "9" Then
-                LoadBoxItems(itemCode)
-                Return
+            ' Check if this is a box barcode (format: 6-digit numeric code, e.g., 600001)
+            ' Box barcodes are exactly 6 digits: BranchDigit (1) + Sequence (5)
+            If itemCode.Length = 6 AndAlso IsNumeric(itemCode) Then
+                ' Try to load as box barcode first
+                If LoadBoxItems(itemCode) Then
+                    Return
+                End If
+                ' If not found as box, continue to regular product search below
             End If
 
             ' Query Demo_Retail_Product and get VAT-inclusive price from Demo_Retail_Price
@@ -1751,6 +1759,11 @@ Public Class POSMainForm_REDESIGN
         ShowIdleScreen()
 
         UpdateStatusBar("New sale started - Touch screen to begin")
+        
+        ' Focus barcode scanner for immediate scanning
+        If txtBarcodeScanner IsNot Nothing Then
+            txtBarcodeScanner.Focus()
+        End If
     End Sub
 
     Private Sub HoldSale()
@@ -3851,6 +3864,11 @@ Public Class POSMainForm_REDESIGN
             ' Update breadcrumb
             lblBreadcrumb.Text = "Categories"
             lblBreadcrumb.ForeColor = _ironGold
+            
+            ' Focus barcode scanner for immediate scanning
+            If txtBarcodeScanner IsNot Nothing Then
+                txtBarcodeScanner.Focus()
+            End If
 
         Catch ex As Exception
             MessageBox.Show($"Error entering sale mode: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -6342,6 +6360,11 @@ Public Class POSMainForm_REDESIGN
 
         ' Show categories
         ShowCategories()
+        
+        ' Focus barcode scanner for immediate scanning
+        If txtBarcodeScanner IsNot Nothing Then
+            txtBarcodeScanner.Focus()
+        End If
     End Sub
 
     ' Helper methods for User Defined Orders
@@ -6589,8 +6612,9 @@ Public Class POSMainForm_REDESIGN
 
     ''' <summary>
     ''' Loads all items from a box barcode into the cart
+    ''' Returns True if box was found and loaded, False otherwise
     ''' </summary>
-    Private Sub LoadBoxItems(boxBarcode As String)
+    Private Function LoadBoxItems(boxBarcode As String) As Boolean
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
@@ -6642,16 +6666,9 @@ Public Class POSMainForm_REDESIGN
                                                                        txtBarcodeScanner.Focus()
                                                                    End Sub)
                                                      End Sub)
+                        Return True
                     Else
-                        txtBarcodeScanner.BackColor = _red
-                        MessageBox.Show($"Box not found: {boxBarcode}", "Box Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                        Task.Delay(200).ContinueWith(Sub()
-                                                         Me.Invoke(Sub()
-                                                                       txtBarcodeScanner.Clear()
-                                                                       txtBarcodeScanner.BackColor = Color.White
-                                                                       txtBarcodeScanner.Focus()
-                                                                   End Sub)
-                                                     End Sub)
+                        Return False
                     End If
                 End Using
             End Using
@@ -6660,8 +6677,9 @@ Public Class POSMainForm_REDESIGN
             MessageBox.Show($"Error loading box items: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             txtBarcodeScanner.Clear()
             txtBarcodeScanner.Focus()
+            Return False
         End Try
-    End Sub
+    End Function
 
     ''' <summary>
     ''' Gets ProductID from barcode
