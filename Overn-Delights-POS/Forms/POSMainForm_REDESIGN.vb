@@ -1369,11 +1369,12 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("F12", "📦 Collect", CType(Sub() OrderCollection(), Action)),
             Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
             Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
+            Tuple.Create("", "✏️ Edit Order", CType(Sub() EditCakeOrder(), Action)),
             Tuple.Create("", "📦 Box Items", CType(Sub() CreateBoxItems(), Action)),
             Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 16 ' 12 F-keys + 4 additional buttons
+        Dim visibleCount = 17 ' 12 F-keys + 5 additional buttons
         ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
         Dim leftMargin = 5
@@ -1503,6 +1504,7 @@ Public Class POSMainForm_REDESIGN
             Case Keys.F10 : VoidSale() : Return True
             Case Keys.F11 : CreateOrder() : Return True
             Case Keys.F12 : OrderCollection() : Return True
+            Case Keys.Shift Or Keys.F11 : EditCakeOrder() : Return True
         End Select
         Return MyBase.ProcessCmdKey(msg, keyData)
     End Function
@@ -6836,4 +6838,48 @@ Public Class POSMainForm_REDESIGN
         
         Return False
     End Function
+    
+    ''' <summary>
+    ''' Opens the Edit Cake Order workflow (Shift+F11)
+    ''' Requires Retail Manager authentication
+    ''' </summary>
+    Private Sub EditCakeOrder()
+        Try
+            ' Get branch details from database
+            Dim branchName As String = ""
+            Dim branchAddress As String = ""
+            Dim branchPhone As String = ""
+            
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT BranchName, Address, Phone FROM Branches WHERE BranchID = @BranchID"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            branchName = If(IsDBNull(reader("BranchName")), "", reader("BranchName").ToString())
+                            branchAddress = If(IsDBNull(reader("Address")), "", reader("Address").ToString())
+                            branchPhone = If(IsDBNull(reader("Phone")), "", reader("Phone").ToString())
+                        End If
+                    End Using
+                End Using
+            End Using
+            
+            ' Create and start edit workflow
+            Dim editService As New CakeOrderEditService(
+                _branchID, 
+                _tillPointID, 
+                _cashierID, 
+                _cashierName,
+                branchName, 
+                branchAddress, 
+                branchPhone
+            )
+            
+            editService.StartEditWorkflow()
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error starting edit workflow: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
 End Class

@@ -2,21 +2,21 @@
 ; Created with Inno Setup
 
 #define MyAppName "Oven Delights POS"
-#define MyAppVersion "1.0.0.5"
+#define MyAppVersion "1.0.0.13"
 #define MyAppPublisher "Oven Delights"
 #define MyAppURL "http://www.mogalia.co.za"
 #define MyAppExeName "Overn-Delights-POS.exe"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
-AppId={{A8B9C1D2-E3F4-5678-9ABC-DEF012345678}
+AppId={{A8B9C1D2-E3F4-5678-9ABC-DEF012345678}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\Oven Delights POS
+DefaultDirName={autopf32}\Oven Delights POS
 DefaultGroupName=Oven Delights POS
 AllowNoIcons=yes
 LicenseFile=
@@ -38,9 +38,12 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Main application files from Release folder
 Source: "C:\Development Apps\Cascades projects\Overn-Delights-POS\Overn-Delights-POS\bin\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; 3OF9 Font files - specify exact filenames
-Source: "E:\3of9_barcode\3OF9_NEW.TTF"; DestDir: "{fonts}"; Flags: onlyifdoesntexist uninsneveruninstall fontisnttruetype
+; 3OF9 Font file - Only FREE3OF9 (3OF9_NEW doesn't scan properly)
 Source: "E:\Free_3_of_9\FREE3OF9.TTF"; DestDir: "{fonts}"; Flags: onlyifdoesntexist uninsneveruninstall fontisnttruetype
+
+; SQL ODBC Drivers
+Source: "G:\msodbcsql (1).msi"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "G:\msodbcsql (2).msi"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -48,6 +51,10 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Install SQL ODBC Drivers
+Filename: "msiexec.exe"; Parameters: "/i ""{tmp}\msodbcsql (1).msi"" /qn /norestart IACCEPTMSODBCSQLLICENSETERMS=YES"; StatusMsg: "Installing SQL Server ODBC Driver (1/2)..."; Flags: waituntilterminated
+Filename: "msiexec.exe"; Parameters: "/i ""{tmp}\msodbcsql (2).msi"" /qn /norestart IACCEPTMSODBCSQLLICENSETERMS=YES"; StatusMsg: "Installing SQL Server ODBC Driver (2/2)..."; Flags: waituntilterminated
+; Launch application
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]

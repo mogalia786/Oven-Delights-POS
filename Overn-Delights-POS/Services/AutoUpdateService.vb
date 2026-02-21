@@ -58,9 +58,38 @@ Public Class AutoUpdateService
         End Try
     End Function
 
+    Private Function FindExecutableFolder(rootPath As String, exeName As String) As String
+        Try
+            ' Check if exe is in root
+            If File.Exists(Path.Combine(rootPath, exeName)) Then
+                Return rootPath
+            End If
+
+            ' Search subdirectories (max 2 levels deep)
+            Dim directories = Directory.GetDirectories(rootPath)
+            For Each dir As String In directories
+                If File.Exists(Path.Combine(dir, exeName)) Then
+                    Return dir
+                End If
+                
+                ' Check one level deeper
+                Dim subDirectories = Directory.GetDirectories(dir)
+                For Each subDir As String In subDirectories
+                    If File.Exists(Path.Combine(subDir, exeName)) Then
+                        Return subDir
+                    End If
+                Next
+            Next
+        Catch ex As Exception
+            Debug.WriteLine($"Error finding executable folder: {ex.Message}")
+        End Try
+        
+        Return Nothing
+    End Function
+
     Public Function DownloadUpdate(progressCallback As Action(Of Integer)) As String
         Try
-            Dim tempPath = Path.Combine(Path.GetTempPath(), "POS_Update.zip")
+            Dim tempPath = Path.Combine(Path.GetTempPath(), "od_package.zip")
             
             If File.Exists(tempPath) Then
                 File.Delete(tempPath)
@@ -97,29 +126,56 @@ Public Class AutoUpdateService
             ZipFile.ExtractToDirectory(zipPath, extractPath)
 
             ' Find the actual POS folder in the extracted content
-            Dim posFolder = extractPath
-            If Directory.Exists(Path.Combine(extractPath, "POS")) Then
-                posFolder = Path.Combine(extractPath, "POS")
+            ' Look for the folder containing Overn-Delights-POS.exe
+            Dim posFolder = FindExecutableFolder(extractPath, "Overn-Delights-POS.exe")
+            If String.IsNullOrEmpty(posFolder) Then
+                ' Fallback: check for common folder names
+                If Directory.Exists(Path.Combine(extractPath, "Release")) Then
+                    posFolder = Path.Combine(extractPath, "Release")
+                ElseIf Directory.Exists(Path.Combine(extractPath, "POS")) Then
+                    posFolder = Path.Combine(extractPath, "POS")
+                ElseIf Directory.Exists(Path.Combine(extractPath, "Overn-Delights-POS")) Then
+                    posFolder = Path.Combine(extractPath, "Overn-Delights-POS")
+                Else
+                    ' Use root if no subfolder found
+                    posFolder = extractPath
+                End If
             End If
 
-            ' Create batch file to perform update after app closes
-            Dim batchPath = Path.Combine(Path.GetTempPath(), "update_pos.bat")
-            Dim batchContent = $"@echo off
+            ' Create batch file for reliable update with UAC elevation
+            Dim batPath = Path.Combine(Path.GetTempPath(), "od_update.bat")
+            Dim logPath = Path.Combine(Path.GetTempPath(), "od_update.log")
+            
+            ' Escape paths for batch file
+            Dim batContent = $"@echo off
+echo Update started > ""{logPath}""
+timeout /t 3 /nobreak > nul
+taskkill /F /IM ""Overn-Delights-POS.exe"" > nul 2>&1
 timeout /t 2 /nobreak > nul
-echo Updating Overn Delights POS...
-xcopy /E /I /Y ""{posFolder}\*"" ""{appPath}\"" > nul
-if exist ""{zipPath}"" del ""{zipPath}""
-if exist ""{extractPath}"" rmdir /s /q ""{extractPath}""
+echo Process stopped >> ""{logPath}""
+robocopy ""{posFolder}"" ""{appPath}"" /E /IS /IT /R:3 /W:1 > nul
+if %errorlevel% leq 7 (
+    echo Files copied successfully >> ""{logPath}""
+) else (
+    echo Copy failed with error %errorlevel% >> ""{logPath}""
+)
+if exist ""{zipPath}"" del /F /Q ""{zipPath}"" > nul 2>&1
+if exist ""{extractPath}"" rmdir /S /Q ""{extractPath}"" > nul 2>&1
+timeout /t 1 /nobreak > nul
 start """" ""{Application.ExecutablePath}""
-del ""%~f0"""
+echo Update complete >> ""{logPath}""
+timeout /t 2 /nobreak > nul
+del ""%~f0"" > nul 2>&1
+"
 
-            File.WriteAllText(batchPath, batchContent)
+            File.WriteAllText(batPath, batContent)
 
-            ' Start the batch file and exit the application
+            ' Start batch file with elevation (triggers UAC)
             Process.Start(New ProcessStartInfo With {
-                .FileName = batchPath,
+                .FileName = batPath,
+                .Verb = "runas",
                 .WindowStyle = ProcessWindowStyle.Hidden,
-                .CreateNoWindow = True
+                .UseShellExecute = True
             })
 
             ' Force immediate exit to avoid ObjectDisposedException
