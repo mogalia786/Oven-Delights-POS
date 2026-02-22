@@ -33,6 +33,7 @@ Public Class POSMainForm_REDESIGN
     Private txtBarcodeScanner As TextBox
     Private btnRefresh As Button
     Private btnModifyQty As Button
+    Private btnPriceOverride As Button
     Private _onScreenKeyboard As OnScreenKeyboard
     
     ' Category Navigation State
@@ -90,6 +91,9 @@ Public Class POSMainForm_REDESIGN
     Private _scaleFactor As Single = 1.0F
     Private _baseWidth As Integer = 1920 ' Base design width
     Private _baseHeight As Integer = 1080 ' Base design height
+    
+    ' Price override tracking
+    Private _priceOverrides As New Dictionary(Of Integer, PriceOverride)
 
     Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer, tillPointID As Integer)
         MyBase.New()
@@ -396,6 +400,18 @@ Public Class POSMainForm_REDESIGN
         btnModifyQty.FlatAppearance.BorderSize = 0
         AddHandler btnModifyQty.Click, Sub() ShowCartQuantityEditor()
 
+        ' Price Override button
+        btnPriceOverride = New Button With {
+            .Text = "R PRICE",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .BackColor = Color.FromArgb(255, 193, 7),
+            .ForeColor = Color.Black,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnPriceOverride.FlatAppearance.BorderSize = 0
+        AddHandler btnPriceOverride.Click, Sub() OverridePriceForSelectedItem()
+
         ' Hidden barcode scanner input
         txtBarcodeScanner = New TextBox With {
             .Location = New Point(-100, -100),
@@ -403,7 +419,7 @@ Public Class POSMainForm_REDESIGN
         }
         AddHandler txtBarcodeScanner.KeyDown, AddressOf BarcodeScanner_KeyDown
 
-        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, txtBarcodeScanner})
+        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, btnPriceOverride, txtBarcodeScanner})
 
         flpProducts = New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -640,44 +656,160 @@ Public Class POSMainForm_REDESIGN
         _cartItems.Columns.Add("Qty", GetType(Decimal))
         _cartItems.Columns.Add("Price", GetType(Decimal))
         _cartItems.Columns.Add("Total", GetType(Decimal))
+        _cartItems.Columns.Add("PriceOverridden", GetType(Boolean))
 
-        dgvCart.AutoGenerateColumns = True
+        dgvCart.AutoGenerateColumns = False
         dgvCart.DataSource = _cartItems
 
-        ' Configure columns after binding
-        AddHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
+        ' Manually add columns with buttons
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "ProductID",
+            .DataPropertyName = "ProductID",
+            .Visible = False
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "ItemCode",
+            .DataPropertyName = "ItemCode",
+            .HeaderText = "Code",
+            .Width = 60,
+            .ReadOnly = True
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Product",
+            .DataPropertyName = "Product",
+            .HeaderText = "Item",
+            .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            .ReadOnly = True
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Qty",
+            .DataPropertyName = "Qty",
+            .HeaderText = "Qty",
+            .Width = 50,
+            .ReadOnly = True
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Price",
+            .DataPropertyName = "Price",
+            .HeaderText = "Price",
+            .Width = 75,
+            .ReadOnly = True,
+            .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C4"}
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Total",
+            .DataPropertyName = "Total",
+            .HeaderText = "Total",
+            .Width = 85,
+            .ReadOnly = True,
+            .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C2"}
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "PriceOverridden",
+            .DataPropertyName = "PriceOverridden",
+            .Visible = False
+        })
+
+        ' Handle button clicks and formatting
+        AddHandler dgvCart.CellContentClick, AddressOf dgvCart_CellContentClick
+        AddHandler dgvCart.CellFormatting, AddressOf dgvCart_CellFormatting
     End Sub
 
-    Private Sub ConfigureCartColumns(sender As Object, e As DataGridViewBindingCompleteEventArgs)
-        ' Only configure once
-        RemoveHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
-
-        If dgvCart.Columns.Count > 0 Then
-            If dgvCart.Columns.Contains("ProductID") Then dgvCart.Columns("ProductID").Visible = False
-            If dgvCart.Columns.Contains("ItemCode") Then
-                dgvCart.Columns("ItemCode").Width = 70
-                dgvCart.Columns("ItemCode").HeaderText = "Code"
-                dgvCart.Columns("ItemCode").ReadOnly = True
-            End If
-            If dgvCart.Columns.Contains("Product") Then
-                dgvCart.Columns("Product").HeaderText = "Item"
-                dgvCart.Columns("Product").ReadOnly = True
-            End If
-            If dgvCart.Columns.Contains("Qty") Then
-                dgvCart.Columns("Qty").Width = 50
-                dgvCart.Columns("Qty").ReadOnly = True
-            End If
-            If dgvCart.Columns.Contains("Price") Then
-                dgvCart.Columns("Price").DefaultCellStyle.Format = "C2"
-                dgvCart.Columns("Price").Width = 80
-                dgvCart.Columns("Price").ReadOnly = True
-            End If
-            If dgvCart.Columns.Contains("Total") Then
-                dgvCart.Columns("Total").DefaultCellStyle.Format = "C2"
-                dgvCart.Columns("Total").Width = 90
-                dgvCart.Columns("Total").ReadOnly = True
+    Private Sub dgvCart_CellContentClick(sender As Object, e As DataGridViewCellEventArgs)
+        ' No button columns in cart grid anymore
+    End Sub
+    
+    Private Sub dgvCart_CellFormatting(sender As Object, e As DataGridViewCellFormattingEventArgs)
+        If e.RowIndex < 0 Then Return
+        
+        ' Check if price was overridden
+        If dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value IsNot Nothing AndAlso
+           CBool(dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value) Then
+            
+            ' Apply gold background to price cells
+            If dgvCart.Columns(e.ColumnIndex).Name = "Price" OrElse
+               dgvCart.Columns(e.ColumnIndex).Name = "Total" Then
+                e.CellStyle.BackColor = Color.FromArgb(255, 248, 220)
+                e.CellStyle.Font = New Font(e.CellStyle.Font, FontStyle.Bold)
             End If
         End If
+    End Sub
+    
+    Private Sub OverridePriceForSelectedItem()
+        Try
+            ' Check if cart has items
+            If _cartItems.Rows.Count = 0 Then
+                MessageBox.Show("Cart is empty. Add items first.", "Empty Cart", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+            
+            ' Check if a cart item is selected
+            If dgvCart.SelectedRows.Count = 0 Then
+                MessageBox.Show("Please select a cart item first.", "No Item Selected", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+            
+            ' Get selected row
+            Dim selectedRow = dgvCart.SelectedRows(0)
+            Dim rowIndex = selectedRow.Index
+            
+            OverridePrice(rowIndex)
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub OverridePrice(rowIndex As Integer)
+        Try
+            ' Get current row data from DataTable
+            Dim dataRow = _cartItems.Rows(rowIndex)
+            Dim productName = dataRow("Product").ToString()
+            Dim originalPrice = CDec(dataRow("Price"))
+            Dim quantity = CDec(dataRow("Qty"))
+            
+            ' Authenticate supervisor
+            Dim authDialog As New RetailManagerAuthDialog()
+            If authDialog.ShowDialog(Me) <> DialogResult.OK Then
+                Return
+            End If
+            
+            ' Show price override dialog
+            Dim priceDialog As New PriceOverrideDialog(productName, originalPrice)
+            If priceDialog.ShowDialog(Me) = DialogResult.OK Then
+                Dim newPrice = priceDialog.NewPrice
+                
+                ' Update the DataTable row (this is what gets passed to PaymentTenderForm)
+                dataRow("Price") = newPrice
+                dataRow("Total") = newPrice * quantity
+                dataRow("PriceOverridden") = True
+                
+                ' Store override info
+                _priceOverrides(rowIndex) = New PriceOverride With {
+                    .NewPrice = newPrice,
+                    .SupervisorUsername = authDialog.AuthenticatedUsername,
+                    .OverrideDate = DateTime.Now
+                }
+                
+                ' Recalculate totals
+                CalculateTotals()
+                
+                ' Refresh the DataGridView to show updated values
+                dgvCart.Refresh()
+                dgvCart.InvalidateRow(rowIndex)
+                
+                MessageBox.Show($"Price updated to R {newPrice:N4}", "Price Override", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error overriding price: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
     Protected Overrides Sub OnLoad(e As EventArgs)
@@ -1013,6 +1145,14 @@ Public Class POSMainForm_REDESIGN
                     btnModifyQty.Location = New Point(xPos, 8)
                     btnModifyQty.Size = New Size(qtyBtnWidth, buttonHeight)
                     btnModifyQty.Visible = True
+                    xPos += qtyBtnWidth + spacing
+                End If
+                
+                ' Price Override button - directly access class field
+                If btnPriceOverride IsNot Nothing Then
+                    btnPriceOverride.Location = New Point(xPos, 8)
+                    btnPriceOverride.Size = New Size(80, buttonHeight)
+                    btnPriceOverride.Visible = True
                 End If
             End If
 
@@ -1315,7 +1455,7 @@ Public Class POSMainForm_REDESIGN
             existingRow(0)("Total") = CDec(existingRow(0)("Qty")) * CDec(existingRow(0)("Price"))
             rowIndex = _cartItems.Rows.IndexOf(existingRow(0))
         Else
-            _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price)
+            _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price, False)
             rowIndex = _cartItems.Rows.Count - 1
         End If
 

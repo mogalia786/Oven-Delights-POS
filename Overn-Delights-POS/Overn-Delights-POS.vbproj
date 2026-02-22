@@ -224,6 +224,10 @@
     <Compile Include="Forms\UpdateDialog.vb">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Forms\PriceOverrideDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Models\PriceOverride.vb" />
     <Compile Include="ResponsiveHelper.vb" />
     <Compile Include="ApplicationEvents.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
