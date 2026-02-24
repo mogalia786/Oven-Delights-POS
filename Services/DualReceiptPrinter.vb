@@ -16,9 +16,19 @@ Public Class DualReceiptPrinter
     ''' Print receipt to both thermal slip printer (default) and continuous network printer
     ''' </summary>
     Public Sub PrintDualReceipt(receiptData As Dictionary(Of String, Object), cartItems As DataTable)
-        ' 1. Print to default thermal slip printer (80mm) - ALWAYS try this first
+        ' 1. Print to default thermal slip printer (80mm)
+        ' - Cash only: 1 copy (customer)
+        ' - Card/Split: 2 copies (customer + merchant with card details)
         Try
-            PrintToThermalPrinter(receiptData, cartItems)
+            Dim paymentMethod As String = If(receiptData.ContainsKey("PaymentMethod"), receiptData("PaymentMethod").ToString(), "CASH")
+            
+            ' Always print customer copy
+            PrintToThermalPrinter(receiptData, cartItems, "CUSTOMER COPY")
+            
+            ' Only print merchant copy for card/split payments
+            If paymentMethod = "CARD" OrElse paymentMethod = "SPLIT" Then
+                PrintToThermalPrinter(receiptData, cartItems, "MERCHANT COPY")
+            End If
             System.Windows.Forms.MessageBox.Show("Successfully printed to Thermal Printer", "DEBUG: Thermal Print", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information)
         Catch ex As Exception
             System.Windows.Forms.MessageBox.Show($"Thermal printer error: {ex.Message}", "Thermal Printer Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning)
@@ -36,7 +46,7 @@ Public Class DualReceiptPrinter
     ''' <summary>
     ''' Print to thermal slip printer (80mm Epson)
     ''' </summary>
-    Public Sub PrintToThermalPrinter(receiptData As Dictionary(Of String, Object), cartItems As DataTable)
+    Public Sub PrintToThermalPrinter(receiptData As Dictionary(Of String, Object), cartItems As DataTable, copyType As String)
         Try
             Dim printDoc As New PrintDocument()
             
@@ -51,6 +61,9 @@ Public Class DualReceiptPrinter
             Dim subtotal As Decimal = If(receiptData.ContainsKey("Subtotal"), CDec(receiptData("Subtotal")), 0D)
             Dim taxAmount As Decimal = If(receiptData.ContainsKey("TaxAmount"), CDec(receiptData("TaxAmount")), 0D)
             Dim totalAmount As Decimal = If(receiptData.ContainsKey("TotalAmount"), CDec(receiptData("TotalAmount")), 0D)
+            Dim cardMaskedPan As String = If(receiptData.ContainsKey("CardMaskedPan"), receiptData("CardMaskedPan").ToString(), "")
+            Dim cardType As String = If(receiptData.ContainsKey("CardType"), receiptData("CardType").ToString(), "")
+            Dim cardApprovalCode As String = If(receiptData.ContainsKey("CardApprovalCode"), receiptData("CardApprovalCode").ToString(), "")
             
             AddHandler printDoc.PrintPage, Sub(sender, e)
                 ' ALL FONTS BOLD FOR BETTER VISIBILITY
@@ -67,6 +80,23 @@ Public Class DualReceiptPrinter
                 
                 ' Branch info
                 e.Graphics.DrawString(receiptData("BranchName").ToString(), fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' VAT Number
+                e.Graphics.DrawString("Vat Number        4150166793", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' VAT Registration
+                e.Graphics.DrawString("Vat Registration  CK 99/65000/23", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' Telephone
+                e.Graphics.DrawString("Telephone         0314019942", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' Copy type - centered
+                Dim copySize = e.Graphics.MeasureString(copyType, fontBold)
+                e.Graphics.DrawString(copyType, fontBold, Brushes.Black, (302 - copySize.Width) / 2, yPos)
                 yPos += 15
                 
                 ' Date and time
@@ -109,12 +139,15 @@ Public Class DualReceiptPrinter
                 e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Totals
-                e.Graphics.DrawString($"Subtotal:                 R {subtotal:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                ' Totals - right-aligned figures
+                e.Graphics.DrawString("Subtotal:", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"R {subtotal:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"Tax (15%):                R {taxAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("Tax (15%):", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"R {taxAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"TOTAL:                    R {totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("TOTAL:", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"R {totalAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 18
                 
                 ' Payment info
@@ -122,22 +155,110 @@ Public Class DualReceiptPrinter
                 yPos += 14
                 
                 If paymentMethod = "CASH" OrElse paymentMethod = "SPLIT" Then
-                    e.Graphics.DrawString($"Cash Tendered:            R {cashAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString("Cash Tendered:", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"R {cashAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                     yPos += 14
                     If changeAmount > 0 Then
-                        e.Graphics.DrawString($"CHANGE:                   R {changeAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                        e.Graphics.DrawString("CHANGE:", fontBold, Brushes.Black, leftMargin, yPos)
+                        e.Graphics.DrawString($"R {changeAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                         yPos += 14
                     End If
                 End If
                 
                 If paymentMethod = "SPLIT" Then
-                    e.Graphics.DrawString($"Card Amount:              R {cardAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString("Card Amount:", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"R {cardAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                     yPos += 14
                 End If
                 
                 yPos += 10
                 e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
+                
+                ' Card payment details section (for CARD and SPLIT payments)
+                If (paymentMethod = "CARD" OrElse paymentMethod = "SPLIT") AndAlso Not String.IsNullOrEmpty(cardMaskedPan) Then
+                    ' Merchant receipt label
+                    If copyType = "MERCHANT COPY" Then
+                        Dim merchantText = "Merchant - Receipt"
+                        Dim merchantSize = e.Graphics.MeasureString(merchantText, fontBold)
+                        e.Graphics.DrawString(merchantText, fontBold, Brushes.Black, (302 - merchantSize.Width) / 2, yPos)
+                        yPos += 15
+                    End If
+                    
+                    e.Graphics.DrawString("Chip Card", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    
+                    If receiptData.ContainsKey("MerchantID") Then
+                        e.Graphics.DrawString($"Merchant ID     {receiptData("MerchantID")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If receiptData.ContainsKey("TerminalID") Then
+                        e.Graphics.DrawString($"Terminal ID     {receiptData("TerminalID")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If receiptData.ContainsKey("MerchantRef") Then
+                        e.Graphics.DrawString($"Merchant Ref    {receiptData("MerchantRef")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If Not String.IsNullOrEmpty(cardApprovalCode) Then
+                        e.Graphics.DrawString($"Authorization   {cardApprovalCode}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    e.Graphics.DrawString("Budget          00", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    
+                    If Not String.IsNullOrEmpty(cardMaskedPan) Then
+                        e.Graphics.DrawString($"Card Number     {cardMaskedPan}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    e.Graphics.DrawString("Approved Amount:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    
+                    Dim approvedAmt = If(paymentMethod = "SPLIT", cardAmount, totalAmount)
+                    e.Graphics.DrawString($"AID             A{approvedAmt:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    
+                    If receiptData.ContainsKey("TVR") Then
+                        e.Graphics.DrawString($"TVR             {receiptData("TVR")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If receiptData.ContainsKey("TSI") Then
+                        e.Graphics.DrawString($"TSI             {receiptData("TSI")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If receiptData.ContainsKey("TC") Then
+                        e.Graphics.DrawString($"TC              {receiptData("TC")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If Not String.IsNullOrEmpty(cardType) Then
+                        e.Graphics.DrawString($"AL              {cardType}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If receiptData.ContainsKey("Agent") Then
+                        e.Graphics.DrawString($"Agent           {receiptData("Agent")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    If receiptData.ContainsKey("TillNumber") Then
+                        e.Graphics.DrawString($"Till            {receiptData("TillNumber")}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    
+                    e.Graphics.DrawString("Processed by Destiny", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                    
+                    e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                End If
                 
                 ' Barcode for returns (7-digit format, research-based settings)
                 Try

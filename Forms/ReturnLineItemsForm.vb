@@ -576,6 +576,29 @@ Public Class ReturnLineItemsForm
                         PostReturnToJournalsAndLedgers(conn, transaction, returnID, returnNumber, totalReturn, totalTax)
                         Debug.WriteLine($"Completed PostReturnToJournalsAndLedgers")
 
+                        ' Post to GL (General Ledger) - wrapped in TRY-CATCH so return completes even if GL fails
+                        Try
+                            Dim subtotal = totalReturn - totalTax
+                            Dim totalCost = CalculateReturnCost(conn, transaction)
+                            Using cmdGL As New SqlCommand("sp_POS_PostRefundToGL", conn, transaction)
+                                cmdGL.CommandType = CommandType.StoredProcedure
+                                cmdGL.Parameters.AddWithValue("@InvoiceNumber", returnNumber)
+                                cmdGL.Parameters.AddWithValue("@RefundDate", DateTime.Today)
+                                cmdGL.Parameters.AddWithValue("@BranchID", _branchID)
+                                cmdGL.Parameters.AddWithValue("@CashierID", _cashierID)
+                                cmdGL.Parameters.AddWithValue("@Subtotal", subtotal)
+                                cmdGL.Parameters.AddWithValue("@TaxAmount", totalTax)
+                                cmdGL.Parameters.AddWithValue("@TotalAmount", totalReturn)
+                                cmdGL.Parameters.AddWithValue("@RefundMethod", "Cash")
+                                cmdGL.Parameters.AddWithValue("@TotalCost", totalCost)
+                                cmdGL.Parameters.AddWithValue("@CreatedBy", _cashierID)
+                                cmdGL.ExecuteNonQuery()
+                            End Using
+                        Catch glEx As Exception
+                            ' GL posting failed but return succeeded - log error but continue
+                            Debug.WriteLine($"GL Posting Error: {glEx.Message}")
+                        End Try
+
                         Debug.WriteLine($"COMMITTING TRANSACTION...")
                         transaction.Commit()
                         Debug.WriteLine($"TRANSACTION COMMITTED SUCCESSFULLY!")
@@ -959,6 +982,19 @@ Public Class ReturnLineItemsForm
             Debug.WriteLine($"Ledger posting error: {ex.Message}")
         End Try
     End Sub
+
+    Private Function CalculateReturnCost(conn As SqlConnection, transaction As SqlTransaction) As Decimal
+        Dim totalCost As Decimal = 0
+        Dim sql = "SELECT ISNULL(pr.CostPrice, 0) FROM Demo_Retail_Product p LEFT JOIN Demo_Retail_Stock s ON p.ProductID = s.StockID LEFT JOIN Demo_Retail_Price pr ON s.StockID = pr.ProductID WHERE p.ProductID = @ProductID"
+        For Each item In _returnItems
+            Using cmd As New SqlCommand(sql, conn, transaction)
+                cmd.Parameters.AddWithValue("@ProductID", item.ProductID)
+                Dim costPrice = CDec(cmd.ExecuteScalar())
+                totalCost += costPrice * item.ReturnQty
+            End Using
+        Next
+        Return totalCost
+    End Function
 
     Private Function GetLedgerID(conn As SqlConnection, transaction As SqlTransaction, ledgerName As String) As Integer
         ' Get ledger for this specific branch

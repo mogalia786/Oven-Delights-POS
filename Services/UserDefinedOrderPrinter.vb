@@ -43,13 +43,13 @@ Public Class UserDefinedOrderPrinter
         End Try
     End Sub
 
-    Public Sub PrintCreationSlip(orderNumber As String, orderData As UserDefinedOrderData, cartItems As DataTable, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, cashierName As String)
+    Public Sub PrintCreationSlip(orderNumber As String, orderData As UserDefinedOrderData, cartItems As DataTable, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, cashierName As String, Optional cardMaskedPan As String = "", Optional cardType As String = "", Optional cardApprovalCode As String = "")
         ' Print twice: Customer Copy + Business Copy
-        PrintSlip(orderNumber, orderData, cartItems, totalAmount, paymentMethod, cashAmount, cardAmount, cashierName, "CUSTOMER COPY")
-        PrintSlip(orderNumber, orderData, cartItems, totalAmount, paymentMethod, cashAmount, cardAmount, cashierName, "BUSINESS COPY")
+        PrintSlip(orderNumber, orderData, cartItems, totalAmount, paymentMethod, cashAmount, cardAmount, cashierName, "CUSTOMER COPY", cardMaskedPan, cardType, cardApprovalCode)
+        PrintSlip(orderNumber, orderData, cartItems, totalAmount, paymentMethod, cashAmount, cardAmount, cashierName, "BUSINESS COPY", cardMaskedPan, cardType, cardApprovalCode)
     End Sub
 
-    Private Sub PrintSlip(orderNumber As String, orderData As UserDefinedOrderData, cartItems As DataTable, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, cashierName As String, copyType As String)
+    Private Sub PrintSlip(orderNumber As String, orderData As UserDefinedOrderData, cartItems As DataTable, totalAmount As Decimal, paymentMethod As String, cashAmount As Decimal, cardAmount As Decimal, cashierName As String, copyType As String, Optional cardMaskedPan As String = "", Optional cardType As String = "", Optional cardApprovalCode As String = "")
         Try
             Dim printDoc As New PrintDocument()
             
@@ -117,21 +117,31 @@ Public Class UserDefinedOrderPrinter
                 e.Graphics.DrawString(copyText, fontLarge, Brushes.Black, (302 - copySize.Width) / 2, yPos)
                 yPos += 22
                 
-                ' Title
-                Dim titleText = "USER DEFINED ORDER"
-                Dim titleSize = e.Graphics.MeasureString(titleText, fontLarge)
-                e.Graphics.DrawString(titleText, fontLarge, Brushes.Black, (302 - titleSize.Width) / 2, yPos)
+                ' Header - centered
+                Dim headerText2 = "OVEN DELIGHTS"
+                Dim headerSize2 = e.Graphics.MeasureString(headerText2, fontLarge)
+                e.Graphics.DrawString(headerText2, fontLarge, Brushes.Black, (302 - headerSize2.Width) / 2, yPos)
                 yPos += 22
                 
-                e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
+                ' Branch info
+                e.Graphics.DrawString(_branchName, fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
                 
-                ' Order details
-                e.Graphics.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                e.Graphics.DrawString($"Ordered Date: {DateTime.Now:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                e.Graphics.DrawString($"Ordered Time: {DateTime.Now:HH:mm:ss}", fontBold, Brushes.Black, leftMargin, yPos)
+                ' VAT Number
+                e.Graphics.DrawString("Vat Number        4150166793", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' VAT Registration
+                e.Graphics.DrawString("Vat Registration  CK 99/65000/23", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' Telephone
+                e.Graphics.DrawString("Telephone         0314019942", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' Copy type - centered
+                Dim copySize2 = e.Graphics.MeasureString(copyType, fontBold)
+                e.Graphics.DrawString(copyType, fontBold, Brushes.Black, (302 - copySize2.Width) / 2, yPos)
                 yPos += 15
                 e.Graphics.DrawString($"Cashier: {cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 18
@@ -204,13 +214,16 @@ Public Class UserDefinedOrderPrinter
                 e.Graphics.DrawString("--------------------------------------", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Totals
+                ' Totals - right-aligned figures
                 Dim taxAmount = totalAmount - subtotal
-                e.Graphics.DrawString($"Subtotal (excl VAT):      R {subtotal:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("Subtotal (excl VAT):", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"R {subtotal:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"VAT (15%):                R {taxAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("VAT (15%):", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"R {taxAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                e.Graphics.DrawString($"TOTAL:                    R {totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("TOTAL:", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString($"R {totalAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 18
                 
                 ' Payment info
@@ -218,16 +231,46 @@ Public Class UserDefinedOrderPrinter
                 yPos += 14
                 
                 If paymentMethod = "CASH" Then
-                    e.Graphics.DrawString($"Amount Paid:              R {cashAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString("Amount Paid:", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"R {cashAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                     yPos += 14
                 ElseIf paymentMethod = "CARD" Then
-                    e.Graphics.DrawString($"Amount Paid:              R {cardAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString("Amount Paid:", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"R {cardAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                     yPos += 14
+                    ' Show card details if available
+                    If Not String.IsNullOrEmpty(cardMaskedPan) Then
+                        e.Graphics.DrawString($"Card: {cardMaskedPan}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    If Not String.IsNullOrEmpty(cardType) Then
+                        e.Graphics.DrawString($"Card Type: {cardType}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    If Not String.IsNullOrEmpty(cardApprovalCode) Then
+                        e.Graphics.DrawString($"Approval Code: {cardApprovalCode}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
                 ElseIf paymentMethod = "SPLIT" Then
-                    e.Graphics.DrawString($"Cash Amount:              R {cashAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString("Cash Amount:", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"R {cashAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                     yPos += 14
-                    e.Graphics.DrawString($"Card Amount:              R {cardAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString("Card Amount:", fontBold, Brushes.Black, leftMargin, yPos)
+                    e.Graphics.DrawString($"R {cardAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                     yPos += 14
+                    ' Show card details if available for split payment
+                    If Not String.IsNullOrEmpty(cardMaskedPan) Then
+                        e.Graphics.DrawString($"Card: {cardMaskedPan}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    If Not String.IsNullOrEmpty(cardType) Then
+                        e.Graphics.DrawString($"Card Type: {cardType}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    If Not String.IsNullOrEmpty(cardApprovalCode) Then
+                        e.Graphics.DrawString($"Approval Code: {cardApprovalCode}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
                 End If
                 
                 e.Graphics.DrawString("PAID IN FULL", fontBold, Brushes.Black, leftMargin, yPos)

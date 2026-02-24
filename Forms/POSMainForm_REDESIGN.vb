@@ -33,6 +33,7 @@ Public Class POSMainForm_REDESIGN
     Private txtBarcodeScanner As TextBox
     Private btnRefresh As Button
     Private btnModifyQty As Button
+    Private btnPriceOverride As Button
     Private _onScreenKeyboard As OnScreenKeyboard
     
     ' Category Navigation State
@@ -90,6 +91,9 @@ Public Class POSMainForm_REDESIGN
     Private _scaleFactor As Single = 1.0F
     Private _baseWidth As Integer = 1920 ' Base design width
     Private _baseHeight As Integer = 1080 ' Base design height
+    
+    ' Price override tracking
+    Private _priceOverrides As New Dictionary(Of Integer, PriceOverride)
 
     Public Sub New(cashierID As Integer, cashierName As String, branchID As Integer, tillPointID As Integer)
         MyBase.New()
@@ -126,6 +130,11 @@ Public Class POSMainForm_REDESIGN
             ' Force the scaling system to recalculate based on actual screen
             InitializeScreenScaling()
             HandleFormResize()
+            
+            ' Focus barcode scanner for immediate scanning
+            If txtBarcodeScanner IsNot Nothing Then
+                txtBarcodeScanner.Focus()
+            End If
         Catch ex As Exception
             MessageBox.Show($"Screen detection error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
@@ -391,6 +400,18 @@ Public Class POSMainForm_REDESIGN
         btnModifyQty.FlatAppearance.BorderSize = 0
         AddHandler btnModifyQty.Click, Sub() ShowCartQuantityEditor()
 
+        ' Price Override button
+        btnPriceOverride = New Button With {
+            .Text = "R PRICE",
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .BackColor = Color.FromArgb(255, 193, 7),
+            .ForeColor = Color.Black,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnPriceOverride.FlatAppearance.BorderSize = 0
+        AddHandler btnPriceOverride.Click, Sub() OverridePriceForSelectedItem()
+
         ' Hidden barcode scanner input
         txtBarcodeScanner = New TextBox With {
             .Location = New Point(-100, -100),
@@ -398,7 +419,7 @@ Public Class POSMainForm_REDESIGN
         }
         AddHandler txtBarcodeScanner.KeyDown, AddressOf BarcodeScanner_KeyDown
 
-        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, txtBarcodeScanner})
+        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, btnPriceOverride, txtBarcodeScanner})
 
         flpProducts = New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
@@ -635,40 +656,160 @@ Public Class POSMainForm_REDESIGN
         _cartItems.Columns.Add("Qty", GetType(Decimal))
         _cartItems.Columns.Add("Price", GetType(Decimal))
         _cartItems.Columns.Add("Total", GetType(Decimal))
+        _cartItems.Columns.Add("PriceOverridden", GetType(Boolean))
 
-        dgvCart.AutoGenerateColumns = True
+        dgvCart.AutoGenerateColumns = False
         dgvCart.DataSource = _cartItems
 
-        ' Configure columns after binding
-        AddHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
+        ' Manually add columns with buttons
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "ProductID",
+            .DataPropertyName = "ProductID",
+            .Visible = False
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "ItemCode",
+            .DataPropertyName = "ItemCode",
+            .HeaderText = "Code",
+            .Width = 60,
+            .ReadOnly = True
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Product",
+            .DataPropertyName = "Product",
+            .HeaderText = "Item",
+            .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            .ReadOnly = True
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Qty",
+            .DataPropertyName = "Qty",
+            .HeaderText = "Qty",
+            .Width = 50,
+            .ReadOnly = True
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Price",
+            .DataPropertyName = "Price",
+            .HeaderText = "Price",
+            .Width = 75,
+            .ReadOnly = True,
+            .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C4"}
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "Total",
+            .DataPropertyName = "Total",
+            .HeaderText = "Total",
+            .Width = 85,
+            .ReadOnly = True,
+            .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C2"}
+        })
+        
+        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
+            .Name = "PriceOverridden",
+            .DataPropertyName = "PriceOverridden",
+            .Visible = False
+        })
+
+        ' Handle button clicks and formatting
+        AddHandler dgvCart.CellContentClick, AddressOf dgvCart_CellContentClick
+        AddHandler dgvCart.CellFormatting, AddressOf dgvCart_CellFormatting
     End Sub
 
-    Private Sub ConfigureCartColumns(sender As Object, e As DataGridViewBindingCompleteEventArgs)
-        ' Only configure once
-        RemoveHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
-
-        If dgvCart.Columns.Count > 0 Then
-            If dgvCart.Columns.Contains("ProductID") Then dgvCart.Columns("ProductID").Visible = False
-            If dgvCart.Columns.Contains("ItemCode") Then
-                dgvCart.Columns("ItemCode").Width = 70
-                dgvCart.Columns("ItemCode").HeaderText = "Code"
-            End If
-            If dgvCart.Columns.Contains("Product") Then
-                dgvCart.Columns("Product").HeaderText = "Item"
-            End If
-            If dgvCart.Columns.Contains("Qty") Then
-                dgvCart.Columns("Qty").Width = 50
-                dgvCart.Columns("Qty").ReadOnly = False
-            End If
-            If dgvCart.Columns.Contains("Price") Then
-                dgvCart.Columns("Price").DefaultCellStyle.Format = "C2"
-                dgvCart.Columns("Price").Width = 80
-            End If
-            If dgvCart.Columns.Contains("Total") Then
-                dgvCart.Columns("Total").DefaultCellStyle.Format = "C2"
-                dgvCart.Columns("Total").Width = 90
+    Private Sub dgvCart_CellContentClick(sender As Object, e As DataGridViewCellEventArgs)
+        ' No button columns in cart grid anymore
+    End Sub
+    
+    Private Sub dgvCart_CellFormatting(sender As Object, e As DataGridViewCellFormattingEventArgs)
+        If e.RowIndex < 0 Then Return
+        
+        ' Check if price was overridden
+        If dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value IsNot Nothing AndAlso
+           CBool(dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value) Then
+            
+            ' Apply gold background to price cells
+            If dgvCart.Columns(e.ColumnIndex).Name = "Price" OrElse
+               dgvCart.Columns(e.ColumnIndex).Name = "Total" Then
+                e.CellStyle.BackColor = Color.FromArgb(255, 248, 220)
+                e.CellStyle.Font = New Font(e.CellStyle.Font, FontStyle.Bold)
             End If
         End If
+    End Sub
+    
+    Private Sub OverridePriceForSelectedItem()
+        Try
+            ' Check if cart has items
+            If _cartItems.Rows.Count = 0 Then
+                MessageBox.Show("Cart is empty. Add items first.", "Empty Cart", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+            
+            ' Check if a cart item is selected
+            If dgvCart.SelectedRows.Count = 0 Then
+                MessageBox.Show("Please select a cart item first.", "No Item Selected", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Return
+            End If
+            
+            ' Get selected row
+            Dim selectedRow = dgvCart.SelectedRows(0)
+            Dim rowIndex = selectedRow.Index
+            
+            OverridePrice(rowIndex)
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub OverridePrice(rowIndex As Integer)
+        Try
+            ' Get current row data from DataTable
+            Dim dataRow = _cartItems.Rows(rowIndex)
+            Dim productName = dataRow("Product").ToString()
+            Dim originalPrice = CDec(dataRow("Price"))
+            Dim quantity = CDec(dataRow("Qty"))
+            
+            ' Authenticate supervisor
+            Dim authDialog As New RetailManagerAuthDialog()
+            If authDialog.ShowDialog(Me) <> DialogResult.OK Then
+                Return
+            End If
+            
+            ' Show price override dialog
+            Dim priceDialog As New PriceOverrideDialog(productName, originalPrice)
+            If priceDialog.ShowDialog(Me) = DialogResult.OK Then
+                Dim newPrice = priceDialog.NewPrice
+                
+                ' Update the DataTable row (this is what gets passed to PaymentTenderForm)
+                dataRow("Price") = newPrice
+                dataRow("Total") = newPrice * quantity
+                dataRow("PriceOverridden") = True
+                
+                ' Store override info
+                _priceOverrides(rowIndex) = New PriceOverride With {
+                    .NewPrice = newPrice,
+                    .SupervisorUsername = authDialog.AuthenticatedUsername,
+                    .OverrideDate = DateTime.Now
+                }
+                
+                ' Recalculate totals
+                CalculateTotals()
+                
+                ' Refresh the DataGridView to show updated values
+                dgvCart.Refresh()
+                dgvCart.InvalidateRow(rowIndex)
+                
+                MessageBox.Show($"Price updated to R {newPrice:N4}", "Price Override", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            End If
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error overriding price: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
     Protected Overrides Sub OnLoad(e As EventArgs)
@@ -1004,6 +1145,14 @@ Public Class POSMainForm_REDESIGN
                     btnModifyQty.Location = New Point(xPos, 8)
                     btnModifyQty.Size = New Size(qtyBtnWidth, buttonHeight)
                     btnModifyQty.Visible = True
+                    xPos += qtyBtnWidth + spacing
+                End If
+                
+                ' Price Override button - directly access class field
+                If btnPriceOverride IsNot Nothing Then
+                    btnPriceOverride.Location = New Point(xPos, 8)
+                    btnPriceOverride.Size = New Size(80, buttonHeight)
+                    btnPriceOverride.Visible = True
                 End If
             End If
 
@@ -1306,7 +1455,7 @@ Public Class POSMainForm_REDESIGN
             existingRow(0)("Total") = CDec(existingRow(0)("Qty")) * CDec(existingRow(0)("Price"))
             rowIndex = _cartItems.Rows.IndexOf(existingRow(0))
         Else
-            _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price)
+            _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price, False)
             rowIndex = _cartItems.Rows.Count - 1
         End If
 
@@ -1360,11 +1509,13 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("F12", "📦 Collect", CType(Sub() OrderCollection(), Action)),
             Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
             Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
+            Tuple.Create("", "✏️ Edit Order", CType(Sub() EditCakeOrder(), Action)),
+            Tuple.Create("", "❌ Cancel Order", CType(Sub() CancelCakeOrder(), Action)),
             Tuple.Create("", "📦 Box Items", CType(Sub() CreateBoxItems(), Action)),
             Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 16 ' 12 F-keys + 4 additional buttons
+        Dim visibleCount = 18 ' 12 F-keys + 6 additional buttons
         ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
         Dim leftMargin = 5
@@ -1417,11 +1568,14 @@ Public Class POSMainForm_REDESIGN
 
     Private Sub ProcessBarcodeScan(itemCode As String)
         Try
-            ' Check if this is a box barcode (format: BranchID900001, e.g., 6900001)
-            ' Box barcodes have '9' as second character and are 7+ digits
-            If itemCode.Length >= 7 AndAlso itemCode.Length <= 8 AndAlso IsNumeric(itemCode) AndAlso itemCode.Substring(1, 1) = "9" Then
-                LoadBoxItems(itemCode)
-                Return
+            ' Check if this is a box barcode (format: 6-digit numeric code, e.g., 600001)
+            ' Box barcodes are exactly 6 digits: BranchDigit (1) + Sequence (5)
+            If itemCode.Length = 6 AndAlso IsNumeric(itemCode) Then
+                ' Try to load as box barcode first
+                If LoadBoxItems(itemCode) Then
+                    Return
+                End If
+                ' If not found as box, continue to regular product search below
             End If
 
             ' Query Demo_Retail_Product and get VAT-inclusive price from Demo_Retail_Price
@@ -1491,6 +1645,7 @@ Public Class POSMainForm_REDESIGN
             Case Keys.F10 : VoidSale() : Return True
             Case Keys.F11 : CreateOrder() : Return True
             Case Keys.F12 : OrderCollection() : Return True
+            Case Keys.Shift Or Keys.F11 : EditCakeOrder() : Return True
         End Select
         Return MyBase.ProcessCmdKey(msg, keyData)
     End Function
@@ -1747,6 +1902,11 @@ Public Class POSMainForm_REDESIGN
         ShowIdleScreen()
 
         UpdateStatusBar("New sale started - Touch screen to begin")
+        
+        ' Focus barcode scanner for immediate scanning
+        If txtBarcodeScanner IsNot Nothing Then
+            txtBarcodeScanner.Focus()
+        End If
     End Sub
 
     Private Sub HoldSale()
@@ -3683,6 +3843,12 @@ Public Class POSMainForm_REDESIGN
                 Return
             End If
 
+            ' Require retail manager authentication
+            If Not AuthenticateRetailManager() Then
+                MessageBox.Show("Void cancelled - Manager authentication required.", "Authentication Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+
             ' Confirm void action
             Dim result = MessageBox.Show($"Void entire sale with {_cartItems.Rows.Count} item(s)?{vbCrLf}{vbCrLf}This action cannot be undone.", "Void Sale", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
 
@@ -3841,6 +4007,11 @@ Public Class POSMainForm_REDESIGN
             ' Update breadcrumb
             lblBreadcrumb.Text = "Categories"
             lblBreadcrumb.ForeColor = _ironGold
+            
+            ' Focus barcode scanner for immediate scanning
+            If txtBarcodeScanner IsNot Nothing Then
+                txtBarcodeScanner.Focus()
+            End If
 
         Catch ex As Exception
             MessageBox.Show($"Error entering sale mode: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
@@ -5231,6 +5402,7 @@ Public Class POSMainForm_REDESIGN
         ' Get selected cart item details
         Dim selectedRow = dgvCart.SelectedRows(0)
         Dim rowIndex = selectedRow.Index
+        Dim productID = CInt(selectedRow.Cells("ProductID").Value)
         Dim productName = selectedRow.Cells("Product").Value.ToString()
         Dim currentQty = CDec(selectedRow.Cells("Qty").Value)
         Dim price = CDec(selectedRow.Cells("Price").Value)
@@ -5359,12 +5531,25 @@ Public Class POSMainForm_REDESIGN
         AddHandler btnOK.Click, Sub()
                                     Dim newQty As Decimal
                                     If Decimal.TryParse(txtQuantity.Text, newQty) AndAlso newQty > 0 Then
-                                        ' Update cart item quantity
-                                        _cartItems.Rows(rowIndex)("Qty") = newQty
-                                        _cartItems.Rows(rowIndex)("Total") = price * newQty
-                                        CalculateTotals()
-                                        modalForm.DialogResult = DialogResult.OK
-                                        modalForm.Close()
+                                        ' Find the correct DataTable row using ProductID (water-tight approach)
+                                        Dim foundRow As DataRow = Nothing
+                                        For Each row As DataRow In _cartItems.Rows
+                                            If CInt(row("ProductID")) = productID Then
+                                                foundRow = row
+                                                Exit For
+                                            End If
+                                        Next
+                                        
+                                        If foundRow IsNot Nothing Then
+                                            ' Update cart item quantity using ProductID match
+                                            foundRow("Qty") = newQty
+                                            foundRow("Total") = price * newQty
+                                            CalculateTotals()
+                                            modalForm.DialogResult = DialogResult.OK
+                                            modalForm.Close()
+                                        Else
+                                            MessageBox.Show("Cart item not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                                        End If
                                     Else
                                         MessageBox.Show("Please enter a valid quantity.", "Invalid Quantity", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                                     End If
@@ -6318,6 +6503,11 @@ Public Class POSMainForm_REDESIGN
 
         ' Show categories
         ShowCategories()
+        
+        ' Focus barcode scanner for immediate scanning
+        If txtBarcodeScanner IsNot Nothing Then
+            txtBarcodeScanner.Focus()
+        End If
     End Sub
 
     ' Helper methods for User Defined Orders
@@ -6565,8 +6755,9 @@ Public Class POSMainForm_REDESIGN
 
     ''' <summary>
     ''' Loads all items from a box barcode into the cart
+    ''' Returns True if box was found and loaded, False otherwise
     ''' </summary>
-    Private Sub LoadBoxItems(boxBarcode As String)
+    Private Function LoadBoxItems(boxBarcode As String) As Boolean
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
@@ -6618,16 +6809,9 @@ Public Class POSMainForm_REDESIGN
                                                                        txtBarcodeScanner.Focus()
                                                                    End Sub)
                                                      End Sub)
+                        Return True
                     Else
-                        txtBarcodeScanner.BackColor = _red
-                        MessageBox.Show($"Box not found: {boxBarcode}", "Box Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                        Task.Delay(200).ContinueWith(Sub()
-                                                         Me.Invoke(Sub()
-                                                                       txtBarcodeScanner.Clear()
-                                                                       txtBarcodeScanner.BackColor = Color.White
-                                                                       txtBarcodeScanner.Focus()
-                                                                   End Sub)
-                                                     End Sub)
+                        Return False
                     End If
                 End Using
             End Using
@@ -6636,8 +6820,9 @@ Public Class POSMainForm_REDESIGN
             MessageBox.Show($"Error loading box items: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             txtBarcodeScanner.Clear()
             txtBarcodeScanner.Focus()
+            Return False
         End Try
-    End Sub
+    End Function
 
     ''' <summary>
     ''' Gets ProductID from barcode
@@ -6668,4 +6853,218 @@ Public Class POSMainForm_REDESIGN
         End Try
         Return 0
     End Function
+    
+    Private Function AuthenticateRetailManager() As Boolean
+        ' Create authentication dialog
+        Dim authForm As New Form With {
+            .Text = "Manager Authentication Required",
+            .Size = New Size(400, 220),
+            .StartPosition = FormStartPosition.CenterParent,
+            .FormBorderStyle = FormBorderStyle.FixedDialog,
+            .MaximizeBox = False,
+            .MinimizeBox = False,
+            .BackColor = Color.White
+        }
+        
+        Dim lblTitle As New Label With {
+            .Text = "Retail Manager Authentication",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .Location = New Point(20, 20),
+            .AutoSize = True
+        }
+        
+        Dim lblUsername As New Label With {
+            .Text = "Username:",
+            .Location = New Point(20, 60),
+            .AutoSize = True
+        }
+        
+        Dim txtUsername As New TextBox With {
+            .Location = New Point(120, 57),
+            .Width = 240,
+            .Font = New Font("Segoe UI", 10)
+        }
+        
+        Dim lblPassword As New Label With {
+            .Text = "Password:",
+            .Location = New Point(20, 95),
+            .AutoSize = True
+        }
+        
+        Dim txtPassword As New TextBox With {
+            .Location = New Point(120, 92),
+            .Width = 240,
+            .Font = New Font("Segoe UI", 10),
+            .UseSystemPasswordChar = True
+        }
+        
+        Dim btnOK As New Button With {
+            .Text = "Authenticate",
+            .Location = New Point(120, 135),
+            .Size = New Size(110, 35),
+            .BackColor = _darkBlue,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold)
+        }
+        btnOK.FlatAppearance.BorderSize = 0
+        
+        Dim btnCancel As New Button With {
+            .Text = "Cancel",
+            .Location = New Point(250, 135),
+            .Size = New Size(110, 35),
+            .BackColor = Color.Gray,
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold)
+        }
+        btnCancel.FlatAppearance.BorderSize = 0
+        
+        AddHandler btnOK.Click, Sub()
+            authForm.DialogResult = DialogResult.OK
+            authForm.Close()
+        End Sub
+        
+        AddHandler btnCancel.Click, Sub()
+            authForm.DialogResult = DialogResult.Cancel
+            authForm.Close()
+        End Sub
+        
+        authForm.Controls.AddRange({lblTitle, lblUsername, txtUsername, lblPassword, txtPassword, btnOK, btnCancel})
+        authForm.AcceptButton = btnOK
+        authForm.CancelButton = btnCancel
+        
+        If authForm.ShowDialog() = DialogResult.OK Then
+            ' Validate credentials against database
+            Try
+                Using conn As New SqlConnection(_connectionString)
+                    conn.Open()
+                    ' Check credentials and role - no branch restriction for managers
+                    Dim sql = "SELECT u.UserID, r.RoleName
+                              FROM Users u
+                              LEFT JOIN Roles r ON u.RoleID = r.RoleID
+                              WHERE u.Username = @Username 
+                              AND u.Password = @Password 
+                              AND u.IsActive = 1"
+                    
+                    Using cmd As New SqlCommand(sql, conn)
+                        cmd.Parameters.AddWithValue("@Username", txtUsername.Text.Trim())
+                        cmd.Parameters.AddWithValue("@Password", txtPassword.Text.Trim())
+                        
+                        Using reader = cmd.ExecuteReader()
+                            If reader.Read() Then
+                                Dim roleName = If(reader("RoleName") IsNot DBNull.Value, reader("RoleName").ToString().Trim(), "")
+                                
+                                ' Check if user has manager-level role
+                                If roleName.IndexOf("Manager", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                                   roleName.IndexOf("Administrator", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                                   roleName.IndexOf("Supervisor", StringComparison.OrdinalIgnoreCase) >= 0 Then
+                                    Return True
+                                Else
+                                    MessageBox.Show($"Insufficient permissions. Your role is '{roleName}'." & vbCrLf & "Only managers/supervisors can void sales.", "Access Denied", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                                    Return False
+                                End If
+                            Else
+                                ' Invalid credentials
+                                Return False
+                            End If
+                        End Using
+                    End Using
+                End Using
+            Catch ex As Exception
+                MessageBox.Show($"Authentication error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                Return False
+            End Try
+        End If
+        
+        Return False
+    End Function
+    
+    ''' <summary>
+    ''' Opens the Edit Cake Order workflow (Shift+F11)
+    ''' Requires Retail Manager authentication
+    ''' </summary>
+    Private Sub EditCakeOrder()
+        Try
+            ' Get branch details from database
+            Dim branchName As String = ""
+            Dim branchAddress As String = ""
+            Dim branchPhone As String = ""
+            
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT BranchName, Address, Phone FROM Branches WHERE BranchID = @BranchID"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            branchName = If(IsDBNull(reader("BranchName")), "", reader("BranchName").ToString())
+                            branchAddress = If(IsDBNull(reader("Address")), "", reader("Address").ToString())
+                            branchPhone = If(IsDBNull(reader("Phone")), "", reader("Phone").ToString())
+                        End If
+                    End Using
+                End Using
+            End Using
+            
+            ' Create and start edit workflow
+            Dim editService As New CakeOrderEditService(
+                _branchID, 
+                _tillPointID, 
+                _cashierID, 
+                _cashierName,
+                branchName, 
+                branchAddress, 
+                branchPhone
+            )
+            
+            editService.StartEditWorkflow()
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error starting edit workflow: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    ''' <summary>
+    ''' Opens the Cancel Cake Order workflow
+    ''' Requires Retail Manager authentication
+    ''' </summary>
+    Private Sub CancelCakeOrder()
+        Try
+            ' Get branch details from database
+            Dim branchName As String = ""
+            Dim branchAddress As String = ""
+            Dim branchPhone As String = ""
+            
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Dim sql = "SELECT BranchName, Address, Phone FROM Branches WHERE BranchID = @BranchID"
+                Using cmd As New SqlCommand(sql, conn)
+                    cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            branchName = If(IsDBNull(reader("BranchName")), "", reader("BranchName").ToString())
+                            branchAddress = If(IsDBNull(reader("Address")), "", reader("Address").ToString())
+                            branchPhone = If(IsDBNull(reader("Phone")), "", reader("Phone").ToString())
+                        End If
+                    End Using
+                End Using
+            End Using
+            
+            ' Create and start cancel workflow (same as edit workflow)
+            Dim cancelService As New CakeOrderCancelService(
+                _branchID, 
+                _tillPointID, 
+                _cashierID, 
+                _cashierName,
+                branchName, 
+                branchAddress, 
+                branchPhone
+            )
+            
+            cancelService.StartCancelWorkflow()
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error starting cancel workflow: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
 End Class

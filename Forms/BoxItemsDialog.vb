@@ -20,6 +20,7 @@ Public Class BoxItemsDialog
     Private dgvItems As DataGridView
     Private btnComplete As Button
     Private btnCancel As Button
+    Private btnRemove As Button
     Private lblTotal As Label
 
     Public Sub New(connectionString As String, branchID As Integer, cashierName As String)
@@ -117,6 +118,19 @@ Public Class BoxItemsDialog
         yPos += 40
 
         ' Buttons
+        btnRemove = New Button With {
+            .Text = "Remove Selected",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
+            .Size = New Size(180, 45),
+            .Location = New Point(100, yPos),
+            .BackColor = ColorTranslator.FromHtml("#E67E22"),
+            .ForeColor = Color.White,
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnRemove.FlatAppearance.BorderSize = 0
+        AddHandler btnRemove.Click, AddressOf BtnRemove_Click
+
         btnComplete = New Button With {
             .Text = "Complete & Print",
             .Font = New Font("Segoe UI", 11, FontStyle.Bold),
@@ -133,7 +147,7 @@ Public Class BoxItemsDialog
         btnCancel = New Button With {
             .Text = "Cancel",
             .Font = New Font("Segoe UI", 11, FontStyle.Bold),
-            .Size = New Size(200, 45),
+            .Size = New Size(180, 45),
             .Location = New Point(520, yPos),
             .BackColor = ColorTranslator.FromHtml("#E74C3C"),
             .ForeColor = Color.White,
@@ -143,7 +157,7 @@ Public Class BoxItemsDialog
         btnCancel.FlatAppearance.BorderSize = 0
         AddHandler btnCancel.Click, AddressOf BtnCancel_Click
 
-        Me.Controls.AddRange({btnComplete, btnCancel})
+        Me.Controls.AddRange({btnRemove, btnComplete, btnCancel})
     End Sub
 
     Private Sub InitializeDataTable()
@@ -197,40 +211,38 @@ Public Class BoxItemsDialog
     End Sub
 
     Private Function GenerateBoxBarcode() As String
-        ' Generate unique box barcode: BranchID900001 (e.g., 6900001)
-        ' Get next sequence number for this branch
-        Dim sequenceNumber As Integer = GetNextBoxSequence()
-        Return $"{_branchID}9{sequenceNumber:D5}"
-    End Function
-
-    Private Function GetNextBoxSequence() As Integer
+        ' Generate 6-digit numeric box barcode: BranchID (1 digit) + Sequence (5 digits)
+        ' Format: {BranchID}{Sequence} e.g., 600001
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
 
-                ' Get the highest sequence number for this branch today
+                ' Get next sequence number for this branch
                 Dim sql = "
-                    SELECT MAX(CAST(RIGHT(BoxBarcode, 5) AS INT)) AS MaxSeq
+                    SELECT ISNULL(MAX(CAST(BoxBarcode AS INT)), 0) + 1 AS NextSeq
                     FROM BoxedItems
                     WHERE BranchID = @BranchID
-                      AND BoxBarcode LIKE @BranchPattern
-                      AND CAST(CreatedDate AS DATE) = CAST(GETDATE() AS DATE)"
+                      AND LEN(BoxBarcode) = 6
+                      AND BoxBarcode NOT LIKE '%[^0-9]%'"
 
+                Dim sequence As Integer = 1
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@BranchID", _branchID)
-                    cmd.Parameters.AddWithValue("@BranchPattern", $"{_branchID}9%")
-
                     Dim result = cmd.ExecuteScalar()
                     If result IsNot Nothing AndAlso Not IsDBNull(result) Then
-                        Return CInt(result) + 1
-                    Else
-                        Return 1 ' Start from 1 if no boxes today
+                        sequence = CInt(result)
                     End If
                 End Using
+
+                ' Build 6-digit barcode: BranchID (1 digit) + Sequence (5 digits)
+                Dim branchDigit = _branchID Mod 10 ' Use last digit of branch ID
+                Dim seqPart = (sequence Mod 100000).ToString("D5") ' 5-digit sequence
+                Return $"{branchDigit}{seqPart}"
             End Using
         Catch ex As Exception
-            ' If error, return 1
-            Return 1
+            ' Fallback to simple sequence if database fails
+            Dim branchDigit = _branchID Mod 10
+            Return $"{branchDigit}00001"
         End Try
     End Function
 
@@ -354,6 +366,23 @@ Public Class BoxItemsDialog
 
         Catch ex As Exception
             MessageBox.Show($"Error saving box: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub BtnRemove_Click(sender As Object, e As EventArgs)
+        If dgvItems.SelectedRows.Count = 0 Then
+            MessageBox.Show("Please select an item to remove.", "No Selection", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        Try
+            ' Remove selected row from DataTable
+            Dim selectedIndex = dgvItems.SelectedRows(0).Index
+            _boxItems.Rows(selectedIndex).Delete()
+            _boxItems.AcceptChanges()
+            UpdateTotal()
+        Catch ex As Exception
+            MessageBox.Show($"Error removing item: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 

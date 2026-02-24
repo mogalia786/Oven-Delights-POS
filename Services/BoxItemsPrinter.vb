@@ -94,15 +94,22 @@ Public Class BoxItemsPrinter
                 e.Graphics.DrawString(barcodeText, fontBold, Brushes.Black, (302 - barcodeSize.Width) / 2, yPos)
                 yPos += 18
                 
-                ' Barcode (centered)
-                Dim barcodeDisplay = $"*{_boxBarcode}*"
-                Dim barcodeDisplaySize = e.Graphics.MeasureString(barcodeDisplay, fontBarcode)
-                e.Graphics.DrawString(barcodeDisplay, fontBarcode, Brushes.Black, (302 - barcodeDisplaySize.Width) / 2, yPos)
-                yPos += 35
+                ' Barcode as Code 39 image (centered)
+                Try
+                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(_boxBarcode, 250, 60)
+                    e.Graphics.DrawImage(barcodeImage, CInt((302 - 250) / 2), CInt(yPos))
+                    yPos += 65
+                    barcodeImage.Dispose()
+                Catch ex As Exception
+                    ' Fallback to text if barcode generation fails
+                    Dim barcodeTextSize = e.Graphics.MeasureString(_boxBarcode, fontLarge)
+                    e.Graphics.DrawString(_boxBarcode, fontLarge, Brushes.Black, (302 - barcodeTextSize.Width) / 2, yPos)
+                    yPos += 25
+                End Try
                 
                 ' Barcode text below
-                Dim barcodeTextSize = e.Graphics.MeasureString(_boxBarcode, fontBold)
-                e.Graphics.DrawString(_boxBarcode, fontBold, Brushes.Black, (302 - barcodeTextSize.Width) / 2, yPos)
+                Dim barcodeTextSize2 = e.Graphics.MeasureString(_boxBarcode, fontBold)
+                e.Graphics.DrawString(_boxBarcode, fontBold, Brushes.Black, (302 - barcodeTextSize2.Width) / 2, yPos)
                 yPos += 18
                 
                 e.Graphics.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
@@ -127,27 +134,33 @@ Public Class BoxItemsPrinter
             Dim printDoc As New PrintDocument()
             
             AddHandler printDoc.PrintPage, Sub(sender, e)
-                ' Barcode font
-                Dim fontBarcode As New Font("Free 3 of 9", 36, FontStyle.Regular)
                 Dim fontBold As New Font("Courier New", 10, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 14, FontStyle.Bold)
                 Dim yPos As Single = 20
                 Dim leftMargin As Single = 5
                 
                 ' Title
                 Dim titleText = "BOX BARCODE"
-                Dim titleSize = e.Graphics.MeasureString(titleText, fontBold)
-                e.Graphics.DrawString(titleText, fontBold, Brushes.Black, (302 - titleSize.Width) / 2, yPos)
-                yPos += 25
+                Dim titleSize = e.Graphics.MeasureString(titleText, fontLarge)
+                e.Graphics.DrawString(titleText, fontLarge, Brushes.Black, (302 - titleSize.Width) / 2, yPos)
+                yPos += 30
                 
-                ' Barcode (centered and large)
-                Dim barcodeDisplay = $"*{_boxBarcode}*"
-                Dim barcodeDisplaySize = e.Graphics.MeasureString(barcodeDisplay, fontBarcode)
-                e.Graphics.DrawString(barcodeDisplay, fontBarcode, Brushes.Black, (302 - barcodeDisplaySize.Width) / 2, yPos)
-                yPos += 50
+                ' Barcode as Code 39 image (centered and large)
+                Try
+                    Dim barcodeImage = BarcodeGenerator.GenerateCode39Barcode(_boxBarcode, 280, 80)
+                    e.Graphics.DrawImage(barcodeImage, CInt((302 - 280) / 2), CInt(yPos))
+                    yPos += 85
+                    barcodeImage.Dispose()
+                Catch ex As Exception
+                    ' Fallback to text if barcode generation fails
+                    Dim barcodeTextSize = e.Graphics.MeasureString(_boxBarcode, fontLarge)
+                    e.Graphics.DrawString(_boxBarcode, fontLarge, Brushes.Black, (302 - barcodeTextSize.Width) / 2, yPos)
+                    yPos += 30
+                End Try
                 
                 ' Barcode text below (centered)
-                Dim barcodeTextSize = e.Graphics.MeasureString(_boxBarcode, fontBold)
-                e.Graphics.DrawString(_boxBarcode, fontBold, Brushes.Black, (302 - barcodeTextSize.Width) / 2, yPos)
+                Dim barcodeTextSize2 = e.Graphics.MeasureString(_boxBarcode, fontBold)
+                e.Graphics.DrawString(_boxBarcode, fontBold, Brushes.Black, (302 - barcodeTextSize2.Width) / 2, yPos)
                 yPos += 25
                 
                 ' Instructions

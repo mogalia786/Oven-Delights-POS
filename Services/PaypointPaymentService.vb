@@ -89,11 +89,27 @@ Public Class PaypointPaymentService
             If response.IsSuccessStatusCode Then
                 Dim transactionResponse = JsonConvert.DeserializeObject(Of JObject)(responseBody)
                 
+                ' Extract card details from FNB response
+                Dim transactions = transactionResponse("transactions")
+                Dim maskedPan As String = Nothing
+                Dim cardType As String = Nothing
+                Dim approvalCode As String = Nothing
+                
+                If transactions IsNot Nothing AndAlso transactions.HasValues Then
+                    Dim firstTxn = CType(transactions.First, JObject)
+                    maskedPan = firstTxn("pan")?.ToString()
+                    cardType = firstTxn("cardType")?.ToString()
+                    approvalCode = firstTxn("approvalCode")?.ToString()
+                End If
+                
                 Return New PaymentResult With {
                     .IsSuccess = True,
                     .TransactionId = transactionResponse("transactionId")?.ToString(),
                     .Status = transactionResponse("status")?.ToString(),
                     .Message = "Payment processed successfully",
+                    .AuthCode = approvalCode,
+                    .CardType = cardType,
+                    .CardLastFour = If(maskedPan IsNot Nothing AndAlso maskedPan.Length >= 4, maskedPan.Substring(maskedPan.Length - 4), Nothing),
                     .RawResponse = responseBody
                 }
             Else

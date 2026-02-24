@@ -15,7 +15,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <IsWebBootstrapper>false</IsWebBootstrapper>
-    <PublishUrl>E:\ODV77\</PublishUrl>
+    <PublishUrl>E:\ODV81\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
@@ -25,7 +25,9 @@
     <UpdatePeriodically>false</UpdatePeriodically>
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
-    <ApplicationRevision>89</ApplicationRevision>
+    <UpdateUrl>http://www.mogalia.co.za/pos/</UpdateUrl>
+    <WebPage>publish.htm</WebPage>
+    <ApplicationRevision>95</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
@@ -87,6 +89,8 @@
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
   <ItemGroup>
     <Import Include="Microsoft.VisualBasic" />
@@ -206,6 +210,33 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Services\BoxItemsPrinter.vb" />
+    <Compile Include="Services\AutoUpdateService.vb" />
+    <Compile Include="Forms\RetailManagerAuthDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\OrderLookupDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\OrderSelectionDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Services\CakeOrderEditService.vb" />
+    <Compile Include="Services\CakeOrderCancelService.vb" />
+    <Compile Include="Services\AccountingService.vb" />
+    <Compile Include="Forms\UpdateDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\PriceOverrideDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\RefundTenderDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\RefundTenderDialog.Designer.vb">
+      <DependentUpon>RefundTenderDialog.vb</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Models\PriceOverride.vb" />
     <Compile Include="ResponsiveHelper.vb" />
     <Compile Include="ApplicationEvents.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />

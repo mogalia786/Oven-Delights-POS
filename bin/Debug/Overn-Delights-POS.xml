@@ -113,7 +113,7 @@ Overn-Delights-POS
  Print receipt to both thermal slip printer (default) and continuous network printer
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToThermalPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToThermalPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable,System.String)">
  <summary>
  Print to thermal slip printer (80mm Epson)
  </summary>
@@ -262,11 +262,24 @@ Overn-Delights-POS
 <member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.LoadBoxItems(System.String)">
  <summary>
  Loads all items from a box barcode into the cart
+ Returns True if box was found and loaded, False otherwise
  </summary>
 </member>
 <member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.GetProductIDFromBarcode(System.String)">
  <summary>
  Gets ProductID from barcode
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.EditCakeOrder">
+ <summary>
+ Opens the Edit Cake Order workflow (Shift+F11)
+ Requires Retail Manager authentication
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.CancelCakeOrder">
+ <summary>
+ Opens the Cancel Cake Order workflow
+ Requires Retail Manager authentication
  </summary>
 </member>
 <member name="M:Overn_Delights_POS.PaymentTenderForm.PrintEFTSlip">
@@ -288,6 +301,32 @@ Overn-Delights-POS
 <member name="T:Overn_Delights_POS.UserDefinedOrderData">
  <summary>
  Data structure to hold User Defined Order header information
+ </summary>
+</member>
+<member name="T:Overn_Delights_POS.AccountingService">
+ <summary>
+ Accounting Service for posting proper double-entry bookkeeping transactions
+ Handles Cash on Hand vs Bank separation and Customer Ledger tracking
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.AccountingService.PostOrderDeposit(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.String,System.Int32,System.String)">
+ <summary>
+ Post cake order deposit - creates customer receivable and records deposit as liability
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.AccountingService.PostOrderEdit(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.Int32,System.String)">
+ <summary>
+ Post order edit - adjust customer receivable for price difference
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.AccountingService.PostOrderCollection(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.Decimal,System.String,System.Int32,System.String)">
+ <summary>
+ Post order collection - recognize revenue and clear deposits
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.AccountingService.PostOrderCancellation(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.String,System.Int32,System.String)">
+ <summary>
+ Post order cancellation - record cancellation fee revenue and process refund/payment
  </summary>
 </member>
 <member name="T:Overn_Delights_POS.ResponsiveHelper">

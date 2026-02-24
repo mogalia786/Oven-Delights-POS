@@ -56,6 +56,26 @@ Public Class CakeOrderFormNew
     Private _depositAmount As Decimal = 0
     Private _balanceAmount As Decimal = 0
     
+    ' Edit mode fields
+    Private _isEditMode As Boolean = False
+    Private _editOrderID As Integer = 0
+    Private _editOrderNumber As String = ""
+    Private _originalDepositPaid As Decimal = 0
+    Private _originalTotalAmount As Decimal = 0
+    Private _orderEditedDate As DateTime = DateTime.Now
+    
+    ' Cancel mode fields
+    Private _isCancelMode As Boolean = False
+    Private _cancellationFeeProductID As Integer = 0
+    Private _cancellationFeeAmount As Decimal = 0
+    
+    ' Accounting service
+    Private _accountingService As AccountingService
+    
+    ' Customer info for accounting
+    Private _customerID As Integer = 0
+    Private _customerAccountNumber As String = ""
+    
     Public Class OrderItem
         Public Property ProductID As Integer
         Public Property Description As String
@@ -64,7 +84,7 @@ Public Class CakeOrderFormNew
         Public Property TotalPrice As Decimal
     End Class
     
-    Public Sub New(branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String, branchName As String, branchAddress As String, branchPhone As String, Optional cartItems As DataTable = Nothing)
+    Public Sub New(branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String, branchName As String, branchAddress As String, branchPhone As String, Optional cartItems As DataTable = Nothing, Optional editOrderID As Integer = 0, Optional isCancelMode As Boolean = False)
         _branchID = branchID
         _tillPointID = tillPointID
         _cashierID = cashierID
@@ -74,11 +94,33 @@ Public Class CakeOrderFormNew
         _branchPhone = branchPhone
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
         
+        ' Initialize accounting service
+        _accountingService = New AccountingService()
+        
+        ' Check if this is edit or cancel mode
+        If editOrderID > 0 Then
+            If isCancelMode Then
+                _isCancelMode = True
+                _editOrderID = editOrderID
+            Else
+                _isEditMode = True
+                _editOrderID = editOrderID
+            End If
+        End If
+        
         InitializeComponent()
         LoadProducts()
         
-        ' Pre-populate with cart items if provided
-        If cartItems IsNot Nothing AndAlso cartItems.Rows.Count > 0 Then
+        ' Load existing order for editing or cancelling
+        If _isEditMode OrElse _isCancelMode Then
+            LoadExistingOrder(_editOrderID)
+            
+            ' If cancel mode, load cancellation fees and setup UI
+            If _isCancelMode Then
+                SetupCancelMode()
+            End If
+        ElseIf cartItems IsNot Nothing AndAlso cartItems.Rows.Count > 0 Then
+            ' Pre-populate with cart items if provided
             LoadCartItems(cartItems)
         End If
     End Sub
@@ -101,11 +143,110 @@ Public Class CakeOrderFormNew
             RefreshItemsGrid()
             CalculateTotals()
             
-            ' Set default deposit to 50% of total
-            txtDeposit.Text = Math.Round(_totalAmount * 0.5D, 2).ToString("0.00")
-            
         Catch ex As Exception
             MessageBox.Show($"Error loading cart items: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub LoadExistingOrder(orderID As Integer)
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                
+                ' Load order header
+                Dim sqlOrder = "
+                    SELECT 
+                        OrderNumber, AccountNumber, CustomerName, CustomerPhone,
+                        CakeColor, CakePicture, ReadyDate, ReadyTime,
+                        SpecialInstructions, Notes, TotalAmount, DepositPaid
+                    FROM POS_CustomOrders
+                    WHERE OrderID = @OrderID"
+                
+                Using cmd As New SqlCommand(sqlOrder, conn)
+                    cmd.Parameters.AddWithValue("@OrderID", orderID)
+                    
+                    Using reader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            _editOrderNumber = reader("OrderNumber").ToString()
+                            _originalDepositPaid = CDec(reader("DepositPaid"))
+                            _originalTotalAmount = CDec(reader("TotalAmount"))
+                            _customerAccountNumber = If(IsDBNull(reader("AccountNumber")), "", reader("AccountNumber").ToString())
+                            
+                            ' Populate form fields (will be done after InitializeComponent)
+                            ' Store values temporarily
+                            Dim orderData As New Dictionary(Of String, Object) From {
+                                {"AccountNumber", _customerAccountNumber},
+                                {"CustomerName", reader("CustomerName").ToString()},
+                                {"CustomerPhone", reader("CustomerPhone").ToString()},
+                                {"CakeColor", reader("CakeColor").ToString()},
+                                {"CakePicture", reader("CakePicture").ToString()},
+                                {"PickupDate", CDate(reader("ReadyDate"))},
+                                {"PickupTime", reader("ReadyTime").ToString()},
+                                {"SpecialRequests", If(IsDBNull(reader("SpecialInstructions")), "", reader("SpecialInstructions").ToString())},
+                                {"Notes", If(IsDBNull(reader("Notes")), "", reader("Notes").ToString())},
+                                {"DepositPaid", CDec(reader("DepositPaid"))}
+                            }
+                            
+                            ' Populate controls after they're created
+                            AddHandler Me.Load, Sub(s, e)
+                                txtAccountNumber.Text = orderData("AccountNumber").ToString()
+                                txtCustomerName.Text = orderData("CustomerName").ToString()
+                                txtCustomerPhone.Text = orderData("CustomerPhone").ToString()
+                                txtCakeColor.Text = orderData("CakeColor").ToString()
+                                txtCakePicture.Text = orderData("CakePicture").ToString()
+                                dtpCollectionDate.Value = CDate(orderData("PickupDate"))
+                                
+                                Dim pickupTime = DateTime.Parse(orderData("PickupTime").ToString())
+                                dtpCollectionTime.Value = pickupTime
+                                
+                                txtSpecialRequests.Text = orderData("SpecialRequests").ToString()
+                                txtNotes.Text = orderData("Notes").ToString()
+                                txtDeposit.Text = CDec(orderData("DepositPaid")).ToString("F2")
+                                txtDeposit.ReadOnly = True
+                                txtDeposit.BackColor = Color.LightGray
+                                
+                                ' Update order number label to show existing order number
+                                lblOrderNumber.Text = _editOrderNumber
+                                lblOrderNumber.ForeColor = Color.Red
+                                lblOrderNumber.Font = New Font("Segoe UI", 9, FontStyle.Bold)
+                                
+                                ' Update title to show edit mode
+                                Me.Text = $"EDIT Cake Order #{_editOrderNumber} - {_branchName}"
+                            End Sub
+                        End If
+                    End Using
+                End Using
+                
+                ' Load order items
+                Dim sqlItems = "
+                    SELECT ProductID, ProductName, Quantity, UnitPrice, LineTotal
+                    FROM POS_CustomOrderItems
+                    WHERE OrderID = @OrderID"
+                
+                Using cmd As New SqlCommand(sqlItems, conn)
+                    cmd.Parameters.AddWithValue("@OrderID", orderID)
+                    
+                    Using reader = cmd.ExecuteReader()
+                        While reader.Read()
+                            Dim item As New OrderItem With {
+                                .ProductID = CInt(reader("ProductID")),
+                                .Description = reader("ProductName").ToString(),
+                                .Quantity = CInt(reader("Quantity")),
+                                .UnitPrice = CDec(reader("UnitPrice")),
+                                .TotalPrice = CDec(reader("LineTotal"))
+                            }
+                            _orderItems.Add(item)
+                        End While
+                    End Using
+                End Using
+                
+                ' Refresh grid and calculate totals
+                RefreshItemsGrid()
+                CalculateTotals()
+            End Using
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error loading order for editing: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
     
@@ -960,7 +1101,17 @@ Public Class CakeOrderFormNew
         End Try
     End Sub
     
-    Private Sub PrintTillSlip(orderNumber As String, orderID As Integer)
+    Private Sub PrintTillSlip(orderNumber As String, orderID As Integer, Optional paymentMethod As String = "Cash", Optional cardMaskedPan As String = "", Optional cardType As String = "", Optional cardApprovalCode As String = "")
+        Try
+            ' Print twice: Customer Copy + Merchant Copy
+            PrintSingleTillSlip(orderNumber, orderID, paymentMethod, cardMaskedPan, cardType, cardApprovalCode, "CUSTOMER COPY")
+            PrintSingleTillSlip(orderNumber, orderID, paymentMethod, cardMaskedPan, cardType, cardApprovalCode, "MERCHANT COPY")
+        Catch ex As Exception
+            Throw New Exception($"Till slip print error: {ex.Message}", ex)
+        End Try
+    End Sub
+    
+    Private Sub PrintSingleTillSlip(orderNumber As String, orderID As Integer, paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, copyType As String)
         Try
             ' Create standard POS till slip - ALL BOLD FONTS
             Dim printDoc As New PrintDocument()
@@ -981,9 +1132,35 @@ Public Class CakeOrderFormNew
                 ' Branch info with full address
                 g.DrawString(_branchName, fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
-                g.DrawString(_branchAddress, fontBold, Brushes.Black, leftMargin, yPos)
+                
+                ' VAT Number
+                g.DrawString("Vat Number        4150166793", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 14
-                g.DrawString($"Tel: {_branchPhone}", fontBold, Brushes.Black, leftMargin, yPos)
+                
+                ' VAT Registration
+                g.DrawString("Vat Registration  CK 99/65000/23", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' Telephone
+                g.DrawString("Telephone         0314019942", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' ORDER EDITED NOTICE (BIG BOLD)
+                If _isEditMode AndAlso _orderEditedDate <> Nothing Then
+                    Dim editFont As New Font("Courier New", 10, FontStyle.Bold)
+                    Dim editText As String = $"*** ORDER EDITED ON ***"
+                    Dim editText2 As String = $"{_orderEditedDate:dd/MM/yyyy HH:mm}"
+                    Dim editSize = g.MeasureString(editText, editFont)
+                    Dim editSize2 = g.MeasureString(editText2, editFont)
+                    g.DrawString(editText, editFont, Brushes.Black, (302 - editSize.Width) / 2, yPos)
+                    yPos += 14
+                    g.DrawString(editText2, editFont, Brushes.Black, (302 - editSize2.Width) / 2, yPos)
+                    yPos += 18
+                End If
+                
+                ' Copy type - centered
+                Dim copySize = g.MeasureString(copyType, fontBold)
+                g.DrawString(copyType, fontBold, Brushes.Black, (302 - copySize.Width) / 2, yPos)
                 yPos += 15
                 
                 ' Date and time
@@ -993,6 +1170,16 @@ Public Class CakeOrderFormNew
                 ' Order number
                 g.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
+                
+                ' Account number with reference message
+                If Not String.IsNullOrWhiteSpace(txtAccountNumber.Text) Then
+                    g.DrawString($"Account #: {txtAccountNumber.Text.Trim()}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString("Please use account number as reference", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                Else
+                    yPos += 3
+                End If
                 
                 ' Cashier
                 g.DrawString($"Cashier: {_cashierName}", fontBold, Brushes.Black, leftMargin, yPos)
@@ -1081,15 +1268,38 @@ Public Class CakeOrderFormNew
                 Dim subtotalExclVAT = Math.Round(_totalAmount / 1.15D, 2)
                 Dim vatAmount = Math.Round(_totalAmount - subtotalExclVAT, 2)
                 
-                g.DrawString($"Subtotal (excl VAT):  R {subtotalExclVAT:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                ' Right-aligned figures
+                g.DrawString("Subtotal (excl VAT):", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString($"R {subtotalExclVAT:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                g.DrawString($"VAT (15%):            R {vatAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString("VAT (15%):", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString($"R {vatAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                g.DrawString($"Total Amount:         R {_totalAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString("Total Amount:", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString($"R {_totalAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                g.DrawString($"Deposit Paid:         R {_depositAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString("Deposit Paid:", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString($"R {_depositAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 14
-                g.DrawString($"Balance Due:          R {_balanceAmount:N2}", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString($"Payment: {paymentMethod}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                
+                ' Show card details if payment was by card
+                If (paymentMethod = "CARD" OrElse paymentMethod = "SPLIT") AndAlso Not String.IsNullOrEmpty(cardMaskedPan) Then
+                    g.DrawString($"Card: {cardMaskedPan}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    If Not String.IsNullOrEmpty(cardType) Then
+                        g.DrawString($"Card Type: {cardType}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                    If Not String.IsNullOrEmpty(cardApprovalCode) Then
+                        g.DrawString($"Approval: {cardApprovalCode}", fontBold, Brushes.Black, leftMargin, yPos)
+                        yPos += 14
+                    End If
+                End If
+                
+                g.DrawString("Balance Due:", fontBold, Brushes.Black, leftMargin, yPos)
+                g.DrawString($"R {_balanceAmount:N2}", fontBold, Brushes.Black, 220, yPos)
                 yPos += 18
                 
                 g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
@@ -1130,26 +1340,149 @@ Public Class CakeOrderFormNew
         End Try
     End Sub
     
+    Private Sub PrintManufacturerSummary(orderNumber As String)
+        Try
+            Dim printDoc As New PrintDocument()
+            
+            AddHandler printDoc.PrintPage, Sub(sender As Object, e As PrintPageEventArgs)
+                Dim g = e.Graphics
+                Dim fontBold As New Font("Courier New", 8, FontStyle.Bold)
+                Dim fontLarge As New Font("Courier New", 11, FontStyle.Bold)
+                Dim yPos As Single = 5
+                Dim leftMargin As Single = 5
+                
+                ' Header
+                Dim headerText = "MANUFACTURER SUMMARY"
+                Dim headerSize = g.MeasureString(headerText, fontLarge)
+                g.DrawString(headerText, fontLarge, Brushes.Black, (302 - headerSize.Width) / 2, yPos)
+                yPos += 22
+                
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' ORDER EDITED NOTICE (BIG BOLD)
+                If _isEditMode AndAlso _orderEditedDate <> Nothing Then
+                    Dim editFont As New Font("Courier New", 10, FontStyle.Bold)
+                    Dim editText As String = $"*** ORDER EDITED ON ***"
+                    Dim editText2 As String = $"{_orderEditedDate:dd/MM/yyyy HH:mm}"
+                    Dim editSize = g.MeasureString(editText, editFont)
+                    Dim editSize2 = g.MeasureString(editText2, editFont)
+                    g.DrawString(editText, editFont, Brushes.Black, (302 - editSize.Width) / 2, yPos)
+                    yPos += 14
+                    g.DrawString(editText2, editFont, Brushes.Black, (302 - editSize2.Width) / 2, yPos)
+                    yPos += 18
+                End If
+                
+                ' Order number
+                g.DrawString($"Order #: {orderNumber}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' Customer name
+                g.DrawString("CUSTOMER:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString(txtCustomerName.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' DUE DATE AND TIME - PROMINENT
+                g.DrawString("*** DUE DATE & TIME ***", fontLarge, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                g.DrawString($"Date: {dtpCollectionDate.Value:dd/MM/yyyy}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Time: {dtpCollectionTime.Value:HH:mm}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 14
+                g.DrawString($"Day: {lblCollectionDay.Text.ToUpper()}", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 18
+                
+                ' Cake details
+                If Not String.IsNullOrWhiteSpace(txtCakeColor.Text) Then
+                    g.DrawString("CAKE COLOR:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtCakeColor.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                If Not String.IsNullOrWhiteSpace(txtCakePicture.Text) Then
+                    g.DrawString("CAKE IMAGE:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtCakePicture.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                ' Special instructions
+                If Not String.IsNullOrWhiteSpace(txtSpecialRequests.Text) Then
+                    g.DrawString("SPECIAL INSTRUCTIONS:", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                    g.DrawString(txtSpecialRequests.Text.Trim(), fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 18
+                End If
+                
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Items - NO PRICES
+                g.DrawString("ITEMS TO PREPARE:", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                For Each item In _orderItems
+                    g.DrawString($"{item.Quantity:0.00} x {item.Description}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 14
+                Next
+                
+                yPos += 5
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Footer
+                Dim footer = "FOR MANUFACTURER USE ONLY"
+                Dim footerSize = g.MeasureString(footer, fontBold)
+                g.DrawString(footer, fontBold, Brushes.Black, (302 - footerSize.Width) / 2, yPos)
+                
+                e.HasMorePages = False
+            End Sub
+            
+            printDoc.DefaultPageSettings.PaperSize = New PaperSize("Receipt", 315, 1000)
+            printDoc.Print()
+            
+        Catch ex As Exception
+            Throw New Exception($"Manufacturer summary print error: {ex.Message}", ex)
+        End Try
+    End Sub
+    
     Private Sub AcceptOrder(sender As Object, e As EventArgs)
         Try
+            ' CANCEL MODE: Process cancellation instead
+            If _isCancelMode Then
+                CancelOrder()
+                Return
+            End If
+            
             If Not ValidateOrder() Then Return
             
             If MessageBox.Show($"Accept this order?{vbCrLf}Total: R{_totalAmount:F2}{vbCrLf}Deposit: R{_depositAmount:F2}{vbCrLf}Balance: R{_balanceAmount:F2}",
                               "Confirm Order", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
                 
-                ' Open payment tender form for deposit collection
-                ' Note: This is a DEPOSIT payment, not a sale transaction
-                Using paymentForm As New PaymentTenderForm(_depositAmount, _branchID, _tillPointID, _cashierID, _cashierName)
-                    If paymentForm.ShowDialog() = DialogResult.OK Then
-                        ' Payment successful - get payment method from form
-                        Dim paymentMethod = "Cash" ' Default, PaymentTenderForm will handle actual payment
-                        
-                        ' Save order (deposit recorded in POS_CustomOrders, NOT as sale)
-                        SaveOrder(paymentMethod)
-                    Else
-                        MessageBox.Show("Payment cancelled. Order not saved.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                    End If
-                End Using
+                ' EDIT MODE: Skip payment - deposit already paid on original order
+                If _isEditMode Then
+                    ' Just save the updated order and print receipts
+                    SaveOrder("CASH", "", "", "")
+                Else
+                    ' NEW ORDER: Open payment tender form for deposit collection
+                    ' Note: This is a DEPOSIT payment, not a sale transaction
+                    Using paymentForm As New PaymentTenderForm(_depositAmount, _branchID, _tillPointID, _cashierID, _cashierName)
+                        If paymentForm.ShowDialog() = DialogResult.OK Then
+                            ' Payment successful - get payment details from form
+                            Dim paymentMethod = paymentForm.PaymentMethod
+                            Dim cardMaskedPan = paymentForm.CardMaskedPan
+                            Dim cardType = paymentForm.CardType
+                            Dim cardApprovalCode = paymentForm.CardApprovalCode
+                            
+                            ' Save order (deposit recorded in POS_CustomOrders, NOT as sale)
+                            SaveOrder(paymentMethod, cardMaskedPan, cardType, cardApprovalCode)
+                        Else
+                            MessageBox.Show("Payment cancelled. Order not saved.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        End If
+                    End Using
+                End If
             End If
             
         Catch ex As Exception
@@ -1184,68 +1517,136 @@ Public Class CakeOrderFormNew
         Return True
     End Function
     
-    Private Sub SaveOrder(paymentMethod As String)
+    Private Sub SaveOrder(paymentMethod As String, Optional cardMaskedPan As String = "", Optional cardType As String = "", Optional cardApprovalCode As String = "")
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
                 
                 Using transaction = conn.BeginTransaction()
                     Try
-                        ' Generate order number
-                        Dim orderNumber = GenerateOrderNumber(conn, transaction)
-                        
-                        ' Insert order header (deposit recorded here, NOT as a sale transaction)
-                        Dim sqlOrder = "
-                            INSERT INTO POS_CustomOrders (
-                                OrderNumber, BranchID, BranchName, OrderType,
-                                CustomerName, CustomerSurname, CustomerPhone, AccountNumber,
-                                OrderDate, ReadyDate, ReadyTime, CollectionDay, CollectionPoint,
-                                CakeColor, CakePicture, SpecialInstructions, Notes,
-                                TotalAmount, DepositPaid, BalanceDue,
-                                OrderStatus, CreatedBy, ManufacturingInstructions
-                            ) VALUES (
-                                @OrderNumber, @BranchID, @BranchName, 'Cake',
-                                @CustomerName, @CustomerSurname, @CustomerPhone, @AccountNumber,
-                                GETDATE(), @ReadyDate, @ReadyTime, @CollectionDay, @CollectionPoint,
-                                @CakeColor, @CakePicture, @SpecialInstructions, @Notes,
-                                @TotalAmount, @DepositPaid, @BalanceDue,
-                                'New', @CreatedBy, @DepositPaymentMethod
-                            )
-                            SELECT SCOPE_IDENTITY()"
-                        
-                        ' Split customer name into first name and surname
-                        Dim fullName = txtCustomerName.Text.Trim()
-                        Dim nameParts = fullName.Split(" "c)
-                        Dim firstName = If(nameParts.Length > 0, nameParts(0), fullName)
-                        Dim surname = If(nameParts.Length > 1, String.Join(" ", nameParts.Skip(1)), "")
-                        
+                        Dim orderNumber As String
                         Dim orderID As Integer
-                        Using cmd As New SqlCommand(sqlOrder, conn, transaction)
-                            cmd.Parameters.AddWithValue("@OrderNumber", orderNumber)
-                            cmd.Parameters.AddWithValue("@BranchID", _branchID)
-                            cmd.Parameters.AddWithValue("@BranchName", _branchName)
-                            cmd.Parameters.AddWithValue("@CustomerName", firstName)
-                            cmd.Parameters.AddWithValue("@CustomerSurname", surname)
-                            cmd.Parameters.AddWithValue("@CustomerPhone", txtCustomerPhone.Text.Trim())
-                            cmd.Parameters.AddWithValue("@AccountNumber", If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), DBNull.Value, txtAccountNumber.Text.Trim()))
-                            cmd.Parameters.AddWithValue("@ReadyDate", dtpCollectionDate.Value.Date)
-                            cmd.Parameters.AddWithValue("@ReadyTime", dtpCollectionTime.Value.TimeOfDay)
-                            cmd.Parameters.AddWithValue("@CollectionDay", lblCollectionDay.Text)
-                            cmd.Parameters.AddWithValue("@CollectionPoint", _branchName)
-                            cmd.Parameters.AddWithValue("@CakeColor", txtCakeColor.Text.Trim())
-                            cmd.Parameters.AddWithValue("@CakePicture", If(String.IsNullOrWhiteSpace(txtCakePicture.Text), "see whats app", txtCakePicture.Text.Trim()))
-                            cmd.Parameters.AddWithValue("@SpecialInstructions", If(String.IsNullOrWhiteSpace(txtSpecialRequests.Text), DBNull.Value, txtSpecialRequests.Text.Trim()))
-                            cmd.Parameters.AddWithValue("@Notes", If(String.IsNullOrWhiteSpace(txtNotes.Text), DBNull.Value, txtNotes.Text.Trim()))
-                            cmd.Parameters.AddWithValue("@TotalAmount", _totalAmount)
-                            cmd.Parameters.AddWithValue("@DepositPaid", _depositAmount)
-                            cmd.Parameters.AddWithValue("@BalanceDue", _balanceAmount)
-                            cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
-                            cmd.Parameters.AddWithValue("@DepositPaymentMethod", $"Deposit paid via {paymentMethod}")
-                            
-                            orderID = Convert.ToInt32(cmd.ExecuteScalar())
-                        End Using
                         
-                        ' Insert order items
+                        If _isEditMode Then
+                            ' EDIT MODE: Use existing order number and ID
+                            orderNumber = _editOrderNumber
+                            orderID = _editOrderID
+                            _orderEditedDate = DateTime.Now
+                            
+                            ' Update existing order
+                            Dim sqlUpdate = "
+                                UPDATE POS_CustomOrders SET
+                                    CustomerName = @CustomerName,
+                                    CustomerSurname = @CustomerSurname,
+                                    CustomerPhone = @CustomerPhone,
+                                    AccountNumber = @AccountNumber,
+                                    CakeColor = @CakeColor,
+                                    CakePicture = @CakePicture,
+                                    ReadyDate = @ReadyDate,
+                                    ReadyTime = @ReadyTime,
+                                    SpecialInstructions = @SpecialInstructions,
+                                    Notes = @Notes,
+                                    TotalAmount = @TotalAmount,
+                                    BalanceDue = @Balance,
+                                    LastEditedDate = @EditedDate,
+                                    LastEditedBy = @EditedBy
+                                WHERE OrderID = @OrderID"
+                            
+                            Using cmd As New SqlCommand(sqlUpdate, conn, transaction)
+                                Dim fullName = txtCustomerName.Text.Trim()
+                                Dim nameParts = fullName.Split(" "c)
+                                Dim firstName = If(nameParts.Length > 0, nameParts(0), fullName)
+                                Dim surname = If(nameParts.Length > 1, String.Join(" ", nameParts.Skip(1)), "")
+                                
+                                cmd.Parameters.AddWithValue("@OrderID", orderID)
+                                cmd.Parameters.AddWithValue("@CustomerName", firstName)
+                                cmd.Parameters.AddWithValue("@CustomerSurname", surname)
+                                cmd.Parameters.AddWithValue("@CustomerPhone", txtCustomerPhone.Text.Trim())
+                                cmd.Parameters.AddWithValue("@AccountNumber", If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), DBNull.Value, txtAccountNumber.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@CakeColor", txtCakeColor.Text.Trim())
+                                cmd.Parameters.AddWithValue("@CakePicture", If(String.IsNullOrWhiteSpace(txtCakePicture.Text), "see whats app", txtCakePicture.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@ReadyDate", dtpCollectionDate.Value.Date)
+                                cmd.Parameters.AddWithValue("@ReadyTime", dtpCollectionTime.Value.TimeOfDay)
+                                cmd.Parameters.AddWithValue("@SpecialInstructions", If(String.IsNullOrWhiteSpace(txtSpecialRequests.Text), DBNull.Value, txtSpecialRequests.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@Notes", If(String.IsNullOrWhiteSpace(txtNotes.Text), DBNull.Value, txtNotes.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@TotalAmount", _totalAmount)
+                                cmd.Parameters.AddWithValue("@Balance", _balanceAmount)
+                                cmd.Parameters.AddWithValue("@EditedDate", _orderEditedDate)
+                                cmd.Parameters.AddWithValue("@EditedBy", _cashierName)
+                                cmd.ExecuteNonQuery()
+                            End Using
+                            
+                            ' Delete existing order items
+                            Dim sqlDeleteItems = "DELETE FROM POS_CustomOrderItems WHERE OrderID = @OrderID"
+                            Using cmd As New SqlCommand(sqlDeleteItems, conn, transaction)
+                                cmd.Parameters.AddWithValue("@OrderID", orderID)
+                                cmd.ExecuteNonQuery()
+                            End Using
+                            
+                        Else
+                            ' NEW ORDER MODE: Generate order number and insert new order
+                            orderNumber = GenerateOrderNumber(conn, transaction)
+                        
+                            ' Insert order header (deposit recorded here, NOT as a sale transaction)
+                            Dim sqlOrder = "
+                                INSERT INTO POS_CustomOrders (
+                                    OrderNumber, BranchID, BranchName, OrderType,
+                                    CustomerName, CustomerSurname, CustomerPhone, AccountNumber,
+                                    OrderDate, ReadyDate, ReadyTime, CollectionDay, CollectionPoint,
+                                    CakeColor, CakePicture, SpecialInstructions, Notes,
+                                    TotalAmount, DepositPaid, BalanceDue,
+                                    OrderStatus, CreatedBy, ManufacturingInstructions
+                                ) VALUES (
+                                    @OrderNumber, @BranchID, @BranchName, 'Cake',
+                                    @CustomerName, @CustomerSurname, @CustomerPhone, @AccountNumber,
+                                    GETDATE(), @ReadyDate, @ReadyTime, @CollectionDay, @CollectionPoint,
+                                    @CakeColor, @CakePicture, @SpecialInstructions, @Notes,
+                                    @TotalAmount, @DepositPaid, @BalanceDue,
+                                    'New', @CreatedBy, @DepositPaymentMethod
+                                )
+                                SELECT SCOPE_IDENTITY()"
+                            
+                            Using cmd As New SqlCommand(sqlOrder, conn, transaction)
+                                Dim fullName = txtCustomerName.Text.Trim()
+                                Dim nameParts = fullName.Split(" "c)
+                                Dim firstName = If(nameParts.Length > 0, nameParts(0), fullName)
+                                Dim surname = If(nameParts.Length > 1, String.Join(" ", nameParts.Skip(1)), "")
+                                
+                                cmd.Parameters.AddWithValue("@OrderNumber", orderNumber)
+                                cmd.Parameters.AddWithValue("@BranchID", _branchID)
+                                cmd.Parameters.AddWithValue("@BranchName", _branchName)
+                                cmd.Parameters.AddWithValue("@CustomerName", firstName)
+                                cmd.Parameters.AddWithValue("@CustomerSurname", surname)
+                                cmd.Parameters.AddWithValue("@CustomerPhone", txtCustomerPhone.Text.Trim())
+                                cmd.Parameters.AddWithValue("@AccountNumber", If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), DBNull.Value, txtAccountNumber.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@ReadyDate", dtpCollectionDate.Value.Date)
+                                cmd.Parameters.AddWithValue("@ReadyTime", dtpCollectionTime.Value.TimeOfDay)
+                                cmd.Parameters.AddWithValue("@CollectionDay", lblCollectionDay.Text)
+                                cmd.Parameters.AddWithValue("@CollectionPoint", _branchName)
+                                cmd.Parameters.AddWithValue("@CakeColor", txtCakeColor.Text.Trim())
+                                cmd.Parameters.AddWithValue("@CakePicture", If(String.IsNullOrWhiteSpace(txtCakePicture.Text), "see whats app", txtCakePicture.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@SpecialInstructions", If(String.IsNullOrWhiteSpace(txtSpecialRequests.Text), DBNull.Value, txtSpecialRequests.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@Notes", If(String.IsNullOrWhiteSpace(txtNotes.Text), DBNull.Value, txtNotes.Text.Trim()))
+                                cmd.Parameters.AddWithValue("@TotalAmount", _totalAmount)
+                                cmd.Parameters.AddWithValue("@DepositPaid", _depositAmount)
+                                cmd.Parameters.AddWithValue("@BalanceDue", _balanceAmount)
+                                cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
+                                cmd.Parameters.AddWithValue("@DepositPaymentMethod", $"Deposit paid via {paymentMethod}")
+                                
+                                orderID = Convert.ToInt32(cmd.ExecuteScalar())
+                            End Using
+                        End If
+                        
+                        ' EDIT MODE: Delete existing order items first to prevent duplicates
+                        If _isEditMode Then
+                            Dim sqlDeleteItems = "DELETE FROM POS_CustomOrderItems WHERE OrderID = @OrderID"
+                            Using cmd As New SqlCommand(sqlDeleteItems, conn, transaction)
+                                cmd.Parameters.AddWithValue("@OrderID", orderID)
+                                cmd.ExecuteNonQuery()
+                            End Using
+                        End If
+                        
+                        ' Insert order items (for both new and edit modes)
                         Dim sqlItem = "
                             INSERT INTO POS_CustomOrderItems (
                                 OrderID, ProductID, ProductName, Quantity, UnitPrice, LineTotal
@@ -1270,12 +1671,37 @@ Public Class CakeOrderFormNew
                         
                         transaction.Commit()
                         
+                        ' POST ACCOUNTING ENTRIES (outside transaction to avoid deadlocks)
+                        Try
+                            If _isEditMode Then
+                                ' Post order edit accounting - adjust customer receivable
+                                Dim customerName = txtCustomerName.Text.Trim()
+                                _accountingService.PostOrderEdit(orderNumber, orderID, 0, customerName, 
+                                                                _customerAccountNumber, _originalTotalAmount, 
+                                                                _totalAmount, _branchID, _cashierName)
+                            Else
+                                ' Post order deposit accounting - new order
+                                Dim customerName = txtCustomerName.Text.Trim()
+                                Dim accountNumber = If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), 
+                                                      txtCustomerPhone.Text.Trim(), txtAccountNumber.Text.Trim())
+                                _accountingService.PostOrderDeposit(orderNumber, orderID, 0, customerName,
+                                                                   accountNumber, _totalAmount, _depositAmount,
+                                                                   paymentMethod, _branchID, _cashierName)
+                            End If
+                        Catch accEx As Exception
+                            MessageBox.Show($"Order saved but accounting entry failed: {accEx.Message}", 
+                                          "Accounting Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                        End Try
+                        
                         ' Print to both printers AFTER payment is tendered
                         Try
-                            ' 1. Print till slip on default slip printer
-                            PrintTillSlip(orderNumber, orderID)
+                            ' 1. Print till slip on default slip printer (customer + merchant copies)
+                            PrintTillSlip(orderNumber, orderID, paymentMethod, cardMaskedPan, cardType, cardApprovalCode)
                             
-                            ' 2. Print cake order form on configured continuous printer
+                            ' 2. Print manufacturer summary slip (no prices, just items and due date/time)
+                            PrintManufacturerSummary(orderNumber)
+                            
+                            ' 3. Print cake order form on configured continuous printer
                             Dim configuredPrinter = GetConfiguredPrinter()
                             Dim cakeOrderData = BuildPrintData(orderNumber, orderID)
                             Dim cakeOrderPrinter As New CakeOrderPrinter(cakeOrderData)
@@ -1285,8 +1711,14 @@ Public Class CakeOrderFormNew
                             MessageBox.Show($"Order saved but printing failed: {printEx.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
                         End Try
                         
-                        MessageBox.Show($"Order created successfully!{vbCrLf}Order Number: {orderNumber}{vbCrLf}{vbCrLf}Deposit paid: R{_depositAmount:F2}{vbCrLf}Balance due: R{_balanceAmount:F2}{vbCrLf}{vbCrLf}Printed to:{vbCrLf}- Till slip (receipt printer){vbCrLf}- Cake order form (continuous printer)",
-                                      "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        Dim successMessage As String
+                        If _isEditMode Then
+                            successMessage = $"Order EDITED successfully!{vbCrLf}Order Number: {orderNumber}{vbCrLf}Edited on: {_orderEditedDate:dd MMM yyyy HH:mm}{vbCrLf}{vbCrLf}New Total: R{_totalAmount:F2}{vbCrLf}Deposit paid: R{_originalDepositPaid:F2}{vbCrLf}Balance due: R{_balanceAmount:F2}{vbCrLf}{vbCrLf}Printed to:{vbCrLf}- Till slip (receipt printer){vbCrLf}- Manufacturer summary{vbCrLf}- Cake order form (continuous printer)"
+                        Else
+                            successMessage = $"Order created successfully!{vbCrLf}Order Number: {orderNumber}{vbCrLf}{vbCrLf}Deposit paid: R{_depositAmount:F2}{vbCrLf}Balance due: R{_balanceAmount:F2}{vbCrLf}{vbCrLf}Printed to:{vbCrLf}- Till slip (receipt printer){vbCrLf}- Manufacturer summary{vbCrLf}- Cake order form (continuous printer)"
+                        End If
+                        
+                        MessageBox.Show(successMessage, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
                         
                         Me.DialogResult = DialogResult.OK
                         Me.Close()
@@ -1354,10 +1786,12 @@ Public Class CakeOrderFormNew
             .CustomerPhone = txtCustomerPhone.Text.Trim(),
             .AccountNumber = txtAccountNumber.Text.Trim(),
             .SpecialRequests = txtSpecialRequests.Text.Trim(),
-            .Notes = txtNotes.Text.Trim(),
+            .Notes = If(_isEditMode, $"{txtNotes.Text.Trim()}{vbCrLf}*** ORDER CHANGED ON {_orderEditedDate:dd/MM/yyyy HH:mm} ***", txtNotes.Text.Trim()),
             .InvoiceTotal = _totalAmount,
-            .DepositPaid = _depositAmount,
-            .BalanceOwing = _balanceAmount
+            .DepositPaid = If(_isEditMode, _originalDepositPaid, _depositAmount),
+            .BalanceOwing = _balanceAmount,
+            .IsEditedOrder = _isEditMode,
+            .EditedDate = If(_isEditMode, _orderEditedDate, Nothing)
         }
         
         For Each item In _orderItems
@@ -1371,4 +1805,291 @@ Public Class CakeOrderFormNew
         
         Return printData
     End Function
+    
+    Private Sub SetupCancelMode()
+        Try
+            ' Change form title and button text
+            Me.Text = "Cancel Cake Order"
+            btnAcceptOrder.Text = "Cancel Order"
+            btnAcceptOrder.BackColor = Color.FromArgb(192, 0, 0) ' Red
+            
+            ' Keep existing items visible so customer can see what they're canceling
+            ' They will add cancellation fee as a separate item
+            
+            ' ENABLE product dropdown to add cancellation fee
+            cboProductSearch.Enabled = True
+            btnAddItem.Enabled = True
+            btnRemoveItem.Enabled = True
+            
+            ' Change label to guide user
+            Dim lblProductLabel = Me.Controls.Find("Label1", True).FirstOrDefault()
+            If lblProductLabel IsNot Nothing Then
+                DirectCast(lblProductLabel, Label).Text = "Add Cancellation Fee:"
+                DirectCast(lblProductLabel, Label).ForeColor = Color.Red
+            End If
+            
+            ' Make customer details READ-ONLY
+            txtCustomerName.ReadOnly = True
+            txtCustomerPhone.ReadOnly = True
+            txtAccountNumber.ReadOnly = True
+            dtpCollectionDate.Enabled = False
+            dtpCollectionTime.Enabled = False
+            txtCakeColor.ReadOnly = True
+            txtCakePicture.ReadOnly = True
+            cboSpecialRequests.Enabled = False
+            btnAddRequest.Enabled = False
+            txtNotes.ReadOnly = True
+            
+            ' Make deposit READ-ONLY (not hidden)
+            txtDeposit.ReadOnly = True
+            txtDeposit.BackColor = Color.FromArgb(245, 245, 245) ' Light grey to show read-only
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error setting up cancel mode: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    
+    Private Sub CancelOrder()
+        Try
+            ' Get ONLY the cancellation fee item from the grid (ignore original order items)
+            Dim cancellationFeeAmount As Decimal = 0
+            For Each item In _orderItems
+                If item.Description.ToUpper().Contains("CANCELLATION") OrElse item.Description.ToUpper().Contains("CANCEL") Then
+                    cancellationFeeAmount = item.TotalPrice
+                    Exit For
+                End If
+            Next
+            
+            If cancellationFeeAmount = 0 Then
+                MessageBox.Show("Please add a cancellation fee item.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+            
+            ' Calculate balance: Deposit - Cancellation Fee
+            ' Positive = we owe customer (refund)
+            ' Negative = customer owes us (payment)
+            Dim balanceAmount As Decimal = _depositAmount - cancellationFeeAmount
+            
+            Dim confirmMsg = $"Cancel this order?{vbCrLf}{vbCrLf}" &
+                           $"Order Number: {_editOrderNumber}{vbCrLf}" &
+                           $"Deposit Paid: R{_depositAmount:F2}{vbCrLf}" &
+                           $"Cancellation Fee: R{cancellationFeeAmount:F2}{vbCrLf}"
+            
+            If balanceAmount >= 0 Then
+                confirmMsg &= $"Refund to Customer: R{balanceAmount:F2}"
+            Else
+                confirmMsg &= $"Customer Pays: R{Math.Abs(balanceAmount):F2}"
+            End If
+            
+            If MessageBox.Show(confirmMsg, "Confirm Cancellation", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
+                Return
+            End If
+            
+            ' Open tender dialog based on balance
+            Dim paymentMethod As String = ""
+            Dim cardMaskedPan As String = ""
+            Dim cardType As String = ""
+            Dim cardApprovalCode As String = ""
+            
+            If balanceAmount < 0 Then
+                ' Customer pays us the difference
+                Using paymentForm As New PaymentTenderForm(Math.Abs(balanceAmount), _branchID, _tillPointID, _cashierID, _cashierName)
+                    If paymentForm.ShowDialog() <> DialogResult.OK Then
+                        MessageBox.Show("Payment cancelled. Order not cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        Return
+                    End If
+                    paymentMethod = paymentForm.PaymentMethod
+                    cardMaskedPan = paymentForm.CardMaskedPan
+                    cardType = paymentForm.CardType
+                    cardApprovalCode = paymentForm.CardApprovalCode
+                End Using
+            ElseIf balanceAmount > 0 Then
+                ' We refund customer
+                Using refundForm As New RefundTenderDialog(balanceAmount, "CASH", False)
+                    If refundForm.ShowDialog() <> DialogResult.OK Then
+                        MessageBox.Show("Refund cancelled. Order not cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        Return
+                    End If
+                    paymentMethod = refundForm.RefundMethod
+                End Using
+            Else
+                ' No payment/refund needed
+                paymentMethod = "NONE"
+            End If
+            
+            ' Process cancellation in database
+            ProcessCancellation(paymentMethod, cardMaskedPan, cardType, cardApprovalCode, cancellationFeeAmount, balanceAmount)
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error cancelling order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    Private Sub ProcessCancellation(paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, cancellationFeeAmount As Decimal, balanceAmount As Decimal)
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Using transaction = conn.BeginTransaction()
+                    Try
+                        ' 1. Update order status to Cancelled
+                        Dim sqlUpdate = "UPDATE POS_CustomOrders 
+                                        SET OrderStatus = 'Cancelled',
+                                            ModifiedDate = GETDATE()
+                                        WHERE OrderID = @OrderID"
+                        Using cmd As New SqlCommand(sqlUpdate, conn, transaction)
+                            cmd.Parameters.AddWithValue("@OrderID", _editOrderID)
+                            cmd.ExecuteNonQuery()
+                        End Using
+                        
+                        ' 2. Record net cash flow (customer pays us or we refund them)
+                        ' Only record actual money movement, not the gross cancellation fee
+                        If balanceAmount <> 0 Then
+                            Dim invoice = GenerateInvoiceNumber()
+                            Dim saleType As String
+                            Dim amount As Decimal
+                            
+                            If balanceAmount < 0 Then
+                                ' Customer pays us (cancellation fee > deposit)
+                                saleType = "CancellationFee"
+                                amount = Math.Abs(balanceAmount)
+                            Else
+                                ' We refund customer (deposit > cancellation fee)
+                                saleType = "CancellationRefund"
+                                amount = -balanceAmount
+                            End If
+                            
+                            Dim sql = "INSERT INTO Demo_Sales 
+                                      (InvoiceNumber, BranchID, TotalAmount, PaymentMethod, 
+                                       SaleType, SaleDate, CashierID, CustomerName)
+                                      VALUES 
+                                      (@invoice, @branchId, @amount, @paymentMethod, 
+                                       @saleType, GETDATE(), @cashierId, @customerName)"
+                            Using cmd As New SqlCommand(sql, conn, transaction)
+                                cmd.Parameters.AddWithValue("@invoice", invoice)
+                                cmd.Parameters.AddWithValue("@branchId", _branchID)
+                                cmd.Parameters.AddWithValue("@amount", amount)
+                                cmd.Parameters.AddWithValue("@paymentMethod", paymentMethod)
+                                cmd.Parameters.AddWithValue("@saleType", saleType)
+                                cmd.Parameters.AddWithValue("@cashierId", _cashierID)
+                                cmd.Parameters.AddWithValue("@customerName", txtCustomerName.Text.Trim())
+                                cmd.ExecuteNonQuery()
+                            End Using
+                        End If
+                        
+                        transaction.Commit()
+                        
+                        ' POST ACCOUNTING ENTRIES (outside transaction to avoid deadlocks)
+                        Try
+                            Dim customerName = txtCustomerName.Text.Trim()
+                            Dim accountNumber = If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), 
+                                                  txtCustomerPhone.Text.Trim(), txtAccountNumber.Text.Trim())
+                            _accountingService.PostOrderCancellation(_editOrderNumber, _editOrderID, 0, 
+                                                                    customerName, accountNumber, 
+                                                                    _depositAmount, cancellationFeeAmount,
+                                                                    paymentMethod, _branchID, _cashierName)
+                        Catch accEx As Exception
+                            MessageBox.Show($"Order cancelled but accounting entry failed: {accEx.Message}", 
+                                          "Accounting Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                        End Try
+                        
+                        ' Print cancellation slip
+                        PrintCancellationSlip(paymentMethod, cardMaskedPan, cardType, cardApprovalCode, cancellationFeeAmount, balanceAmount)
+                        
+                        Dim successMsg = $"Order cancelled successfully!{vbCrLf}{vbCrLf}" &
+                                       $"Order Number: {_editOrderNumber}{vbCrLf}" &
+                                       $"Deposit: R{_depositAmount:F2}{vbCrLf}" &
+                                       $"Cancellation Fee: R{cancellationFeeAmount:F2}{vbCrLf}"
+                        
+                        If balanceAmount >= 0 Then
+                            successMsg &= $"Refunded: R{balanceAmount:F2}"
+                        Else
+                            successMsg &= $"Customer Paid: R{Math.Abs(balanceAmount):F2}"
+                        End If
+                        
+                        MessageBox.Show(successMsg, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        
+                        Me.DialogResult = DialogResult.OK
+                        Me.Close()
+                        
+                    Catch ex As Exception
+                        transaction.Rollback()
+                        Throw
+                    End Try
+                End Using
+            End Using
+            
+        Catch ex As Exception
+            Throw New Exception($"Error processing cancellation: {ex.Message}", ex)
+        End Try
+    End Sub
+    
+    Private Function GenerateInvoiceNumber() As String
+        Return $"INV{DateTime.Now:yyyyMMddHHmmss}"
+    End Function
+    
+    Private Sub PrintCancellationSlip(paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, cancellationFeeAmount As Decimal, balanceAmount As Decimal)
+        ' Print cancellation receipt showing deposit, fee, and balance
+        ' Implementation similar to PrintTillSlip but for cancellation
+        Try
+            Dim printDoc As New PrintDocument()
+            
+            AddHandler printDoc.PrintPage, Sub(sender, e)
+                Dim g = e.Graphics
+                Dim fontBold As New Font("Courier New", 9, FontStyle.Bold)
+                Dim fontRegular As New Font("Courier New", 8, FontStyle.Regular)
+                Dim yPos = 10
+                Dim leftMargin = 5
+                
+                ' Header
+                g.DrawString("ORDER CANCELLED", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 20
+                g.DrawString($"Order #: {_editOrderNumber}", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                g.DrawString($"Customer: {txtCustomerName.Text.Trim()}", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                g.DrawString($"Phone: {txtCustomerPhone.Text.Trim()}", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 20
+                
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                ' Financial details
+                g.DrawString($"Deposit Paid:        R{_depositAmount,10:F2}", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                g.DrawString($"Cancellation Fee:    R{cancellationFeeAmount,10:F2}", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                g.DrawString("--------------------------------------", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                If balanceAmount >= 0 Then
+                    g.DrawString($"Amount Refunded:     R{balanceAmount,10:F2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                    g.DrawString($"Refund Method: {paymentMethod}", fontRegular, Brushes.Black, leftMargin, yPos)
+                Else
+                    g.DrawString($"Amount Paid:         R{Math.Abs(balanceAmount),10:F2}", fontBold, Brushes.Black, leftMargin, yPos)
+                    yPos += 15
+                    g.DrawString($"Payment Method: {paymentMethod}", fontRegular, Brushes.Black, leftMargin, yPos)
+                End If
+                
+                yPos += 20
+                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                
+                g.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", fontRegular, Brushes.Black, leftMargin, yPos)
+                yPos += 15
+                g.DrawString($"Cashier: {_cashierName}", fontRegular, Brushes.Black, leftMargin, yPos)
+                
+                e.HasMorePages = False
+            End Sub
+            
+            printDoc.DefaultPageSettings.PaperSize = New PaperSize("Receipt", 315, 600)
+            printDoc.Print()
+            
+        Catch ex As Exception
+            ' Don't fail cancellation if print fails
+            MessageBox.Show($"Cancellation successful but printing failed: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+    End Sub
 End Class

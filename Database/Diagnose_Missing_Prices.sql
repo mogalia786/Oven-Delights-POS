@@ -41,7 +41,7 @@ PRINT '========================================'
 PRINT ''
 
 -- Check what the ProductCacheService query returns
-DECLARE @TestBranchID INT = 4 -- Change this to your actual branch ID
+DECLARE @TestBranchID INT = 6 -- Change this to your actual branch ID
 
 PRINT 'ProductCacheService Query Result for BranchID ' + CAST(@TestBranchID AS NVARCHAR(10)) + ':'
 SELECT 

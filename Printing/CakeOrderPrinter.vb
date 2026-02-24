@@ -60,6 +60,10 @@ Public Class CakeOrderPrinter
         Public Property DepositPaid As Decimal
         Public Property BalanceOwing As Decimal
         
+        ' Edit Mode Tracking
+        Public Property IsEditedOrder As Boolean
+        Public Property EditedDate As DateTime?
+        
         Public Class OrderItem
             Public Property Description As String
             Public Property Quantity As Integer
@@ -146,6 +150,15 @@ Public Class CakeOrderPrinter
         DrawField(g, "Address", _orderData.BranchAddress, 10, 95, 7, False)
         DrawField(g, "Phone", $"Tel: {_orderData.BranchTelephone}", 10, 125, 7, False)
         DrawField(g, "Email", $"Email: {_orderData.BranchEmail}", 10, 140, 7, False)
+        
+        ' ===== ORDER EDITED NOTICE (BIG BOLD) =====
+        If _orderData.IsEditedOrder AndAlso _orderData.EditedDate.HasValue Then
+            Dim editFont As New Font("Courier New", 14, FontStyle.Bold)
+            Dim editText As String = $"*** ORDER EDITED ON {_orderData.EditedDate.Value:dd/MM/yyyy HH:mm} ***"
+            Dim editSize = g.MeasureString(editText, editFont)
+            ' Center the text
+            g.DrawString(editText, editFont, Brushes.Black, (827 - editSize.Width) / 2, 160)
+        End If
         
         ' Cake Details (Top Right)
         DrawField(g, "CakeColour", $"Cake Colour: {_orderData.CakeColor}", 450, 50, 8, False)
