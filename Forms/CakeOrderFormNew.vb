@@ -1932,12 +1932,16 @@ Public Class CakeOrderFormNew
                 conn.Open()
                 Using transaction = conn.BeginTransaction()
                     Try
-                        ' 1. Update order status to Cancelled
-                        Dim sqlUpdate = "UPDATE POS_CustomOrders 
-                                        SET OrderStatus = 'Cancelled',
-                                            ModifiedDate = GETDATE()
-                                        WHERE OrderID = @OrderID"
-                        Using cmd As New SqlCommand(sqlUpdate, conn, transaction)
+                        ' 1. Delete order items first (foreign key constraint)
+                        Dim sqlDeleteItems = "DELETE FROM POS_CustomOrderItems WHERE OrderID = @OrderID"
+                        Using cmd As New SqlCommand(sqlDeleteItems, conn, transaction)
+                            cmd.Parameters.AddWithValue("@OrderID", _editOrderID)
+                            cmd.ExecuteNonQuery()
+                        End Using
+                        
+                        ' 2. Delete the order completely (this auto-updates ERP cutting list)
+                        Dim sqlDeleteOrder = "DELETE FROM POS_CustomOrders WHERE OrderID = @OrderID"
+                        Using cmd As New SqlCommand(sqlDeleteOrder, conn, transaction)
                             cmd.Parameters.AddWithValue("@OrderID", _editOrderID)
                             cmd.ExecuteNonQuery()
                         End Using
@@ -1960,19 +1964,26 @@ Public Class CakeOrderFormNew
                             End If
                             
                             Dim sql = "INSERT INTO Demo_Sales 
-                                      (InvoiceNumber, BranchID, TotalAmount, PaymentMethod, 
-                                       SaleType, SaleDate, CashierID, CustomerName)
+                                      (SaleNumber, InvoiceNumber, BranchID, TillPointID, CashierID, SaleDate,
+                                       Subtotal, TaxAmount, TotalAmount, PaymentMethod, CashAmount, CardAmount,
+                                       SaleType, ReferenceNumber)
                                       VALUES 
-                                      (@invoice, @branchId, @amount, @paymentMethod, 
-                                       @saleType, GETDATE(), @cashierId, @customerName)"
+                                      (@saleNumber, @invoice, @branchId, @tillPointId, @cashierId, GETDATE(),
+                                       @subtotal, @taxAmount, @amount, @paymentMethod, @cashAmount, @cardAmount,
+                                       @saleType, @invoice)"
                             Using cmd As New SqlCommand(sql, conn, transaction)
+                                cmd.Parameters.AddWithValue("@saleNumber", invoice)
                                 cmd.Parameters.AddWithValue("@invoice", invoice)
                                 cmd.Parameters.AddWithValue("@branchId", _branchID)
+                                cmd.Parameters.AddWithValue("@tillPointId", _tillPointID)
+                                cmd.Parameters.AddWithValue("@cashierId", _cashierID)
+                                cmd.Parameters.AddWithValue("@subtotal", amount / 1.15D)
+                                cmd.Parameters.AddWithValue("@taxAmount", amount - (amount / 1.15D))
                                 cmd.Parameters.AddWithValue("@amount", amount)
                                 cmd.Parameters.AddWithValue("@paymentMethod", paymentMethod)
+                                cmd.Parameters.AddWithValue("@cashAmount", If(paymentMethod = "Cash", Math.Abs(amount), 0))
+                                cmd.Parameters.AddWithValue("@cardAmount", If(paymentMethod = "Card", Math.Abs(amount), 0))
                                 cmd.Parameters.AddWithValue("@saleType", saleType)
-                                cmd.Parameters.AddWithValue("@cashierId", _cashierID)
-                                cmd.Parameters.AddWithValue("@customerName", txtCustomerName.Text.Trim())
                                 cmd.ExecuteNonQuery()
                             End Using
                         End If
@@ -2030,8 +2041,9 @@ Public Class CakeOrderFormNew
     
     Private Sub PrintCancellationSlip(paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, cancellationFeeAmount As Decimal, balanceAmount As Decimal)
         ' Print cancellation receipt showing deposit, fee, and balance
-        ' Implementation similar to PrintTillSlip but for cancellation
+        ' Print 2 copies: Customer and Merchant
         Try
+            Dim printCount As Integer = 0
             Dim printDoc As New PrintDocument()
             
             AddHandler printDoc.PrintPage, Sub(sender, e)
@@ -2041,7 +2053,10 @@ Public Class CakeOrderFormNew
                 Dim yPos = 10
                 Dim leftMargin = 5
                 
-                ' Header
+                ' Header with copy type
+                Dim copyType As String = If(printCount = 0, "CUSTOMER COPY", "MERCHANT COPY")
+                g.DrawString(copyType, fontBold, Brushes.Black, leftMargin, yPos)
+                yPos += 15
                 g.DrawString("ORDER CANCELLED", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 20
                 g.DrawString($"Order #: {_editOrderNumber}", fontRegular, Brushes.Black, leftMargin, yPos)
@@ -2081,7 +2096,8 @@ Public Class CakeOrderFormNew
                 yPos += 15
                 g.DrawString($"Cashier: {_cashierName}", fontRegular, Brushes.Black, leftMargin, yPos)
                 
-                e.HasMorePages = False
+                printCount += 1
+                e.HasMorePages = (printCount < 2)
             End Sub
             
             printDoc.DefaultPageSettings.PaperSize = New PaperSize("Receipt", 315, 600)
