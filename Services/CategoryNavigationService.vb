@@ -100,26 +100,29 @@ Public Class CategoryNavigationService
                 p.SKU,
                 p.ProductID AS VariantID,
                 ISNULL(p.Barcode, p.SKU) AS Barcode,
-                ISNULL(price.SellingPrice, 0) AS SellingPrice,
-                ISNULL(price.CostPrice, 0) AS CostPrice,
+                ISNULL(latest_price.SellingPrice, 0) AS SellingPrice,
+                ISNULL(latest_price.CostPrice, 0) AS CostPrice,
                 ISNULL(p.CurrentStock, 0) AS QtyOnHand,
                 0 AS ReorderLevel,
                 c.CategoryName,
                 sc.SubCategoryName,
-                price.DisplayPriority
+                latest_price.DisplayPriority
             FROM Demo_Retail_Product p
             INNER JOIN Categories c ON c.CategoryID = p.CategoryID
             INNER JOIN SubCategories sc ON sc.SubCategoryID = p.SubCategoryID
-            LEFT JOIN Demo_Retail_Price price ON price.ProductID = p.ProductID 
-                AND price.BranchID = @BranchID
+            LEFT JOIN (
+                SELECT ProductID, BranchID, SellingPrice, CostPrice, DisplayPriority,
+                       ROW_NUMBER() OVER (PARTITION BY ProductID, BranchID ORDER BY EffectiveFrom DESC) AS rn
+                FROM Demo_Retail_Price
+                WHERE BranchID = @BranchID
+            ) latest_price ON latest_price.ProductID = p.ProductID AND latest_price.rn = 1
             WHERE p.CategoryID = @CategoryID
               AND p.SubCategoryID = @SubCategoryID
-              AND p.BranchID = @BranchID
               AND p.IsActive = 1
               AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
             ORDER BY 
-                CASE WHEN price.DisplayPriority IS NULL THEN 1 ELSE 0 END,
-                price.DisplayPriority ASC,
+                CASE WHEN latest_price.DisplayPriority IS NULL THEN 1 ELSE 0 END,
+                latest_price.DisplayPriority ASC,
                 p.Name ASC"
 
         Using conn As New SqlConnection(_connectionString)

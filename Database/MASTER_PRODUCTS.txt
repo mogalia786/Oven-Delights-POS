@@ -1,0 +1,39 @@
+BranchType                     ProductCount Categories  Subcategories
+------------------------------ ------------ ----------- -------------
+NULL (Master)                           264          14            23
+1                                       118          11            14
+3                                        10           7             0
+4 (Umhlanga)                           1293          36            32
+5                                        10           7             0
+6 (Ayesha Centre)                      1519          36            45
+8                                        10           7             0
+9                                        10           7             0
+10                                       10           7             0
+11                                       10           7             0
+12                                       10           7             0
+
+(11 rows affected)
+CheckType                ProductsWithVariants
+------------------------ --------------------
+BranchID=6 with variants                 1510
+
+(1 rows affected)
+CheckType                   ProductsWithVariants
+--------------------------- --------------------
+BranchID=NULL with variants                  263
+
+(1 rows affected)
+ProductID   SKU                                                              Name                                                                                                                                                                                                     BranchID    VariantID   UmhlangaPrice        AyeshaPrice         
+----------- ---------------------------------------------------------------- -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- ----------- ----------- -------------------- --------------------
+      55924 BD-BAR-020                                                       BD Bar One Square 20                                                                                                                                                                                               6       33724              1600.00                 1.00
+      55924 BD-BAR-020                                                       BD Bar One Square 20                                                                                                                                                                                               6       36455              1600.00                 1.00
+      55925 BIS- CHC-EAC                                                     Biscuit Choc Chip                                                                                                                                                                                                  6       33725                85.00                80.00
+      55926 BIS-BCV-EAC                                                      Biscuit Choc Vanilla 300g                                                                                                                                                                                          6       33726                85.00                70.00
+      55927 BIS-CCC-EAC                                                      Biscuit Choc Chip Cookie                                                                                                                                                                                           6       33727                85.00                70.00
+      55928 200014079                                                        Biscuit Choc Delights 300G                                                                                                                                                                                         6       33728                95.00                95.00
+      55928 200014079                                                        Biscuit Choc Delights 300G                                                                                                                                                                                         6       36324                95.00                95.00
+      55929 200014067                                                        Biscuit Jam Nest 300G                                                                                                                                                                                              6       33729                85.00                85.00
+      55929 200014067                                                        Biscuit Jam Nest 300G                                                                                                                                                                                              6       36325                85.00                85.00
+      55930 BIS-COC-EAC                                                      Biscuit Coconut                                                                                                                                                                                                    6       33730                85.00                70.00
+
+(10 rows affected)

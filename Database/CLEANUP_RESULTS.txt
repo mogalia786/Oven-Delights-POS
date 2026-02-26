@@ -1,0 +1,59 @@
+Status         BranchID    ProductCount
+-------------- ----------- ------------
+BEFORE CLEANUP        NULL          264
+BEFORE CLEANUP           1          118
+BEFORE CLEANUP           3           10
+BEFORE CLEANUP           4         1293
+BEFORE CLEANUP           5           10
+BEFORE CLEANUP           6         1519
+BEFORE CLEANUP           8           10
+BEFORE CLEANUP           9           10
+BEFORE CLEANUP          10           10
+BEFORE CLEANUP          11           10
+BEFORE CLEANUP          12           10
+
+(11 rows affected)
+
+(212 rows affected)
+Deleted 212 incorrect R0.00 price records
+Msg 547, Level 16, State 1, Server mogalia, Line 23
+The DELETE statement conflicted with the REFERENCE constraint "FK_Demo_Retail_Stock_Variant". The conflict occurred in database "Oven_Delights_Main", table "dbo.Demo_Retail_Stock", column 'VariantID'.
+The statement has been terminated.
+Deleted 0 variant records for duplicate products
+Msg 547, Level 16, State 1, Server mogalia, Line 33
+The DELETE statement conflicted with the REFERENCE constraint "FK_Demo_Retail_Variant_Product". The conflict occurred in database "Oven_Delights_Main", table "dbo.Demo_Retail_Variant", column 'ProductID'.
+The statement has been terminated.
+Deleted 0 duplicate Umhlanga products
+Status        BranchID    ProductCount
+------------- ----------- ------------
+AFTER CLEANUP        NULL          264
+AFTER CLEANUP           1          118
+AFTER CLEANUP           3           10
+AFTER CLEANUP           4         1293
+AFTER CLEANUP           5           10
+AFTER CLEANUP           6         1519
+AFTER CLEANUP           8           10
+AFTER CLEANUP           9           10
+AFTER CLEANUP          10           10
+AFTER CLEANUP          11           10
+AFTER CLEANUP          12           10
+
+(11 rows affected)
+Description           ProductsWithPrices MinPrice             MaxPrice            
+--------------------- ------------------ -------------------- --------------------
+Prices for BranchID=4               2625                  .04              5700.00
+
+(1 rows affected)
+Test             ProductID   SKU                                                              Name                                                                                                                                                                                                     ProductBranchID SellingPrice         PriceBranchID
+---------------- ----------- ---------------------------------------------------------------- -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- --------------- -------------------- -------------
+TEST CFC-MFD-EAC       56205 CFC-MFD-EAC                                                      Mini FC D/N                                                                                                                                                                                                            6                14.00             4
+TEST CFC-MFD-EAC       57499 CFC-MFD-EAC                                                      Mini FC D/N                                                                                                                                                                                                            4                14.00             4
+
+(2 rows affected)
+ 
+========================================
+Cleanup Complete!
+========================================
+Removed duplicate BranchID=4 products
+POS will now use original products with branch-specific prices
+Umhlanga prices remain in Demo_Retail_Price table
