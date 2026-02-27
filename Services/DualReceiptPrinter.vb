@@ -13,10 +13,11 @@ Public Class DualReceiptPrinter
     End Sub
 
     ''' <summary>
-    ''' Print receipt to both thermal slip printer (default) and continuous network printer
+    ''' Print receipt to thermal slip printer only (for sales)
+    ''' Continuous printer is only used for cake orders (create/edit/cancel)
     ''' </summary>
     Public Sub PrintDualReceipt(receiptData As Dictionary(Of String, Object), cartItems As DataTable)
-        ' 1. Print to default thermal slip printer (80mm)
+        ' Print to default thermal slip printer (80mm)
         ' - Cash only: 1 copy (customer)
         ' - Card/Split: 2 copies (customer + merchant with card details)
         Try
@@ -29,17 +30,8 @@ Public Class DualReceiptPrinter
             If paymentMethod = "CARD" OrElse paymentMethod = "SPLIT" Then
                 PrintToThermalPrinter(receiptData, cartItems, "MERCHANT COPY")
             End If
-            System.Windows.Forms.MessageBox.Show("Successfully printed to Thermal Printer", "DEBUG: Thermal Print", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information)
         Catch ex As Exception
             System.Windows.Forms.MessageBox.Show($"Thermal printer error: {ex.Message}", "Thermal Printer Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning)
-        End Try
-
-        ' 2. Print to continuous network printer with XY positioning - independent of thermal
-        Try
-            PrintToContinuousPrinter(receiptData, cartItems)
-            System.Windows.Forms.MessageBox.Show("Successfully printed to Continuous Printer", "DEBUG: Continuous Print", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Information)
-        Catch ex As Exception
-            System.Windows.Forms.MessageBox.Show($"Continuous printer error: {ex.Message}", "Continuous Printer Error", System.Windows.Forms.MessageBoxButtons.OK, System.Windows.Forms.MessageBoxIcon.Warning)
         End Try
     End Sub
 

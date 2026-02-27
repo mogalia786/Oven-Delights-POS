@@ -2041,7 +2041,7 @@ Public Class CakeOrderFormNew
     
     Private Sub PrintCancellationSlip(paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, cancellationFeeAmount As Decimal, balanceAmount As Decimal)
         ' Print cancellation receipt showing deposit, fee, and balance
-        ' Print 2 copies: Customer and Merchant
+        ' 1. Print to thermal printer - 2 copies: Customer and Merchant
         Try
             Dim printCount As Integer = 0
             Dim printDoc As New PrintDocument()
@@ -2104,8 +2104,27 @@ Public Class CakeOrderFormNew
             printDoc.Print()
             
         Catch ex As Exception
-            ' Don't fail cancellation if print fails
-            MessageBox.Show($"Cancellation successful but printing failed: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            ' Don't fail cancellation if thermal print fails
+            MessageBox.Show($"Thermal printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+        End Try
+        
+        ' 2. Print to continuous printer with pre-formatted paper using database coordinates
+        Try
+            Dim configuredPrinter = GetConfiguredPrinter()
+            
+            ' Build cancellation print data with CANCELLED status
+            Dim cancellationData = BuildPrintData(_editOrderNumber, 0)
+            cancellationData.Notes = $"*** ORDER CANCELLED ON {DateTime.Now:dd/MM/yyyy HH:mm} ***{vbCrLf}" &
+                                    $"Cancellation Fee: R{cancellationFeeAmount:F2}{vbCrLf}" &
+                                    $"Refund Amount: R{balanceAmount:F2}{vbCrLf}" &
+                                    $"Refund Method: {paymentMethod}"
+            
+            Dim cakeOrderPrinter As New CakeOrderPrinter(cancellationData)
+            cakeOrderPrinter.Print(configuredPrinter)
+            
+        Catch ex As Exception
+            ' Don't fail cancellation if continuous printer fails
+            MessageBox.Show($"Continuous printer error: {ex.Message}", "Continuous Printer Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
         End Try
     End Sub
 End Class

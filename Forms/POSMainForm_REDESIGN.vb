@@ -1521,18 +1521,18 @@ Public Class POSMainForm_REDESIGN
         Dim leftMargin = 5
         Dim rightMargin = 5
         Dim availableWidth = screenWidth - leftMargin - rightMargin
-        Dim spacing = 3 ' Reduced spacing for more room
+        Dim spacing = 2 ' Minimal spacing to fit all buttons
         Dim buttonWidth = ((availableWidth - (spacing * (visibleCount - 1))) \ visibleCount)
 
-        ' Ensure buttons fit on screen - adjust if too wide
-        If buttonWidth < 60 Then 
-            buttonWidth = 60
-        ElseIf buttonWidth > 80 Then
-            buttonWidth = 80
+        ' Ensure buttons fit on screen - adjust for 1024x768
+        If buttonWidth < 52 Then 
+            buttonWidth = 52
+        ElseIf buttonWidth > 56 Then
+            buttonWidth = 56
         End If
         
         ' Calculate font size based on button width
-        Dim fontSize As Single = If(buttonWidth < 65, 7, 8)
+        Dim fontSize As Single = If(buttonWidth < 54, 6.5, 7)
 
         For i = 0 To visibleCount - 1
             Dim shortcut = shortcuts(i)

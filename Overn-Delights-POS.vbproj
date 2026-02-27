@@ -15,7 +15,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <IsWebBootstrapper>false</IsWebBootstrapper>
-    <PublishUrl>E:\ODV81\</PublishUrl>
+    <PublishUrl>E:\ODV82\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
     <UpdateEnabled>false</UpdateEnabled>
@@ -27,7 +27,7 @@
     <MapFileExtensions>true</MapFileExtensions>
     <UpdateUrl>http://www.mogalia.co.za/pos/</UpdateUrl>
     <WebPage>publish.htm</WebPage>
-    <ApplicationRevision>95</ApplicationRevision>
+    <ApplicationRevision>96</ApplicationRevision>
     <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
