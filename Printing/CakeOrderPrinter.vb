@@ -194,9 +194,24 @@ Public Class CakeOrderPrinter
         DrawField(g, "ItemHeader", "Item Description              Qty Required    Unit Price (R)    Total Price (R)", 10, 330, 8, True)
         
         Dim itemYPos = 345
+        Dim isFirstItem = True
         For Each item In _orderData.Items
             Dim itemLine = $"{item.Description.PadRight(30)} {item.Quantity.ToString().PadLeft(4)} {item.UnitPrice.ToString("F2").PadLeft(15)} {item.TotalPrice.ToString("F2").PadLeft(18)}"
-            DrawField(g, "ItemLine1", itemLine, 10, itemYPos, 8, False)
+            
+            ' Use template position for first item only, then use incremented position
+            If isFirstItem Then
+                DrawField(g, "ItemLine1", itemLine, 10, itemYPos, 8, False)
+                ' Get the actual Y position from template for first item
+                If _fieldPositions.ContainsKey("ItemLine1") Then
+                    itemYPos = _fieldPositions("ItemLine1").YPos
+                End If
+                isFirstItem = False
+            Else
+                ' Draw subsequent items without using template (use manual positioning)
+                Dim font As New Font("Courier New", 8, FontStyle.Regular)
+                Dim xPos = If(_fieldPositions.ContainsKey("ItemLine1"), _fieldPositions("ItemLine1").XPos, 10)
+                g.DrawString(itemLine, font, Brushes.Black, xPos, itemYPos)
+            End If
             itemYPos += 15
         Next
         

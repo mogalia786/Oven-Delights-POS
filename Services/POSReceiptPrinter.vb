@@ -391,15 +391,37 @@ Public Class POSReceiptPrinter
             Dim items As DataTable = CType(_receiptData("Items"), DataTable)
             For Each row As DataRow In items.Rows
                 Dim itemName As String = row("Product").ToString()
-                If itemName.Length > 20 Then itemName = itemName.Substring(0, 20)
-                
                 Dim qty As String = CDec(row("Qty")).ToString("0.00")
                 Dim price As String = CDec(row("Price")).ToString("0.00")
                 Dim lineTotal As String = CDec(row("Total")).ToString("0.00")
                 
-                Dim line As String = $"{itemName,-20} {qty,4} {price,6} {lineTotal,7}"
-                e.Graphics.DrawString(line, font, Brushes.Black, _leftMargin, y)
-                y += 16
+                ' Check if item contains newline characters (multi-line item like cake with message)
+                If itemName.Contains(vbLf) OrElse itemName.Contains("\n") Then
+                    ' Split into multiple lines
+                    Dim itemLines() As String = itemName.Replace("\n", vbLf).Split({vbLf}, StringSplitOptions.RemoveEmptyEntries)
+                    
+                    ' Print first line with qty, price, total
+                    Dim firstLine As String = itemLines(0).Trim()
+                    If firstLine.Length > 20 Then firstLine = firstLine.Substring(0, 20)
+                    Dim line As String = $"{firstLine,-20} {qty,4} {price,6} {lineTotal,7}"
+                    e.Graphics.DrawString(line, font, Brushes.Black, _leftMargin, y)
+                    y += 16
+                    
+                    ' Print additional lines (indented, no qty/price/total)
+                    For i As Integer = 1 To itemLines.Length - 1
+                        Dim additionalLine As String = itemLines(i).Trim()
+                        If additionalLine.Length > 0 Then
+                            e.Graphics.DrawString("  " & additionalLine, font, Brushes.Black, _leftMargin, y)
+                            y += 16
+                        End If
+                    Next
+                Else
+                    ' Single line item
+                    If itemName.Length > 20 Then itemName = itemName.Substring(0, 20)
+                    Dim line As String = $"{itemName,-20} {qty,4} {price,6} {lineTotal,7}"
+                    e.Graphics.DrawString(line, font, Brushes.Black, _leftMargin, y)
+                    y += 16
+                End If
             Next
 
             ' Totals
