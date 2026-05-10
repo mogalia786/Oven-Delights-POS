@@ -786,14 +786,14 @@ Public Class PaymentTenderForm
                                                  End If
                                              ElseIf _paymentMethod = "CREDIT CARD" Then
                                                  _cardAmount = amount
-                                                 ' ✅ PROCESS CREDIT CARD PAYMENT - Call the method that has all the FNB API logic
                                                  ProcessCreditCardPayment()
                                              ElseIf _paymentMethod = "SPLIT" Then
                                                  _cashAmount = amount
                                                  _cardAmount = _totalAmount - amount
                                                  If _cardAmount > 0 Then
-                                                     ' Process card for remaining balance - DON'T write to database yet
-                                                     ProcessCardTransaction(_cardAmount)
+                                                     ' Process card for remaining balance - Use LIVE/TEST toggle
+                                                     _cardMaskedPan = "TERMINAL_CARD"
+                                                     ProcessCreditCardPayment()
                                                  Else
                                                      ' All cash, no card needed - write to database
                                                      CompleteTransactionAndShowReceipt()
@@ -1188,40 +1188,8 @@ Public Class PaymentTenderForm
                             PostToJournalsAndLedgers(conn, transaction, salesID, invoiceNumber)
                         End If
 
-                        ' Post to GL (General Ledger) - wrapped in TRY-CATCH so sale completes even if GL fails
-                        Try
-                            Dim totalCost = CalculateTotalCost(conn, transaction)
-
-                            ' Determine EFT amount (if payment method is EFT, card amount is actually EFT)
-                            Dim eftAmount As Decimal = 0
-                            Dim actualCardAmount As Decimal = _cardAmount
-
-                            If _paymentMethod = "EFT" Then
-                                eftAmount = _cardAmount
-                                actualCardAmount = 0
-                            End If
-
-                            Using cmdGL As New SqlCommand("sp_POS_PostSaleToGL", conn, transaction)
-                                cmdGL.CommandType = CommandType.StoredProcedure
-                                cmdGL.Parameters.AddWithValue("@InvoiceNumber", invoiceNumber)
-                                cmdGL.Parameters.AddWithValue("@SaleDate", DateTime.Today)
-                                cmdGL.Parameters.AddWithValue("@BranchID", _branchID)
-                                cmdGL.Parameters.AddWithValue("@CashierID", _cashierID)
-                                cmdGL.Parameters.AddWithValue("@Subtotal", _subtotal)
-                                cmdGL.Parameters.AddWithValue("@TaxAmount", _taxAmount)
-                                cmdGL.Parameters.AddWithValue("@TotalAmount", _totalAmount)
-                                cmdGL.Parameters.AddWithValue("@CashAmount", _cashAmount)
-                                cmdGL.Parameters.AddWithValue("@CardAmount", actualCardAmount)
-                                cmdGL.Parameters.AddWithValue("@EFTAmount", eftAmount)
-                                cmdGL.Parameters.AddWithValue("@TotalCost", totalCost)
-                                cmdGL.Parameters.AddWithValue("@CreatedBy", _cashierID)
-                                cmdGL.ExecuteNonQuery()
-                            End Using
-                        Catch glEx As Exception
-                            ' GL posting failed but sale succeeded - show error
-                            MessageBox.Show($"Sale completed but GL posting failed:{vbCrLf}{glEx.Message}", "GL Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                            Debug.WriteLine($"GL Posting Error: {glEx.Message}")
-                        End Try
+                        ' GL posting is now handled by PostToJournalsAndLedgers method above
+                        ' No need for separate stored procedure call
 
                         ' If this is an order collection, update order status to Delivered
                         If _isOrderCollection AndAlso _orderID > 0 Then
@@ -1473,7 +1441,7 @@ Public Class PaymentTenderForm
         ' Buttons at bottom
         Dim pnlButtons As New Panel With {.Dock = DockStyle.Bottom, .Height = 90, .BackColor = _lightGray}
 
-        Dim btnPrint As New Button With {.Text = "🖨 PRINT", .Size = New Size(220, 60), .Location = New Point(25, 15), .BackColor = _ironBlue, .ForeColor = Color.White, .Font = New Font("Segoe UI", 18, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        Dim btnPrint As New Button With {.Text = "🖨 PRINT", .Size = New Size(200, 60), .Location = New Point(25, 15), .BackColor = _ironBlue, .ForeColor = Color.White, .Font = New Font("Segoe UI", 16, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
         btnPrint.FlatAppearance.BorderSize = 0
         AddHandler btnPrint.Click, Sub()
                                        ' Print receipt to continuous printer
@@ -1487,6 +1455,16 @@ Public Class PaymentTenderForm
                                            MessageBox.Show($"Print error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
                                        End Try
                                    End Sub
+        
+        Dim btnDone As New Button With {.Text = "✓ DONE", .Size = New Size(200, 60), .Location = New Point(formWidth - 225, 15), .BackColor = _green, .ForeColor = Color.White, .Font = New Font("Segoe UI", 16, FontStyle.Bold), .FlatStyle = FlatStyle.Flat, .Cursor = Cursors.Hand}
+        btnDone.FlatAppearance.BorderSize = 0
+        AddHandler btnDone.Click, Sub()
+                                      Me.DialogResult = DialogResult.OK
+                                      Me.Close()
+                                  End Sub
+        
+        pnlButtons.Controls.AddRange({btnPrint, btnDone})
+        Me.Controls.AddRange({pnlHeader, pnlReceipt, pnlButtons})
     End Sub
 
 
@@ -1525,18 +1503,31 @@ Public Class PaymentTenderForm
             Dim productItems As New List(Of Object)
             Dim itemId As Integer = 1
 
-            For Each row As DataRow In _cartItems.Rows
+            ' Handle cart items if available (regular sales), or create single item for deposits
+            If _cartItems IsNot Nothing Then
+                For Each row As DataRow In _cartItems.Rows
+                    productItems.Add(New With {
+                        .itemId = itemId,
+                        .category = 255,
+                        .amount = CInt(CDec(row("Total")) * 100), ' Convert to cents as integer
+                        .description = If(row.Table.Columns.Contains("Description") AndAlso Not String.IsNullOrWhiteSpace(row("Description").ToString()),
+                            row("Description").ToString().Substring(0, Math.Min(20, row("Description").ToString().Length)), "Product"),
+                        .quantity = CInt(row("Qty")),
+                        .unitPrice = CInt(CDec(row("Price")) * 100) ' Convert to cents as integer
+                    })
+                    itemId += 1
+                Next
+            Else
+                ' Deposit payment - create single item
                 productItems.Add(New With {
-                    .itemId = itemId,
+                    .itemId = 1,
                     .category = 255,
-                    .amount = CInt(CDec(row("Total")) * 100), ' Convert to cents as integer
-                    .description = If(row.Table.Columns.Contains("Description") AndAlso Not String.IsNullOrWhiteSpace(row("Description").ToString()),
-                        row("Description").ToString().Substring(0, Math.Min(20, row("Description").ToString().Length)), "Product"),
-                    .quantity = CInt(row("Qty")),
-                    .unitPrice = CInt(CDec(row("Price")) * 100) ' Convert to cents as integer
+                    .amount = CInt(_totalAmount * 100), ' Convert to cents as integer
+                    .description = "Cake Order Deposit",
+                    .quantity = 1,
+                    .unitPrice = CInt(_totalAmount * 100) ' Convert to cents as integer
                 })
-                itemId += 1
-            Next
+            End If
 
             Dim paymentRequest As Object
             If _isLiveMode Then
@@ -1548,7 +1539,7 @@ Public Class PaymentTenderForm
                     .posIdentifier = 1,
                     .posVersion = "1.0.0",
                     .siteId = "RT08",
-                    .totalAmount = _cardAmount, ' Amount in decimal (not cents)
+                    .totalAmount = _cardAmount, ' Amount in decimal format (e.g., 185.00)
                     .productItems = productItems
                 }
             Else
@@ -1560,13 +1551,13 @@ Public Class PaymentTenderForm
                     .posIdentifier = 10,
                     .posVersion = "1.0.0",
                     .siteId = "UT02",
-                    .totalAmount = _cardAmount, ' Amount in decimal (not cents)
+                    .totalAmount = _cardAmount, ' Amount in decimal format (e.g., 185.00)
                     .productItems = productItems
                 }
             End If
 
-            ' ✅ USE TEST MODE JSON FOR PHYSICAL TEST TERMINAL
-            Dim jsonRequest As String = "{""requestType"":""Settlement"",""reconIndicator"":""1141510"",""supervisor"":[],""posIdentifier"":10,""posVersion"":""1.0.0"",""siteId"":""UT02"",""totalAmount"":185.00,""productItems"":[{""itemId"":1,""category"":255,""amount"":10000,""description"":""Cake Freshcream In D"",""quantity"":1,""unitPrice"":10000},{""itemId"":2,""category"":255,""amount"":8500,""description"":""Carrot Cake With Cre"",""quantity"":1,""unitPrice"":85000}]}"
+            ' ✅ SERIALIZE PAYMENT REQUEST TO JSON - Uses correct LIVE/TEST settings
+            Dim jsonRequest As String = SimpleJsonSerialize(paymentRequest)
 
             ' ✅ SEND TO FNB PAYPOINT API
             Dim apiUrl As String = If(_isLiveMode,
@@ -2061,20 +2052,6 @@ Public Class PaymentTenderForm
             Return If(result IsNot Nothing, CInt(result), 0)
         End Using
     End Function
-    
-    Private Sub InsertJournalEntry(conn As SqlConnection, transaction As SqlTransaction, reference As String, accountID As Integer, accountName As String, debit As Decimal, credit As Decimal, description As String)
-        Dim sql = "INSERT INTO GeneralJournal (TransactionDate, Reference, AccountID, AccountName, Debit, Credit, BranchID, CreatedBy, CreatedDate) VALUES (GETDATE(), @Reference, @AccountID, @AccountName, @Debit, @Credit, @BranchID, @CreatedBy, GETDATE())"
-        Using cmd As New SqlCommand(sql, conn, transaction)
-            cmd.Parameters.AddWithValue("@Reference", reference)
-            cmd.Parameters.AddWithValue("@AccountID", accountID)
-            cmd.Parameters.AddWithValue("@AccountName", accountName)
-            cmd.Parameters.AddWithValue("@Debit", debit)
-            cmd.Parameters.AddWithValue("@Credit", credit)
-            cmd.Parameters.AddWithValue("@BranchID", _branchID)
-            cmd.Parameters.AddWithValue("@CreatedBy", _cashierID)
-            cmd.ExecuteNonQuery()
-        End Using
-    End Sub
     
     Private Function CalculateTotalCost(conn As SqlConnection, transaction As SqlTransaction) As Decimal
         Dim totalCost As Decimal = 0

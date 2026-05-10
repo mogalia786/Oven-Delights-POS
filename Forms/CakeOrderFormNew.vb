@@ -63,6 +63,10 @@ Public Class CakeOrderFormNew
     Private _originalDepositPaid As Decimal = 0
     Private _orderEditedDate As DateTime = DateTime.Now
     
+    ' Cancel mode fields
+    Private _isCancelMode As Boolean = False
+    Private _refundAmount As Decimal = 0
+    
     Public Class OrderItem
         Public Property ProductID As Integer
         Public Property Description As String
@@ -71,7 +75,7 @@ Public Class CakeOrderFormNew
         Public Property TotalPrice As Decimal
     End Class
     
-    Public Sub New(branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String, branchName As String, branchAddress As String, branchPhone As String, Optional cartItems As DataTable = Nothing, Optional editOrderID As Integer = 0)
+    Public Sub New(branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String, branchName As String, branchAddress As String, branchPhone As String, Optional cartItems As DataTable = Nothing, Optional editOrderID As Integer = 0, Optional isCancelMode As Boolean = False)
         _branchID = branchID
         _tillPointID = tillPointID
         _cashierID = cashierID
@@ -81,8 +85,11 @@ Public Class CakeOrderFormNew
         _branchPhone = branchPhone
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
         
-        ' Check if this is edit mode
-        If editOrderID > 0 Then
+        ' Check if this is edit or cancel mode
+        If isCancelMode Then
+            _isCancelMode = True
+            _editOrderID = editOrderID
+        ElseIf editOrderID > 0 Then
             _isEditMode = True
             _editOrderID = editOrderID
         End If
@@ -90,8 +97,8 @@ Public Class CakeOrderFormNew
         InitializeComponent()
         LoadProducts()
         
-        ' Load existing order for editing
-        If _isEditMode Then
+        ' Load existing order for editing or canceling
+        If _isEditMode Or _isCancelMode Then
             LoadExistingOrder(_editOrderID)
         ElseIf cartItems IsNot Nothing AndAlso cartItems.Rows.Count > 0 Then
             ' Pre-populate with cart items if provided
@@ -189,28 +196,32 @@ Public Class CakeOrderFormNew
                     End Using
                 End Using
                 
-                ' Load order items
-                Dim sqlItems = "
-                    SELECT ProductID, ProductName, Quantity, UnitPrice, LineTotal
-                    FROM POS_CustomOrderItems
-                    WHERE OrderID = @OrderID"
-                
-                Using cmd As New SqlCommand(sqlItems, conn)
-                    cmd.Parameters.AddWithValue("@OrderID", orderID)
+                ' Load order items in EDIT mode only (NOT in cancel mode)
+                ' Edit mode: Load original items + allow adding service charges
+                ' Cancel mode: Empty cart - user adds only cancellation fees
+                If Not _isCancelMode Then
+                    Dim sqlItems = "
+                        SELECT ProductID, ProductName, Quantity, UnitPrice, LineTotal
+                        FROM POS_CustomOrderItems
+                        WHERE OrderID = @OrderID"
                     
-                    Using reader = cmd.ExecuteReader()
-                        While reader.Read()
-                            Dim item As New OrderItem With {
-                                .ProductID = CInt(reader("ProductID")),
-                                .Description = reader("ProductName").ToString(),
-                                .Quantity = CInt(reader("Quantity")),
-                                .UnitPrice = CDec(reader("UnitPrice")),
-                                .TotalPrice = CDec(reader("LineTotal"))
-                            }
-                            _orderItems.Add(item)
-                        End While
+                    Using cmd As New SqlCommand(sqlItems, conn)
+                        cmd.Parameters.AddWithValue("@OrderID", orderID)
+                        
+                        Using reader = cmd.ExecuteReader()
+                            While reader.Read()
+                                Dim item As New OrderItem With {
+                                    .ProductID = CInt(reader("ProductID")),
+                                    .Description = reader("ProductName").ToString(),
+                                    .Quantity = CInt(reader("Quantity")),
+                                    .UnitPrice = CDec(reader("UnitPrice")),
+                                    .TotalPrice = CDec(reader("LineTotal"))
+                                }
+                                _orderItems.Add(item)
+                            End While
+                        End Using
                     End Using
-                End Using
+                End If
                 
                 ' Refresh grid and calculate totals
                 RefreshItemsGrid()
@@ -333,7 +344,7 @@ Public Class CakeOrderFormNew
             .Location = New Point(xRight + 125, yPos - 3),
             .Width = 150,
             .Format = DateTimePickerFormat.Short,
-            .MinDate = DateTime.Today
+            .MinDate = If(_isCancelMode OrElse _isEditMode, New DateTime(2020, 1, 1), DateTime.Today)
         }
         AddHandler dtpCollectionDate.ValueChanged, AddressOf UpdateCollectionDay
         Me.Controls.AddRange({lblCollectionDateLabel, dtpCollectionDate})
@@ -781,16 +792,20 @@ Public Class CakeOrderFormNew
         AddHandler btnPrintPreview.Click, AddressOf PrintPreview
         
         btnAcceptOrder = New Button With {
-            .Text = "✓ ACCEPT & SAVE ORDER",
+            .Text = If(_isCancelMode, "💰 PROCESS REFUND", "✓ ACCEPT & SAVE ORDER"),
             .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .Location = New Point(240, yPos),
             .Size = New Size(250, 45),
-            .BackColor = ColorTranslator.FromHtml("#27AE60"),
+            .BackColor = If(_isCancelMode, ColorTranslator.FromHtml("#E74C3C"), ColorTranslator.FromHtml("#27AE60")),
             .ForeColor = Color.White,
             .FlatStyle = FlatStyle.Flat
         }
         btnAcceptOrder.FlatAppearance.BorderSize = 0
-        AddHandler btnAcceptOrder.Click, AddressOf AcceptOrder
+        If _isCancelMode Then
+            AddHandler btnAcceptOrder.Click, AddressOf ProcessCancellationRefund
+        Else
+            AddHandler btnAcceptOrder.Click, AddressOf AcceptOrder
+        End If
         
         btnCancel = New Button With {
             .Text = "✗ CANCEL",
@@ -1597,7 +1612,20 @@ Public Class CakeOrderFormNew
                                 cmd.Parameters.AddWithValue("@DepositPaid", _depositAmount)
                                 cmd.Parameters.AddWithValue("@BalanceDue", _balanceAmount)
                                 cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
-                                cmd.Parameters.AddWithValue("@DepositPaymentMethod", $"Deposit paid via {paymentMethod}")
+                                ' ManufacturingInstructions = Special requests (shape overrides like Bible, Heart, Figure) + flavour from items
+                                Dim mfgInstructions As String = ""
+                                If Not String.IsNullOrWhiteSpace(txtSpecialRequests.Text) Then
+                                    mfgInstructions = txtSpecialRequests.Text.Trim()
+                                End If
+                                ' Add flavour from first item description if available
+                                If _orderItems.Count > 0 Then
+                                    If Not String.IsNullOrWhiteSpace(mfgInstructions) Then
+                                        mfgInstructions &= " | Flavour: " & _orderItems(0).Description
+                                    Else
+                                        mfgInstructions = "Flavour: " & _orderItems(0).Description
+                                    End If
+                                End If
+                                cmd.Parameters.AddWithValue("@ManufacturingInstructions", If(String.IsNullOrWhiteSpace(mfgInstructions), DBNull.Value, mfgInstructions))
                                 
                                 orderID = Convert.ToInt32(cmd.ExecuteScalar())
                             End Using
@@ -1740,4 +1768,186 @@ Public Class CakeOrderFormNew
         
         Return printData
     End Function
+    
+    ''' <summary>
+    ''' Process cancellation refund through terminal (cash or card)
+    ''' Refund Amount = Deposit Paid - Total (surcharge items added)
+    ''' </summary>
+    Private Sub ProcessCancellationRefund(sender As Object, e As EventArgs)
+        Try
+            ' Validate that we have items (surcharges)
+            If _orderItems.Count = 0 Then
+                MessageBox.Show("Please add cancellation surcharge items before processing refund.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                Return
+            End If
+            
+            ' Calculate refund/payment amount: Deposit - Surcharges
+            _refundAmount = _originalDepositPaid - _totalAmount
+            
+            ' Determine if refund or payment is needed
+            Dim transactionType As String
+            Dim confirmMessage As String
+            
+            If _refundAmount > 0 Then
+                ' We owe customer a refund
+                transactionType = "REFUND"
+                confirmMessage = $"CANCEL ORDER: {_editOrderNumber}{vbCrLf}{vbCrLf}" &
+                                $"Deposit Paid: R{_originalDepositPaid:N2}{vbCrLf}" &
+                                $"Surcharges: R{_totalAmount:N2}{vbCrLf}" &
+                                $"Refund to Customer: R{_refundAmount:N2}{vbCrLf}{vbCrLf}" &
+                                "Process cancellation and refund?"
+            ElseIf _refundAmount < 0 Then
+                ' Customer owes us money
+                transactionType = "PAYMENT"
+                Dim amountDue = Math.Abs(_refundAmount)
+                confirmMessage = $"CANCEL ORDER: {_editOrderNumber}{vbCrLf}{vbCrLf}" &
+                                $"Deposit Paid: R{_originalDepositPaid:N2}{vbCrLf}" &
+                                $"Surcharges: R{_totalAmount:N2}{vbCrLf}" &
+                                $"Customer Owes: R{amountDue:N2}{vbCrLf}{vbCrLf}" &
+                                "Process cancellation and collect payment?"
+            Else
+                ' Exactly equal - no money exchange
+                transactionType = "NONE"
+                confirmMessage = $"CANCEL ORDER: {_editOrderNumber}{vbCrLf}{vbCrLf}" &
+                                $"Deposit Paid: R{_originalDepositPaid:N2}{vbCrLf}" &
+                                $"Surcharges: R{_totalAmount:N2}{vbCrLf}" &
+                                $"No refund or payment needed (amounts equal){vbCrLf}{vbCrLf}" &
+                                "Process cancellation?"
+            End If
+            
+            ' Confirm cancellation
+            Dim confirmResult = MessageBox.Show(confirmMessage, "Confirm Cancellation", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+            
+            If confirmResult <> DialogResult.Yes Then
+                Return
+            End If
+            
+            ' Process based on transaction type
+            If transactionType = "REFUND" Then
+                ' Customer gets money back - use ReturnTenderForm
+                Dim returnItems As New DataTable()
+                returnItems.Columns.Add("ProductID", GetType(Integer))
+                returnItems.Columns.Add("ProductName", GetType(String))
+                returnItems.Columns.Add("Quantity", GetType(Decimal))
+                returnItems.Columns.Add("UnitPrice", GetType(Decimal))
+                returnItems.Columns.Add("LineTotal", GetType(Decimal))
+                
+                Dim refundRow = returnItems.NewRow()
+                refundRow("ProductID") = 0
+                refundRow("ProductName") = $"Cake Order Cancellation - {_editOrderNumber}"
+                refundRow("Quantity") = 1
+                refundRow("UnitPrice") = _refundAmount
+                refundRow("LineTotal") = _refundAmount
+                returnItems.Rows.Add(refundRow)
+                
+                Using tenderForm As New ReturnTenderForm(
+                    $"CANCEL-{_editOrderNumber}",
+                    returnItems,
+                    _refundAmount,
+                    _branchID,
+                    _cashierName,
+                    txtCustomerName.Text.Trim(),
+                    "",
+                    txtCustomerPhone.Text.Trim(),
+                    $"Cake order cancellation - {_editOrderNumber}")
+                    
+                    If tenderForm.ShowDialog() = DialogResult.OK Then
+                        UpdateOrderStatusToCancelled()
+                        MessageBox.Show($"Order {_editOrderNumber} cancelled successfully.{vbCrLf}{vbCrLf}Refund of R{_refundAmount:N2} processed.", "Cancellation Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        Me.DialogResult = DialogResult.OK
+                        Me.Close()
+                    Else
+                        MessageBox.Show("Refund cancelled. Order not cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    End If
+                End Using
+                
+            ElseIf transactionType = "PAYMENT" Then
+                ' Customer owes money - use PaymentTenderForm
+                Dim amountDue = Math.Abs(_refundAmount)
+                Dim paymentItems As New DataTable()
+                paymentItems.Columns.Add("ProductID", GetType(Integer))
+                paymentItems.Columns.Add("ProductName", GetType(String))
+                paymentItems.Columns.Add("Quantity", GetType(Decimal))
+                paymentItems.Columns.Add("UnitPrice", GetType(Decimal))
+                paymentItems.Columns.Add("LineTotal", GetType(Decimal))
+                
+                Dim paymentRow = paymentItems.NewRow()
+                paymentRow("ProductID") = 0
+                paymentRow("ProductName") = $"Cake Order Cancellation Fee - {_editOrderNumber}"
+                paymentRow("Quantity") = 1
+                paymentRow("UnitPrice") = amountDue
+                paymentRow("LineTotal") = amountDue
+                paymentItems.Rows.Add(paymentRow)
+                
+                Using tenderForm As New PaymentTenderForm(
+                    _cashierID,
+                    _cashierName,
+                    _branchID,
+                    _tillPointID,
+                    "",
+                    paymentItems,
+                    amountDue,
+                    0,
+                    amountDue)
+                    
+                    If tenderForm.ShowDialog() = DialogResult.OK Then
+                        UpdateOrderStatusToCancelled()
+                        MessageBox.Show($"Order {_editOrderNumber} cancelled successfully.{vbCrLf}{vbCrLf}Payment of R{amountDue:N2} collected.", "Cancellation Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        Me.DialogResult = DialogResult.OK
+                        Me.Close()
+                    Else
+                        MessageBox.Show("Payment cancelled. Order not cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                    End If
+                End Using
+                
+            Else
+                ' No money exchange - just update status
+                UpdateOrderStatusToCancelled()
+                MessageBox.Show($"Order {_editOrderNumber} cancelled successfully.{vbCrLf}{vbCrLf}No refund or payment needed (amounts equal).", "Cancellation Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                Me.DialogResult = DialogResult.OK
+                Me.Close()
+            End If
+            
+        Catch ex As Exception
+            MessageBox.Show($"Error processing cancellation: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+    
+    ''' <summary>
+    ''' Update order status to Cancelled in database
+    ''' </summary>
+    Private Sub UpdateOrderStatusToCancelled()
+        Try
+            Using conn As New SqlConnection(_connectionString)
+                conn.Open()
+                Using transaction = conn.BeginTransaction()
+                    Try
+                        ' Update order status
+                        Dim sql = "UPDATE POS_CustomOrders 
+                                  SET OrderStatus = 'Cancelled',
+                                      CancelledDate = GETDATE(),
+                                      CancelledBy = @CancelledBy,
+                                      CancellationReason = @CancellationReason
+                                  WHERE OrderID = @OrderID"
+                        
+                        Using cmd As New SqlCommand(sql, conn, transaction)
+                            cmd.Parameters.AddWithValue("@OrderID", _editOrderID)
+                            cmd.Parameters.AddWithValue("@CancelledBy", _cashierName)
+                            cmd.Parameters.AddWithValue("@CancellationReason", txtNotes.Text.Trim())
+                            cmd.ExecuteNonQuery()
+                        End Using
+                        
+                        transaction.Commit()
+                        Debug.WriteLine($"Order {_editOrderNumber} marked as Cancelled")
+                        
+                    Catch ex As Exception
+                        transaction.Rollback()
+                        Throw New Exception($"Database error: {ex.Message}")
+                    End Try
+                End Using
+            End Using
+        Catch ex As Exception
+            Throw New Exception($"Error updating order status: {ex.Message}")
+        End Try
+    End Sub
 End Class

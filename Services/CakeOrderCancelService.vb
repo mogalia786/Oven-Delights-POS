@@ -31,12 +31,10 @@ Public Class CakeOrderCancelService
 
             ' Step 2: Get order lookup criteria
             Dim accountNumber As String = ""
-            Dim pickupDate As Date = Date.Today
 
             Dim lookupDialog As New OrderLookupDialog()
             If lookupDialog.ShowDialog() = DialogResult.OK Then
                 accountNumber = lookupDialog.AccountNumber
-                pickupDate = lookupDialog.PickupDate
                 lookupDialog.Dispose()
             Else
                 lookupDialog.Dispose()
@@ -46,7 +44,7 @@ Public Class CakeOrderCancelService
             ' Step 3: Show orders and let user select
             Dim selectedOrderID As Integer = 0
 
-            Dim selectionDialog As New OrderSelectionDialog(accountNumber, pickupDate)
+            Dim selectionDialog As New OrderSelectionDialog(accountNumber, Date.Today)
             If selectionDialog.ShowDialog() = DialogResult.OK Then
                 selectedOrderID = selectionDialog.SelectedOrderID
                 selectionDialog.Dispose()

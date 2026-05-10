@@ -1509,12 +1509,13 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("F12", "📦 Collect", CType(Sub() OrderCollection(), Action)),
             Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
             Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
-            Tuple.Create("", "✏️ Edit Order", CType(Sub() EditCakeOrder(), Action)),
+            Tuple.Create("Shift+F11", "✏️ Edit Order", CType(Sub() EditCakeOrder(), Action)),
+            Tuple.Create("Shift+F12", "❌ Cancel Order", CType(Sub() CancelCakeOrder(), Action)),
             Tuple.Create("", "📦 Box Items", CType(Sub() CreateBoxItems(), Action)),
             Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 17 ' 12 F-keys + 5 additional buttons
+        Dim visibleCount = 18 ' 12 F-keys + 6 additional buttons
         ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
         Dim leftMargin = 5
@@ -2657,9 +2658,10 @@ Public Class POSMainForm_REDESIGN
                     _collectionOrderNumber = ""
                 End If
 
-                ' Clear cart and show categories
+                ' Clear cart and reset to new sale state
                 _cartItems.Rows.Clear()
                 CalculateTotals()
+                ShowWelcomeMessage()
                 LoadCategories()
             End If
         End Using

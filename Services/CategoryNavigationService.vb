@@ -28,6 +28,8 @@ Public Class CategoryNavigationService
             FROM Categories c
             LEFT JOIN Demo_Retail_Product p ON p.CategoryID = c.CategoryID 
                 AND p.IsActive = 1
+                AND p.SubCategoryID IS NOT NULL
+                AND p.SubCategoryID > 0
                 AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'pest control')
                 AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
             WHERE c.IsActive = 1

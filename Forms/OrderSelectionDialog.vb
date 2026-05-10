@@ -60,7 +60,7 @@ Public Class OrderSelectionDialog
 
         Dim lblOrderInfo As New Label With {
             .Name = "lblOrderInfo",
-            .Text = $"Orders for pickup on {_pickupDate:dd MMMM yyyy}",
+            .Text = $"All pending orders for account: {_accountNumber}",
             .Font = New Font("Segoe UI", 11),
             .ForeColor = Color.FromArgb(240, 240, 240),
             .Location = New Point(20, 55),
@@ -140,19 +140,19 @@ Public Class OrderSelectionDialog
                     SELECT 
                         OrderID,
                         OrderNumber,
-                        CustomerName + ' ' + ISNULL(CustomerSurname, '') AS CustomerName,
+                        CustomerName,
+                        ReadyDate,
                         ReadyTime,
                         TotalAmount,
                         DepositPaid,
                         BalanceDue
                     FROM POS_CustomOrders
                     WHERE AccountNumber = @AccountNumber 
-                        AND CAST(ReadyDate AS DATE) = @ReadyDate
-                    ORDER BY ReadyTime"
+                        AND OrderStatus IN ('New', 'Pending', 'Active')
+                    ORDER BY ReadyDate, ReadyTime"
 
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@AccountNumber", _accountNumber)
-                    cmd.Parameters.AddWithValue("@ReadyDate", _pickupDate)
 
                     Dim dt As New DataTable()
                     Using adapter As New SqlDataAdapter(cmd)
@@ -171,10 +171,14 @@ Public Class OrderSelectionDialog
                     dgvOrders.Columns("CustomerName").Visible = False
 
                     dgvOrders.Columns("OrderNumber").HeaderText = "Order #"
-                    dgvOrders.Columns("OrderNumber").Width = 150
+                    dgvOrders.Columns("OrderNumber").Width = 120
+                    
+                    dgvOrders.Columns("ReadyDate").HeaderText = "Pickup Date"
+                    dgvOrders.Columns("ReadyDate").DefaultCellStyle.Format = "dd MMM yyyy"
+                    dgvOrders.Columns("ReadyDate").Width = 120
 
-                    dgvOrders.Columns("ReadyTime").HeaderText = "Pickup Time"
-                    dgvOrders.Columns("ReadyTime").Width = 120
+                    dgvOrders.Columns("ReadyTime").HeaderText = "Time"
+                    dgvOrders.Columns("ReadyTime").Width = 80
 
                     dgvOrders.Columns("TotalAmount").HeaderText = "Total"
                     dgvOrders.Columns("TotalAmount").DefaultCellStyle.Format = "C2"

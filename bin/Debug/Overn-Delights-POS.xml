@@ -113,7 +113,7 @@ Overn-Delights-POS
  Print receipt to both thermal slip printer (default) and continuous network printer
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToThermalPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable,System.String)">
+<member name="M:Overn_Delights_POS.DualReceiptPrinter.PrintToThermalPrinter(System.Collections.Generic.Dictionary{System.String,System.Object},System.Data.DataTable)">
  <summary>
  Print to thermal slip printer (80mm Epson)
  </summary>
@@ -276,6 +276,12 @@ Overn-Delights-POS
  Requires Retail Manager authentication
  </summary>
 </member>
+<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.CancelCakeOrder">
+ <summary>
+ Opens the Cancel Cake Order workflow
+ Requires Retail Manager authentication
+ </summary>
+</member>
 <member name="M:Overn_Delights_POS.PaymentTenderForm.PrintEFTSlip">
  <summary>
  Print EFT payment slip to thermal printer
@@ -290,6 +296,17 @@ Overn-Delights-POS
  <summary>
  LEGACY: Print receipt to default printer (Epson thermal slip printer - 80mm)
  This method is kept for reference but replaced by PrintReceiptDual
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CakeOrderFormNew.ProcessCancellationRefund(System.Object,System.EventArgs)">
+ <summary>
+ Process cancellation refund through terminal (cash or card)
+ Refund Amount = Deposit Paid - Total (surcharge items added)
+ </summary>
+</member>
+<member name="M:Overn_Delights_POS.CakeOrderFormNew.UpdateOrderStatusToCancelled">
+ <summary>
+ Update order status to Cancelled in database
  </summary>
 </member>
 <member name="T:Overn_Delights_POS.UserDefinedOrderData">

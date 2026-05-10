@@ -221,6 +221,7 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Services\CakeOrderEditService.vb" />
+    <Compile Include="Services\CakeOrderCancelService.vb" />
     <Compile Include="Forms\UpdateDialog.vb">
       <SubType>Form</SubType>
     </Compile>

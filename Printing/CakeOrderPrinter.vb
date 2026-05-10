@@ -194,10 +194,14 @@ Public Class CakeOrderPrinter
         DrawField(g, "ItemHeader", "Item Description              Qty Required    Unit Price (R)    Total Price (R)", 10, 330, 8, True)
         
         Dim itemYPos = 345
+        Dim itemIndex = 1
         For Each item In _orderData.Items
             Dim itemLine = $"{item.Description.PadRight(30)} {item.Quantity.ToString().PadLeft(4)} {item.UnitPrice.ToString("F2").PadLeft(15)} {item.TotalPrice.ToString("F2").PadLeft(18)}"
-            DrawField(g, "ItemLine1", itemLine, 10, itemYPos, 8, False)
+            ' Use unique field name per item to avoid overwriting, but don't use config - always use calculated position
+            Dim font As New Font("Courier New", 8, FontStyle.Regular)
+            g.DrawString(itemLine, font, Brushes.Black, 10, itemYPos)
             itemYPos += 15
+            itemIndex += 1
         Next
         
         ' ===== FOOTER SECTION =====

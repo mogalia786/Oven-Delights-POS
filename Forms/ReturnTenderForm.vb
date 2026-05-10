@@ -2,12 +2,16 @@ Imports System.Configuration
 Imports System.Data.SqlClient
 Imports System.Drawing
 Imports System.Windows.Forms
+Imports System.IO
+Imports System.Net
+Imports System.Text
 
 Public Class ReturnTenderForm
     Inherits Form
 
     Private _connectionString As String
     Private _returnNumber As String
+    Private _returnInvoiceNumber As String
     Private _returnItems As DataTable
     Private _totalRefund As Decimal
     Private _branchID As Integer
@@ -17,6 +21,15 @@ Public Class ReturnTenderForm
     Private _customerCell As String
     Private _returnReason As String
     Private _tenderMethod As String = ""
+    
+    ' PAYMENT TERMINAL CONFIGURATION
+    Private _isLiveMode As Boolean = False ' DEFAULT TO TEST MODE
+    Private _paypointApiKey As String = ""
+    Private _paypointSiteId As String = ""
+    Private _paypointClientSecret As String = ""
+    Private _paypointClientId As String = ""
+    Private _cardApprovalCode As String = ""
+    Private _transactionId As String = ""
     
     ' Public properties to expose tender details
     Public ReadOnly Property TenderMethod As String
@@ -42,6 +55,7 @@ Public Class ReturnTenderForm
     Public Sub New(returnNumber As String, returnItems As DataTable, totalRefund As Decimal, branchID As Integer, cashierName As String, customerName As String, customerSurname As String, customerCell As String, returnReason As String)
         MyBase.New()
         _returnNumber = returnNumber
+        _returnInvoiceNumber = returnNumber
         _returnItems = returnItems
         _totalRefund = totalRefund
         _branchID = branchID
@@ -52,8 +66,35 @@ Public Class ReturnTenderForm
         _returnReason = returnReason
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
         
+        LoadPaymentConfiguration()
         InitializeComponent()
         ShowTenderSelection()
+    End Sub
+    
+    Private Sub LoadPaymentConfiguration()
+        Try
+            ' ✅ USE HARDCODED CREDENTIALS BASED ON _isLiveMode TOGGLE
+            If _isLiveMode Then
+                ' ✅ LIVE CREDENTIALS - REFUND/REVERSAL
+                _paypointApiKey = ""
+                _paypointClientId = "gmfp6rxmbrjejsd8ekc1eb4zhkdgkwi38iwx017pmdxs81giwk6i0nehmilmuj"
+                _paypointClientSecret = "81giwk6i0nehmilmuj"
+                _paypointSiteId = "RT08"
+                Debug.WriteLine("[REFUND] Using LIVE credentials - Production environment")
+            Else
+                ' ✅ TEST CREDENTIALS
+                _paypointApiKey = "Q7w30FOnntfiLzJuKKJrKqVqXg9BHPCq"
+                _paypointClientId = "MP7BQIe0TMxgxzhpGghkNF303zhmYnjA"
+                _paypointClientSecret = "Tf3ac4dLR9DGmBfwipmjy6tjUmLv6tma"
+                _paypointSiteId = "UT02"
+                Debug.WriteLine("[REFUND] Using TEST credentials - Sandbox environment")
+            End If
+            
+            Debug.WriteLine($"[REFUND] Loaded {_isLiveMode.ToString().ToUpper()} mode configuration")
+        Catch ex As Exception
+            Debug.WriteLine($"[REFUND] Error loading config: {ex.Message}")
+            _isLiveMode = False
+        End Try
     End Sub
     
     Private Sub InitializeComponent()
@@ -76,33 +117,73 @@ Public Class ReturnTenderForm
         ' Header
         Dim pnlHeader As New Panel With {
             .Dock = DockStyle.Top,
-            .Height = 100,
+            .Height = 120,
             .BackColor = Color.Transparent,
             .Padding = New Padding(20, 10, 20, 10)
         }
         
+        ' LIVE/TEST Toggle buttons (top row, highly visible)
+        Dim btnTest As New Button With {
+            .Text = "🧪 TEST",
+            .Size = New Size(140, 45),
+            .Location = New Point(20, 10),
+            .BackColor = If(Not _isLiveMode, Color.FromArgb(0, 200, 0), Color.FromArgb(80, 80, 80)),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnTest.FlatAppearance.BorderSize = 0
+        
+        Dim btnLive As New Button With {
+            .Text = "🔴 LIVE",
+            .Size = New Size(140, 45),
+            .Location = New Point(170, 10),
+            .BackColor = If(_isLiveMode, Color.FromArgb(220, 20, 20), Color.FromArgb(80, 80, 80)),
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
+            .FlatStyle = FlatStyle.Flat,
+            .Cursor = Cursors.Hand
+        }
+        btnLive.FlatAppearance.BorderSize = 0
+        
         Dim lblTitle As New Label With {
-            .Text = "💰 SELECT REFUND METHOD",
-            .Font = New Font("Segoe UI", 24, FontStyle.Bold),
+            .Text = "� SELECT REFUND METHOD",
+            .Font = New Font("Segoe UI", 22, FontStyle.Bold),
             .ForeColor = _ironGold,
             .AutoSize = False,
-            .Width = 760,
-            .Height = 40,
-            .TextAlign = ContentAlignment.MiddleCenter
+            .Width = 500,
+            .Height = 35,
+            .TextAlign = ContentAlignment.MiddleLeft
         }
-        lblTitle.Location = New Point(20, 10)
+        lblTitle.Location = New Point(330, 15)
         
         Dim lblAmount As New Label With {
             .Text = $"Refund Amount: R {_totalRefund:N2}",
-            .Font = New Font("Segoe UI", 20, FontStyle.Bold),
+            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
             .ForeColor = _ironRed,
             .AutoSize = False,
             .Width = 760,
-            .Height = 40,
+            .Height = 35,
             .TextAlign = ContentAlignment.MiddleCenter
         }
-        lblAmount.Location = New Point(20, 55)
-        pnlHeader.Controls.AddRange({lblTitle, lblAmount})
+        lblAmount.Location = New Point(20, 70)
+        
+        AddHandler btnTest.Click, Sub()
+            _isLiveMode = False
+            btnTest.BackColor = Color.FromArgb(0, 200, 0)
+            btnLive.BackColor = Color.FromArgb(80, 80, 80)
+            LoadPaymentConfiguration()
+        End Sub
+        
+        AddHandler btnLive.Click, Sub()
+            _isLiveMode = True
+            btnLive.BackColor = Color.FromArgb(220, 20, 20)
+            btnTest.BackColor = Color.FromArgb(80, 80, 80)
+            LoadPaymentConfiguration()
+        End Sub
+        
+        pnlHeader.Controls.AddRange({lblTitle, lblAmount, btnTest, btnLive})
         
         ' Tender buttons panel
         Dim pnlButtons As New Panel With {
@@ -213,33 +294,287 @@ Public Class ReturnTenderForm
         Dim result = MessageBox.Show($"Confirm CASH refund of R {_totalRefund:N2}?{vbCrLf}{vbCrLf}Open cash drawer and count cash to customer.", "Cash Refund", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
         
         If result = DialogResult.Yes Then
-            ' Open cash drawer
-            OpenCashDrawer()
-            
-            ' Show message while printing
-            MessageBox.Show("Printing customer and cashier receipts...", "Printing", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            
-            ' Print duplicate receipts automatically (Customer + Cashier copy)
-            PrintDuplicateReceipts()
-            
-            ' Confirm completion
-            MessageBox.Show("Cash refund complete. Receipts printed.", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            
-            ' Close tender form - return to summary
-            Me.DialogResult = DialogResult.OK
-            Me.Close()
+            Try
+                ' Update Cash on Hand ledger
+                Using conn As New SqlConnection(_connectionString)
+                    conn.Open()
+                    Using transaction = conn.BeginTransaction()
+                        Try
+                            ' CREDIT Cash (reducing cash on hand for refund)
+                            Dim cashLedgerID = GetLedgerID(conn, transaction, "Cash")
+                            Dim refNumber = $"REF-{DateTime.Now:yyyyMMddHHmmss}"
+                            InsertJournalEntry(conn, transaction, DateTime.Now, "Refund Journal", refNumber, cashLedgerID, 0, _totalRefund, $"Cash refund {_returnInvoiceNumber}")
+                            
+                            ' DEBIT Sales Returns
+                            Dim salesReturnsLedgerID = GetLedgerID(conn, transaction, "Sales Returns")
+                            InsertJournalEntry(conn, transaction, DateTime.Now, "Refund Journal", refNumber, salesReturnsLedgerID, _totalRefund, 0, $"Sales return {_returnInvoiceNumber}")
+                            
+                            transaction.Commit()
+                        Catch ex As Exception
+                            transaction.Rollback()
+                            Throw New Exception($"Ledger update failed: {ex.Message}", ex)
+                        End Try
+                    End Using
+                End Using
+                
+                ' Open cash drawer
+                OpenCashDrawer()
+                
+                ' Show message while printing
+                MessageBox.Show("Printing customer and cashier receipts...", "Printing", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                
+                ' Print duplicate receipts automatically (Customer + Cashier copy)
+                PrintDuplicateReceipts()
+                
+                ' Confirm completion
+                MessageBox.Show("Cash refund complete. Receipts printed.", "Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                
+                ' Close tender form - return to summary
+                Me.DialogResult = DialogResult.OK
+                Me.Close()
+            Catch ex As Exception
+                MessageBox.Show($"Error processing cash refund: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            End Try
         End If
     End Sub
     
     Private Sub ProcessCardRefund()
         _tenderMethod = "CARD"
         
-        ' Show card refund instructions
-        MessageBox.Show($"Process CARD refund of R {_totalRefund:N2}{vbCrLf}{vbCrLf}1. Process reversal on card terminal{vbCrLf}2. Wait for approval{vbCrLf}3. Give customer card receipt", "Card Refund", MessageBoxButtons.OK, MessageBoxIcon.Information)
-        
-        ' Show receipt and complete
-        CompleteRefund()
+        Try
+            ' Show processing dialog
+            Dim processingResult As DialogResult = MessageBox.Show(
+                "Processing card refund through terminal..." & vbCrLf & vbCrLf &
+                "Amount: R" & _totalRefund.ToString("N2") & vbCrLf &
+                "Please wait...",
+                "Card Refund Processing",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information)
+
+            If processingResult <> DialogResult.OK Then
+                Return
+            End If
+
+            Debug.WriteLine("[REFUND] Processing card refund through terminal")
+            Debug.WriteLine($"[REFUND] CURRENT MODE: {_isLiveMode} (True=LIVE, False=TEST)")
+            Debug.WriteLine($"[REFUND] Amount: R{_totalRefund:N2}")
+
+            ' Build refund request
+            Dim productItems As New List(Of Object)
+            Dim itemId As Integer = 1
+
+            For Each row As DataRow In _returnItems.Rows
+                productItems.Add(New With {
+                    .itemId = itemId,
+                    .category = 255,
+                    .amount = CInt(CDec(row("LineTotal")) * 100),
+                    .description = row("ProductName").ToString().Substring(0, Math.Min(20, row("ProductName").ToString().Length)),
+                    .quantity = CInt(row("Quantity")),
+                    .unitPrice = CInt(CDec(row("UnitPrice")) * 100)
+                })
+                itemId += 1
+            Next
+
+            Dim refundRequest As Object
+            If _isLiveMode Then
+                refundRequest = New With {
+                    .requestType = "Refund",
+                    .reconIndicator = Now.ToString("HHmmss").Substring(0, Math.Min(7, Now.ToString("HHmmss").Length)),
+                    .supervisor = New String() {"R"}, ' Refund supervisor code
+                    .posIdentifier = 1,
+                    .posVersion = "1.0.0",
+                    .siteId = "RT08",
+                    .totalAmount = _totalRefund, ' Amount in decimal format (e.g., 185.00)
+                    .productItems = productItems
+                }
+            Else
+                refundRequest = New With {
+                    .requestType = "Refund",
+                    .reconIndicator = Now.ToString("HHmmss").Substring(0, Math.Min(7, Now.ToString("HHmmss").Length)),
+                    .supervisor = New String() {}, ' Test allows unattended
+                    .posIdentifier = 10,
+                    .posVersion = "1.0.0",
+                    .siteId = "UT02",
+                    .totalAmount = _totalRefund, ' Amount in decimal format (e.g., 185.00)
+                    .productItems = productItems
+                }
+            End If
+
+            Dim jsonRequest As String = SimpleJsonSerialize(refundRequest)
+            Dim apiUrl As String = If(_isLiveMode, "https://miniposfnb.co.za:49410/api", "https://test.figment.co.za:49410/api")
+
+            Debug.WriteLine($"[REFUND] {_isLiveMode.ToString().ToUpper()} MODE - Sending to: {apiUrl}")
+            Debug.WriteLine($"[REFUND] JSON: {jsonRequest}")
+
+            Dim request As HttpWebRequest = WebRequest.Create(apiUrl)
+            request.Method = "POST"
+            request.ContentType = "application/json"
+            request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Overn-Delights-POS/1.0.0.37"
+            request.Timeout = 30000
+
+            ' Handle authentication
+            Dim accessToken As String = ""
+            If _isLiveMode Then
+                ' OAuth2 for LIVE
+                Dim tokenUrl As String = "https://miniposfnb.co.za:49410/oauth2/token"
+                Dim tokenRequest As HttpWebRequest = WebRequest.Create(tokenUrl)
+                tokenRequest.Method = "POST"
+                tokenRequest.ContentType = "application/x-www-form-urlencoded"
+                tokenRequest.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Overn-Delights-POS/1.0.0.37"
+                tokenRequest.Timeout = 30000
+
+                Dim tokenData = $"grant_type=client_credentials&client_id={_paypointClientId}&client_secret={_paypointClientSecret}"
+                Dim tokenBytes = Encoding.UTF8.GetBytes(tokenData)
+                tokenRequest.ContentLength = tokenBytes.Length
+
+                Using tokenStream = tokenRequest.GetRequestStream()
+                    tokenStream.Write(tokenBytes, 0, tokenBytes.Length)
+                End Using
+
+                Using tokenResponse = tokenRequest.GetResponse()
+                    Using tokenStream = tokenResponse.GetResponseStream()
+                        Using tokenReader = New StreamReader(tokenStream)
+                            Dim tokenJson = tokenReader.ReadToEnd()
+                            accessToken = ExtractJsonValue(tokenJson, "access_token")
+                        End Using
+                    End Using
+                End Using
+            Else
+                accessToken = _paypointApiKey
+            End If
+
+            ' Send refund request
+            Dim dataBytes = Encoding.UTF8.GetBytes(jsonRequest)
+            request.ContentLength = dataBytes.Length
+
+            If _isLiveMode Then
+                request.Headers.Add("Authorization", "Bearer " & accessToken)
+            Else
+                request.Headers.Add("X-API-Key", accessToken)
+            End If
+
+            Using requestStream = request.GetRequestStream()
+                requestStream.Write(dataBytes, 0, dataBytes.Length)
+            End Using
+
+            Using response = request.GetResponse()
+                Using responseStream = response.GetResponseStream()
+                    Using reader = New StreamReader(responseStream)
+                        Dim responseJson = reader.ReadToEnd()
+                        Debug.WriteLine($"[REFUND] API Response: {responseJson}")
+
+                        Dim isSuccess As Boolean = responseJson.Contains("""success"":true") OrElse responseJson.Contains("""success"": True")
+
+                        If isSuccess Then
+                            _cardApprovalCode = ExtractJsonValue(responseJson, "approvalCode")
+                            _transactionId = ExtractJsonValue(responseJson, "transactionId")
+
+                            MessageBox.Show(
+                                "✅ REFUND APPROVED" & vbCrLf & vbCrLf &
+                                "Amount: R" & _totalRefund.ToString("N2") & vbCrLf &
+                                "Auth Code: " & _cardApprovalCode & vbCrLf &
+                                "Transaction ID: " & _transactionId,
+                                "Refund Successful",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information)
+
+                            CompleteRefund()
+                        Else
+                            Dim errorMessage As String = "Refund declined"
+                            If responseJson.Contains("""error"":") Then
+                                errorMessage = ExtractJsonValue(responseJson, "error")
+                            End If
+
+                            MessageBox.Show(
+                                "❌ REFUND FAILED" & vbCrLf & vbCrLf &
+                                "Error: " & errorMessage,
+                                "Refund Error",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error)
+                        End If
+                    End Using
+                End Using
+            End Using
+
+        Catch ex As Exception
+            Debug.WriteLine($"[REFUND] Error: {ex.Message}")
+            MessageBox.Show(
+                "Refund processing error: " & ex.Message & vbCrLf & vbCrLf &
+                "Please process refund manually on terminal.",
+                "System Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error)
+        End Try
     End Sub
+    
+    Private Function SimpleJsonSerialize(obj As Object) As String
+        Dim json As New StringBuilder()
+        json.Append("{")
+        
+        Dim properties = obj.GetType().GetProperties()
+        For i As Integer = 0 To properties.Length - 1
+            Dim prop = properties(i)
+            If prop.GetIndexParameters().Length > 0 Then Continue For
+            
+            If i > 0 Then json.Append(",")
+            
+            Dim value = prop.GetValue(obj, Nothing)
+            json.Append($"""{prop.Name}"":")
+            
+            If TypeOf value Is String Then
+                json.Append($"""{value}""")
+            ElseIf TypeOf value Is Decimal Then
+                json.Append(CDec(value).ToString("F2"))
+            ElseIf TypeOf value Is Integer Then
+                json.Append(CInt(value).ToString())
+            ElseIf TypeOf value Is Boolean Then
+                json.Append(CBool(value).ToString().ToLower())
+            ElseIf TypeOf value Is String() Then
+                json.Append(SimpleJsonSerializeArray(value))
+            ElseIf TypeOf value Is IEnumerable Then
+                json.Append(SimpleJsonSerializeArray(value))
+            Else
+                json.Append($"""{value}""")
+            End If
+        Next
+        
+        json.Append("}")
+        Return json.ToString()
+    End Function
+    
+    Private Function SimpleJsonSerializeArray(arr As IEnumerable) As String
+        Dim json As New StringBuilder()
+        json.Append("[")
+        
+        Dim first As Boolean = True
+        For Each item In arr
+            If Not first Then json.Append(",")
+            first = False
+            
+            If TypeOf item Is String Then
+                json.Append($"""{item}""")
+            ElseIf item.GetType().IsClass AndAlso Not TypeOf item Is String Then
+                json.Append(SimpleJsonSerialize(item))
+            Else
+                json.Append(item.ToString())
+            End If
+        Next
+        
+        json.Append("]")
+        Return json.ToString()
+    End Function
+    
+    Private Function ExtractJsonValue(json As String, key As String) As String
+        Try
+            Dim pattern As String = $"""{key}""\s*:\s*""([^""]*)"""
+            Dim match = System.Text.RegularExpressions.Regex.Match(json, pattern)
+            If match.Success Then
+                Return match.Groups(1).Value
+            End If
+        Catch
+        End Try
+        Return ""
+    End Function
     
     Private Sub ProcessEFTRefund()
         _tenderMethod = "EFT"
@@ -380,6 +715,40 @@ Public Class ReturnTenderForm
             ' Silently fail - drawer may not be connected
             Debug.WriteLine($"Cash drawer error: {ex.Message}")
         End Try
+    End Sub
+    
+    Private Function GetLedgerID(conn As SqlConnection, transaction As SqlTransaction, ledgerName As String) As Integer
+        Dim sql = "SELECT TOP 1 LedgerID FROM Ledgers WHERE LedgerName = @LedgerName"
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@LedgerName", ledgerName)
+            Dim result = cmd.ExecuteScalar()
+            If result IsNot Nothing Then
+                Return CInt(result)
+            Else
+                Dim insertSql = "INSERT INTO Ledgers (LedgerName, LedgerType, IsActive) VALUES (@LedgerName, 'Asset', 1); SELECT CAST(SCOPE_IDENTITY() AS INT)"
+                Using cmdInsert As New SqlCommand(insertSql, conn, transaction)
+                    cmdInsert.Parameters.AddWithValue("@LedgerName", ledgerName)
+                    Return CInt(cmdInsert.ExecuteScalar())
+                End Using
+            End If
+        End Using
+    End Function
+    
+    Private Sub InsertJournalEntry(conn As SqlConnection, transaction As SqlTransaction, journalDate As DateTime, journalType As String, reference As String, ledgerID As Integer, debit As Decimal, credit As Decimal, description As String)
+        Dim sql = "INSERT INTO GeneralJournal (TransactionDate, JournalType, Reference, LedgerID, Debit, Credit, BranchID, CreatedBy, CreatedDate) " &
+                  "VALUES (@Date, @Type, @Ref, @LedgerID, @Debit, @Credit, @BranchID, @CreatedBy, GETDATE())"
+        
+        Using cmd As New SqlCommand(sql, conn, transaction)
+            cmd.Parameters.AddWithValue("@Date", journalDate)
+            cmd.Parameters.AddWithValue("@Type", journalType)
+            cmd.Parameters.AddWithValue("@Ref", reference)
+            cmd.Parameters.AddWithValue("@LedgerID", ledgerID)
+            cmd.Parameters.AddWithValue("@Debit", debit)
+            cmd.Parameters.AddWithValue("@Credit", credit)
+            cmd.Parameters.AddWithValue("@BranchID", _branchID)
+            cmd.Parameters.AddWithValue("@CreatedBy", _cashierName)
+            cmd.ExecuteNonQuery()
+        End Using
     End Sub
 End Class
 

@@ -7,11 +7,8 @@ Public Class OrderLookupDialog
     
     Private _connectionString As String
     Private _accountNumber As String = ""
-    Private _pickupDate As Date = Date.Today
     Private txtAccountNumber As TextBox
-    Private dtpPickupDate As DateTimePicker
     Private lblAccountNumber As Label
-    Private lblPickupDate As Label
 
     Public ReadOnly Property AccountNumber As String
         Get
@@ -19,11 +16,6 @@ Public Class OrderLookupDialog
         End Get
     End Property
 
-    Public ReadOnly Property PickupDate As Date
-        Get
-            Return _pickupDate
-        End Get
-    End Property
 
     Public Sub New()
         Try
@@ -88,21 +80,6 @@ Public Class OrderLookupDialog
         }
         AddHandler txtAccountNumber.KeyPress, AddressOf TxtAccountNumber_KeyPress
 
-        lblPickupDate = New Label With {
-            .Text = "Pickup Date:",
-            .Font = New Font("Segoe UI", 10),
-            .Location = New Point(30, 185),
-            .AutoSize = True
-        }
-
-        dtpPickupDate = New DateTimePicker With {
-            .Name = "dtpPickupDate",
-            .Font = New Font("Segoe UI", 11),
-            .Location = New Point(30, 210),
-            .Size = New Size(440, 30),
-            .Format = DateTimePickerFormat.Long,
-            .Value = Date.Today
-        }
 
         Dim btnCancel As New Button With {
             .Text = "Cancel",
@@ -128,7 +105,7 @@ Public Class OrderLookupDialog
         btnSearch.FlatAppearance.BorderSize = 0
         AddHandler btnSearch.Click, AddressOf BtnSearch_Click
 
-        Me.Controls.AddRange({pnlHeader, lblInstruction, lblAccountNumber, txtAccountNumber, lblPickupDate, dtpPickupDate, btnCancel, btnSearch})
+        Me.Controls.AddRange({pnlHeader, lblInstruction, lblAccountNumber, txtAccountNumber, btnCancel, btnSearch})
         Me.AcceptButton = btnSearch
         Me.CancelButton = btnCancel
     End Sub
@@ -141,7 +118,6 @@ Public Class OrderLookupDialog
 
     Private Sub BtnSearch_Click(sender As Object, e As EventArgs)
         Dim accountNumber As String = txtAccountNumber.Text.Trim()
-        Dim pickupDate As Date = dtpPickupDate.Value.Date
 
         If String.IsNullOrEmpty(accountNumber) Then
             MessageBox.Show("Please enter the customer's account number (cellphone number).", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
@@ -150,38 +126,35 @@ Public Class OrderLookupDialog
         End If
 
         If accountNumber.Length < 10 Then
-            MessageBox.Show("Please enter a valid cellphone number (at least 10 digits).", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            MessageBox.Show("Please enter a valid cellphone number (10 digits).", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
             txtAccountNumber.Focus()
             Return
         End If
 
-        If Not OrdersExist(accountNumber, pickupDate) Then
-            MessageBox.Show($"No cake orders found for account number {accountNumber} on {pickupDate:dd MMM yyyy}." & Environment.NewLine & Environment.NewLine & "Please verify the account number and pickup date.", "No Orders Found", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        If Not OrdersExist(accountNumber) Then
+            MessageBox.Show($"No pending cake orders found for account number {accountNumber}." & Environment.NewLine & Environment.NewLine & "Please verify the account number.", "No Orders Found", MessageBoxButtons.OK, MessageBoxIcon.Information)
             Return
         End If
 
         _accountNumber = accountNumber
-        _pickupDate = pickupDate
         Me.DialogResult = DialogResult.OK
         Me.Close()
     End Sub
 
-    Private Function OrdersExist(accountNumber As String, pickupDate As Date) As Boolean
+    Private Function OrdersExist(accountNumber As String) As Boolean
         Try
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
 
-                Dim sql = "SELECT COUNT(*) FROM POS_CustomOrders WHERE AccountNumber = @AccountNumber AND CAST(ReadyDate AS DATE) = @ReadyDate"
+                Dim sql = "SELECT COUNT(*) FROM POS_CustomOrders WHERE AccountNumber = @AccountNumber AND OrderStatus IN ('New', 'Pending', 'Active')"
 
                 Using cmd As New SqlCommand(sql, conn)
                     cmd.Parameters.AddWithValue("@AccountNumber", accountNumber)
-                    cmd.Parameters.AddWithValue("@ReadyDate", pickupDate)
 
                     Dim count As Integer = CInt(cmd.ExecuteScalar())
                     Return count > 0
                 End Using
             End Using
-
         Catch ex As Exception
             MessageBox.Show($"Error checking orders: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Return False
