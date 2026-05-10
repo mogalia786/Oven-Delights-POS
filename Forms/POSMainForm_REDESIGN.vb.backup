@@ -43,6 +43,8 @@ Public Class POSMainForm_REDESIGN
     Private _currentSubCategoryId As Integer = 0
     Private _currentSubCategoryName As String = ""
     Private _categoryService As New CategoryNavigationService()
+    Private _categoryButtons As New List(Of Button)()
+    Private _categoryColors() As Color = {Color.FromArgb(52, 152, 219), Color.FromArgb(46, 204, 113), Color.FromArgb(241, 196, 15), Color.FromArgb(155, 89, 182), Color.FromArgb(231, 76, 60), Color.FromArgb(244, 208, 63)}
     Private lblBreadcrumb As Label
     
     ' Search debouncing
@@ -1190,17 +1192,17 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub LoadCategories()
-        ' Check if panel is initialized
+        ' Check if panel is initialized - EXACT MATCH WITH DECOMPILED
         If pnlCategories Is Nothing Then
-            ' Show categories as tiles in main product area instead
             ShowCategories()
-            ResetIdleTimer() ' Start idle timer after showing categories
+            ResetIdleTimer()
             Return
         End If
 
+        ' Simple clear like decompiled version
         pnlCategories.Controls.Clear()
 
-        ' Add "All Products" button at the top
+        ' Add "All Products" button - EXACT MATCH WITH DECOMPILED
         Dim btnAll As New Button With {
             .Text = "📦 All Products",
             .Size = New Size(190, 60),
@@ -1220,23 +1222,24 @@ Public Class POSMainForm_REDESIGN
         pnlCategories.Controls.Add(btnAll)
 
         Try
-            Dim sql = "SELECT CategoryID, CategoryCode, CategoryName FROM ProductCategories WHERE IsActive = 1 ORDER BY CategoryName"
-
+            ' Use exact SQL from decompiled version
+            Dim sql = "SELECT CategoryID, CategoryCode, CategoryName FROM ProductCategories WHERE IsActive = 1 AND CategoryName NOT IN ('BUITERCREAM CAKE', 'FRESHCREAM CAKE') ORDER BY CategoryName"
+            
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
                 Using cmd As New SqlCommand(sql, conn)
                     Using reader = cmd.ExecuteReader()
-                        Dim colorIndex = 0
+                        Dim num As Integer = 0
                         Dim colors() As Color = {_lightBlue, _green, _orange, _purple, _red, _yellow}
-
+                        
                         While reader.Read()
                             Dim categoryCode = reader.GetString(1)
                             Dim categoryName = reader.GetString(2)
-                            Dim icon = GetCategoryIcon(categoryCode)
-                            Dim btnColor = colors(colorIndex Mod colors.Length)
+                            Dim categoryIcon = GetCategoryIcon(categoryCode)
+                            Dim btnColor = colors(num Mod colors.Length)
 
                             Dim btn As New Button With {
-                                .Text = $"{icon} {categoryName}",
+                                .Text = $"{categoryIcon} {categoryName}",
                                 .Size = New Size(190, 60),
                                 .BackColor = btnColor,
                                 .ForeColor = Color.White,
@@ -1261,7 +1264,7 @@ Public Class POSMainForm_REDESIGN
                                                        End Sub
 
                             pnlCategories.Controls.Add(btn)
-                            colorIndex += 1
+                            num += 1
                         End While
                     End Using
                 End Using
@@ -1284,6 +1287,12 @@ Public Class POSMainForm_REDESIGN
             Case "MANUFACTURED", "GOODS" : Return "🏭"
             Case "PACKAGING" : Return "📦"
             Case "RAW", "MATERIALS" : Return "🌾"
+            Case "CPC" : Return "🧁"
+            Case "DNT" : Return "🍩"
+            Case "CKE" : Return "🎂"
+            Case "PST" : Return "🥐"
+            Case "BEV" : Return "☕"
+            Case "GOODS" : Return "🏭"
             Case Else : Return "📦"
         End Select
     End Function
@@ -1510,28 +1519,29 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
             Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
             Tuple.Create("", "✏️ Edit Order", CType(Sub() EditCakeOrder(), Action)),
+            Tuple.Create("", "❌ Cancel Order", CType(Sub() CancelCakeOrder(), Action)),
             Tuple.Create("", "📦 Box Items", CType(Sub() CreateBoxItems(), Action)),
             Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 17 ' 12 F-keys + 5 additional buttons
+        Dim visibleCount = 18 ' 12 F-keys + 6 additional buttons
         ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
         Dim leftMargin = 5
         Dim rightMargin = 5
         Dim availableWidth = screenWidth - leftMargin - rightMargin
-        Dim spacing = 3 ' Reduced spacing for more room
+        Dim spacing = 2 ' Minimal spacing to fit all buttons
         Dim buttonWidth = ((availableWidth - (spacing * (visibleCount - 1))) \ visibleCount)
 
-        ' Ensure buttons fit on screen - adjust if too wide
-        If buttonWidth < 60 Then 
-            buttonWidth = 60
-        ElseIf buttonWidth > 80 Then
-            buttonWidth = 80
+        ' Ensure buttons fit on screen - adjust for 1024x768
+        If buttonWidth < 52 Then 
+            buttonWidth = 52
+        ElseIf buttonWidth > 56 Then
+            buttonWidth = 56
         End If
         
         ' Calculate font size based on button width
-        Dim fontSize As Single = If(buttonWidth < 65, 7, 8)
+        Dim fontSize As Single = If(buttonWidth < 54, 6.5, 7)
 
         For i = 0 To visibleCount - 1
             Dim shortcut = shortcuts(i)
@@ -1645,7 +1655,6 @@ Public Class POSMainForm_REDESIGN
             Case Keys.F11 : CreateOrder() : Return True
             Case Keys.F12 : OrderCollection() : Return True
             Case Keys.Shift Or Keys.F11 : EditCakeOrder() : Return True
-            Case Keys.Shift Or Keys.F12 : CancelCakeOrder() : Return True
         End Select
         Return MyBase.ProcessCmdKey(msg, keyData)
     End Function
@@ -2846,8 +2855,8 @@ Public Class POSMainForm_REDESIGN
         ' Reset idle timer when user interacts
         ResetIdleTimer()
 
-        ' Show categories when idle screen is dismissed
-        If _currentView = "categories" AndAlso flpProducts.Controls.Count = 0 Then
+        ' Show categories when idle screen is dismissed - ONLY if not already shown
+        If _currentView = "categories" AndAlso flpProducts.Controls.Count = 0 AndAlso pnlCategories.Controls.Count = 0 Then
             ShowCategories()
         End If
 
@@ -5125,26 +5134,8 @@ Public Class POSMainForm_REDESIGN
         _currentCategoryName = ""
         lblBreadcrumb.Text = "Categories"
 
-        flpProducts.SuspendLayout()
-        flpProducts.Controls.Clear()
-
-        Try
-            Dim categories = _categoryService.LoadCategories()
-
-            For Each row As DataRow In categories.Rows
-                Dim categoryId = CInt(row("CategoryID"))
-                Dim categoryName = row("CategoryName").ToString()
-                Dim productCount = CInt(row("ProductCount"))
-
-                Dim btn = CreateCategoryTile(categoryId, categoryName, productCount)
-                flpProducts.Controls.Add(btn)
-            Next
-
-        Catch ex As Exception
-            MessageBox.Show($"Error loading categories: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        Finally
-            flpProducts.ResumeLayout()
-        End Try
+        ' Just call LoadCategories - don't duplicate the logic
+        LoadCategories()
     End Sub
 
     Private Sub ShowSubCategories(categoryId As Integer, categoryName As String)
@@ -7050,7 +7041,7 @@ Public Class POSMainForm_REDESIGN
                 End Using
             End Using
             
-            ' Create and start cancel workflow
+            ' Create and start cancel workflow (same as edit workflow)
             Dim cancelService As New CakeOrderCancelService(
                 _branchID, 
                 _tillPointID, 

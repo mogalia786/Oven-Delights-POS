@@ -43,6 +43,8 @@ Public Class POSMainForm_REDESIGN
     Private _currentSubCategoryId As Integer = 0
     Private _currentSubCategoryName As String = ""
     Private _categoryService As New CategoryNavigationService()
+    Private _categoryButtons As New List(Of Button)()
+    Private _categoryColors() As Color = {Color.FromArgb(52, 152, 219), Color.FromArgb(46, 204, 113), Color.FromArgb(241, 196, 15), Color.FromArgb(155, 89, 182), Color.FromArgb(231, 76, 60), Color.FromArgb(244, 208, 63)}
     Private lblBreadcrumb As Label
     
     ' Search debouncing
@@ -107,9 +109,6 @@ Public Class POSMainForm_REDESIGN
         Me.KeyPreview = True
 
         SetupModernUI()
-
-        ' Initialize screen dimensions and scaling AFTER form is positioned
-        InitializeScreenScaling()
 
         InitializeCart()
         SetupIdleScreen()
@@ -251,12 +250,13 @@ Public Class POSMainForm_REDESIGN
         lblCashier.BringToFront()
         lblBranch.BringToFront()
 
-        ' LEFT PANEL - HIDDEN (using category tiles in main area instead)
-        ' Categories will now show as tiles in the main product panel
-        Dim pnlCategoriesContainer As New Panel With {
+        ' LEFT PANEL - Categories panel (exact match with decompiled)
+        pnlCategories = New FlowLayoutPanel With {
             .Dock = DockStyle.Left,
-            .Width = 0,
-            .Visible = False
+            .Width = 200,
+            .BackColor = Color.FromArgb(25, 25, 30),
+            .Padding = New Padding(10),
+            .AutoScroll = True
         }
 
         ' CENTER PANEL - Products with vibrant futuristic theme
@@ -306,14 +306,14 @@ Public Class POSMainForm_REDESIGN
 
         ' Search textbox (accepts keyboard and touch input)
         txtSearch = New TextBox With {
-            .Font = New Font("Segoe UI", 12),
+            .Font = New Font("Segoe UI", 10), ' Smaller font for 1024px
             .Location = New Point(120, 8),
-            .Width = 300,
-            .Height = 44,
-            .Text = "🔍 Search by code...",
+            .Width = 200, ' Reduced width for 1024px
+            .Height = 35, ' Reduced height for 1024px
+            .Text = "🔍 Search...",
             .ForeColor = _darkGray,
-            .ReadOnly = False,
-            .Cursor = Cursors.IBeam
+            .BackColor = Color.White,
+            .BorderStyle = BorderStyle.FixedSingle
         }
 
         AddHandler txtSearch.Enter, Sub()
@@ -346,11 +346,11 @@ Public Class POSMainForm_REDESIGN
 
         ' Search by Name textbox
         txtSearchByName = New TextBox With {
-            .Font = New Font("Segoe UI", 12),
-            .Location = New Point(430, 8),
-            .Width = 300,
-            .Height = 44,
-            .Text = "⌨️ Search by name...",
+            .Font = New Font("Segoe UI", 10), ' Smaller font for 1024px
+            .Location = New Point(330, 8), ' Adjusted position
+            .Width = 200, ' Reduced width for 1024px
+            .Height = 35, ' Reduced height for 1024px
+            .Text = "⌨️ Name...",
             .ForeColor = _darkGray,
             .ReadOnly = False,
             .Cursor = Cursors.IBeam
@@ -419,8 +419,9 @@ Public Class POSMainForm_REDESIGN
         }
         AddHandler txtBarcodeScanner.KeyDown, AddressOf BarcodeScanner_KeyDown
 
-        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, btnPriceOverride, txtBarcodeScanner})
+        pnlSearchBar.Controls.AddRange({btnScan, txtSearch, txtSearchByName, btnRefresh, btnModifyQty, btnPriceOverride})
 
+        ' PRODUCTS AREA - FlowLayoutPanel for tiles
         flpProducts = New FlowLayoutPanel With {
             .Dock = DockStyle.Fill,
             .AutoScroll = True,
@@ -430,70 +431,105 @@ Public Class POSMainForm_REDESIGN
             .BackColor = Color.FromArgb(15, 20, 35)
         }
 
-        pnlProducts.Controls.AddRange({flpProducts, lblBreadcrumb, pnlSearchBar})
+        pnlProducts.Controls.AddRange({lblBreadcrumb, pnlSearchBar, flpProducts})
 
-        ' RIGHT PANEL - Cart - Much wider, almost to categories
+        ' RIGHT PANEL - Cart - Optimized for 1024px screens
         pnlCart = New Panel With {
             .Dock = DockStyle.Right,
-            .Width = 450,
+            .Width = 350, ' Reduced from 450 for 1024px screens
             .BackColor = Color.White,
             .Padding = New Padding(0)
         }
 
+        ' Cart header
         Dim lblCartHeader As New Label With {
-            .Text = "🛒 CURRENT SALE",
-            .Font = New Font("Segoe UI", 14, FontStyle.Bold),
+            .Text = "🛒 SHOPPING CART",
+            .Font = New Font("Segoe UI", 12, FontStyle.Bold),
             .ForeColor = Color.White,
-            .BackColor = _darkBlue,
             .Dock = DockStyle.Top,
-            .Height = 50,
-            .TextAlign = ContentAlignment.MiddleCenter
+            .Height = 40,
+            .TextAlign = ContentAlignment.MiddleCenter,
+            .BackColor = _darkBlue
         }
 
+        ' Cart items - DataGridView with modern styling
         dgvCart = New DataGridView With {
             .Dock = DockStyle.Fill,
             .BackgroundColor = Color.White,
             .BorderStyle = BorderStyle.None,
-            .AllowUserToAddRows = False,
-            .ReadOnly = False,
-            .SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             .RowHeadersVisible = False,
-            .AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            .Font = New Font("Segoe UI", 10),
-            .RowTemplate = New DataGridViewRow With {.Height = 45}
+            .ColumnHeadersHeight = 30,
+            .RowTemplate = DirectCast(New DataGridViewRow() With {.Height = 40}, DataGridViewRow),
+            .AllowUserToAddRows = False,
+            .AllowUserToDeleteRows = False,
+            .ReadOnly = True,
+            .MultiSelect = False,
+            .SelectionMode = DataGridViewSelectionMode.FullRowSelect
         }
 
+        ' Style the DataGridView
+        dgvCart.ColumnCount = 6
+        dgvCart.Columns(0).Name = "Product"
+        dgvCart.Columns(0).Width = 150
+        dgvCart.Columns(1).Name = "Price"
+        dgvCart.Columns(1).Width = 70
+        dgvCart.Columns(2).Name = "Qty"
+        dgvCart.Columns(2).Width = 50
+        dgvCart.Columns(3).Name = "Total"
+        dgvCart.Columns(3).Width = 70
+        dgvCart.Columns(4).Name = "Actions"
+        dgvCart.Columns(4).Width = 30
+        dgvCart.Columns(5).Name = "ID"
+        dgvCart.Columns(5).Visible = False
+
+        ' Apply modern styling to DataGridView
+        dgvCart.DefaultCellStyle = New DataGridViewCellStyle With {
+            .BackColor = Color.White,
+            .ForeColor = Color.FromArgb(50, 50, 50),
+            .Font = New Font("Segoe UI", 10),
+            .SelectionBackColor = _lightBlue,
+            .SelectionForeColor = Color.White
+        }
+        dgvCart.ColumnHeadersDefaultCellStyle = New DataGridViewCellStyle With {
+            .BackColor = _darkBlue,
+            .ForeColor = Color.White,
+            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
+            .Alignment = DataGridViewContentAlignment.MiddleCenter
+        }
+
+        ' Totals panel - Optimized for 1024px screens
         Dim pnlTotals As New Panel With {
             .Dock = DockStyle.Bottom,
-            .Height = 200,
+            .Height = 150, ' Reduced from 200 for 1024px screens
             .BackColor = _darkBlue,
-            .Padding = New Padding(15)
+            .Padding = New Padding(10) ' Reduced padding
         }
 
         lblSubtotal = New Label With {
-            .Text = "Subtotal: R 0.00",
-            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
+            .Text = "Subtotal: R0.00",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .ForeColor = Color.White,
-            .Location = New Point(20, 10),
+            .Location = New Point(10, 20),
             .AutoSize = True
         }
 
         lblTax = New Label With {
-            .Text = "VAT (15%): R 0.00",
-            .Font = New Font("Segoe UI", 13, FontStyle.Bold),
+            .Text = "Tax (15%): R0.00",
+            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
             .ForeColor = Color.White,
-            .Location = New Point(20, 38),
+            .Location = New Point(10, 50),
             .AutoSize = True
         }
 
         lblTotal = New Label With {
-            .Text = "R 0.00",
-            .Font = New Font("Segoe UI", 42, FontStyle.Bold),
-            .ForeColor = _yellow,
-            .Location = New Point(20, 68),
+            .Text = "TOTAL: R0.00",
+            .Font = New Font("Segoe UI", 16, FontStyle.Bold),
+            .ForeColor = Color.FromArgb(255, 215, 0),
+            .Location = New Point(10, 80),
             .AutoSize = True
         }
 
+        ' Pay button - Optimized for 1024px screens
         Dim btnPay As New Button With {
             .Text = "💳 PAY NOW (F12)",
             .Font = New Font("Segoe UI", 16, FontStyle.Bold),
@@ -526,7 +562,7 @@ Public Class POSMainForm_REDESIGN
         AddHandler _onScreenKeyboard.TextChanged, AddressOf OnScreenKeyboard_TextChanged
 
         ' Add all panels to form
-        Me.Controls.AddRange({pnlProducts, pnlCart, pnlCategoriesContainer, pnlShortcuts, pnlTop, _onScreenKeyboard})
+        Me.Controls.AddRange({pnlProducts, pnlCart, pnlCategories, pnlShortcuts, pnlTop, _onScreenKeyboard})
     End Sub
 
     Private Sub OnScreenKeyboard_TextChanged(sender As Object, text As String)
@@ -667,7 +703,7 @@ Public Class POSMainForm_REDESIGN
             .DataPropertyName = "ProductID",
             .Visible = False
         })
-        
+
         dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
             .Name = "ItemCode",
             .DataPropertyName = "ItemCode",
@@ -675,7 +711,7 @@ Public Class POSMainForm_REDESIGN
             .Width = 60,
             .ReadOnly = True
         })
-        
+
         dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
             .Name = "Product",
             .DataPropertyName = "Product",
@@ -683,7 +719,7 @@ Public Class POSMainForm_REDESIGN
             .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
             .ReadOnly = True
         })
-        
+
         dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
             .Name = "Qty",
             .DataPropertyName = "Qty",
@@ -691,7 +727,7 @@ Public Class POSMainForm_REDESIGN
             .Width = 50,
             .ReadOnly = True
         })
-        
+
         dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
             .Name = "Price",
             .DataPropertyName = "Price",
@@ -700,7 +736,7 @@ Public Class POSMainForm_REDESIGN
             .ReadOnly = True,
             .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C4"}
         })
-        
+
         dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
             .Name = "Total",
             .DataPropertyName = "Total",
@@ -709,7 +745,7 @@ Public Class POSMainForm_REDESIGN
             .ReadOnly = True,
             .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C2"}
         })
-        
+
         dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
             .Name = "PriceOverridden",
             .DataPropertyName = "PriceOverridden",
@@ -724,14 +760,14 @@ Public Class POSMainForm_REDESIGN
     Private Sub dgvCart_CellContentClick(sender As Object, e As DataGridViewCellEventArgs)
         ' No button columns in cart grid anymore
     End Sub
-    
+
     Private Sub dgvCart_CellFormatting(sender As Object, e As DataGridViewCellFormattingEventArgs)
         If e.RowIndex < 0 Then Return
-        
+
         ' Check if price was overridden
         If dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value IsNot Nothing AndAlso
            CBool(dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value) Then
-            
+
             ' Apply gold background to price cells
             If dgvCart.Columns(e.ColumnIndex).Name = "Price" OrElse
                dgvCart.Columns(e.ColumnIndex).Name = "Total" Then
@@ -740,7 +776,7 @@ Public Class POSMainForm_REDESIGN
             End If
         End If
     End Sub
-    
+
     Private Sub OverridePriceForSelectedItem()
         Try
             ' Check if cart has items
@@ -748,24 +784,24 @@ Public Class POSMainForm_REDESIGN
                 MessageBox.Show("Cart is empty. Add items first.", "Empty Cart", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 Return
             End If
-            
+
             ' Check if a cart item is selected
             If dgvCart.SelectedRows.Count = 0 Then
                 MessageBox.Show("Please select a cart item first.", "No Item Selected", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 Return
             End If
-            
+
             ' Get selected row
             Dim selectedRow = dgvCart.SelectedRows(0)
             Dim rowIndex = selectedRow.Index
-            
+
             OverridePrice(rowIndex)
-            
+
         Catch ex As Exception
             MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
-    
+
     Private Sub OverridePrice(rowIndex As Integer)
         Try
             ' Get current row data from DataTable
@@ -773,40 +809,40 @@ Public Class POSMainForm_REDESIGN
             Dim productName = dataRow("Product").ToString()
             Dim originalPrice = CDec(dataRow("Price"))
             Dim quantity = CDec(dataRow("Qty"))
-            
+
             ' Authenticate supervisor
             Dim authDialog As New RetailManagerAuthDialog()
             If authDialog.ShowDialog(Me) <> DialogResult.OK Then
                 Return
             End If
-            
+
             ' Show price override dialog
             Dim priceDialog As New PriceOverrideDialog(productName, originalPrice)
             If priceDialog.ShowDialog(Me) = DialogResult.OK Then
                 Dim newPrice = priceDialog.NewPrice
-                
+
                 ' Update the DataTable row (this is what gets passed to PaymentTenderForm)
                 dataRow("Price") = newPrice
                 dataRow("Total") = newPrice * quantity
                 dataRow("PriceOverridden") = True
-                
+
                 ' Store override info
                 _priceOverrides(rowIndex) = New PriceOverride With {
                     .NewPrice = newPrice,
                     .SupervisorUsername = authDialog.AuthenticatedUsername,
                     .OverrideDate = DateTime.Now
                 }
-                
+
                 ' Recalculate totals
                 CalculateTotals()
-                
+
                 ' Refresh the DataGridView to show updated values
                 dgvCart.Refresh()
                 dgvCart.InvalidateRow(rowIndex)
-                
+
                 MessageBox.Show($"Price updated to R {newPrice:N4}", "Price Override", MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
-            
+
         Catch ex As Exception
             MessageBox.Show($"Error overriding price: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
@@ -977,19 +1013,10 @@ Public Class POSMainForm_REDESIGN
     End Sub
 
     Private Sub InitializeScreenScaling()
-        ' Get current screen dimensions - use actual form size when maximized
-        ' This ensures we scale based on what Windows actually gives us
-        If Me.WindowState = FormWindowState.Maximized Then
-            _screenWidth = Me.ClientSize.Width
-            _screenHeight = Me.ClientSize.Height
-        Else
-            Dim currentScreen As Screen = Screen.FromControl(Me)
-            If currentScreen Is Nothing Then
-                currentScreen = Screen.PrimaryScreen
-            End If
-            _screenWidth = currentScreen.WorkingArea.Width
-            _screenHeight = currentScreen.WorkingArea.Height
-        End If
+        ' Force 1024px screen resolution for POS compatibility
+        ' This ensures consistent layout regardless of actual screen size
+        _screenWidth = 1024
+        _screenHeight = 768
 
         ' Calculate scale factor based on screen size
         Dim widthScale As Single = CSng(_screenWidth) / CSng(_baseWidth)
@@ -1001,18 +1028,18 @@ Public Class POSMainForm_REDESIGN
         ' Ensure minimum scale factor
         If _scaleFactor < 0.5F Then _scaleFactor = 0.5F
 
-        ' Calculate tile sizes - wider tiles for better visibility
-        ' Cart is now 450px, so products area calculation updated
-        Dim availableWidth = _screenWidth - 450 - 40 ' Subtract cart width and margins
-        Dim margin = 10 ' 5px margin on each side
+        ' Calculate tile sizes - optimized for 1024px screens
+        ' Cart is now 350px, so products area calculation updated
+        Dim availableWidth = _screenWidth - 350 - 40 ' Subtract cart width and margins
+        Dim margin = 8 ' Reduced margin for smaller screens
         _tileWidth = CInt((availableWidth - (_tilesPerRow * margin * 2)) / _tilesPerRow)
-        _tileHeight = CInt(_tileWidth * 0.7) ' Maintain aspect ratio
+        _tileHeight = CInt(_tileWidth * 0.6) ' Maintain aspect ratio (slightly shorter)
 
-        ' Ensure minimum size and maximum for readability
-        If _tileWidth < 120 Then _tileWidth = 120
-        If _tileHeight < 85 Then _tileHeight = 85
-        If _tileWidth > 200 Then _tileWidth = 200
-        If _tileHeight > 140 Then _tileHeight = 140
+        ' Ensure minimum size and maximum for 1024px screens
+        If _tileWidth < 100 Then _tileWidth = 100 ' Smaller minimum for 1024px
+        If _tileHeight < 70 Then _tileHeight = 70 ' Smaller minimum for 1024px
+        If _tileWidth > 160 Then _tileWidth = 160 ' Smaller maximum for 1024px
+        If _tileHeight > 110 Then _tileHeight = 110 ' Smaller maximum for 1024px
 
         Debug.WriteLine($"[SCREEN SCALING] Screen: {_screenWidth}x{_screenHeight}, Scale Factor: {_scaleFactor:F2}, Tile: {_tileWidth}x{_tileHeight}")
     End Sub
@@ -1102,14 +1129,14 @@ Public Class POSMainForm_REDESIGN
                 Dim buttonHeight = 44
                 Dim spacing = 6
                 Dim xPos = 10
-                
+
                 ' Fixed widths
                 Dim scanBtnWidth = 80
                 Dim searchCodeWidth = 150
                 Dim searchNameWidth = 150
                 Dim refreshBtnWidth = 55
                 Dim qtyBtnWidth = 55
-                
+
                 ' Scan button
                 Dim btnScan = pnlSearchBar.Controls.OfType(Of Button)().FirstOrDefault(Function(b) b.Text.Contains("📷"))
                 If btnScan IsNot Nothing Then
@@ -1117,21 +1144,21 @@ Public Class POSMainForm_REDESIGN
                     btnScan.Size = New Size(scanBtnWidth, buttonHeight)
                     xPos += scanBtnWidth + spacing
                 End If
-                
+
                 ' Search by code textbox
                 If txtSearch IsNot Nothing Then
                     txtSearch.Location = New Point(xPos, 8)
                     txtSearch.Size = New Size(searchCodeWidth, buttonHeight)
                     xPos += searchCodeWidth + spacing
                 End If
-                
+
                 ' Search by name textbox
                 If txtSearchByName IsNot Nothing Then
                     txtSearchByName.Location = New Point(xPos, 8)
                     txtSearchByName.Size = New Size(searchNameWidth, buttonHeight)
                     xPos += searchNameWidth + spacing
                 End If
-                
+
                 ' Refresh button - directly access class field
                 If btnRefresh IsNot Nothing Then
                     btnRefresh.Location = New Point(xPos, 8)
@@ -1139,7 +1166,7 @@ Public Class POSMainForm_REDESIGN
                     btnRefresh.Visible = True
                     xPos += refreshBtnWidth + spacing
                 End If
-                
+
                 ' Qty button - directly access class field
                 If btnModifyQty IsNot Nothing Then
                     btnModifyQty.Location = New Point(xPos, 8)
@@ -1147,7 +1174,7 @@ Public Class POSMainForm_REDESIGN
                     btnModifyQty.Visible = True
                     xPos += qtyBtnWidth + spacing
                 End If
-                
+
                 ' Price Override button - directly access class field
                 If btnPriceOverride IsNot Nothing Then
                     btnPriceOverride.Location = New Point(xPos, 8)
@@ -1192,15 +1219,15 @@ Public Class POSMainForm_REDESIGN
     Private Sub LoadCategories()
         ' Check if panel is initialized
         If pnlCategories Is Nothing Then
-            ' Show categories as tiles in main product area instead
             ShowCategories()
-            ResetIdleTimer() ' Start idle timer after showing categories
+            ResetIdleTimer()
             Return
         End If
 
+        ' Simple clear like decompiled version
         pnlCategories.Controls.Clear()
 
-        ' Add "All Products" button at the top
+        ' Add "All Products" button - EXACT MATCH WITH DECOMPILED
         Dim btnAll As New Button With {
             .Text = "📦 All Products",
             .Size = New Size(190, 60),
@@ -1220,23 +1247,24 @@ Public Class POSMainForm_REDESIGN
         pnlCategories.Controls.Add(btnAll)
 
         Try
-            Dim sql = "SELECT CategoryID, CategoryCode, CategoryName FROM ProductCategories WHERE IsActive = 1 ORDER BY CategoryName"
-
+            ' Use exact SQL from decompiled version
+            Dim sql = "SELECT CategoryID, CategoryCode, CategoryName FROM ProductCategories WHERE IsActive = 1 AND CategoryName NOT IN ('BUITERCREAM CAKE', 'FRESHCREAM CAKE') ORDER BY CategoryName"
+            
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
                 Using cmd As New SqlCommand(sql, conn)
                     Using reader = cmd.ExecuteReader()
-                        Dim colorIndex = 0
+                        Dim num As Integer = 0
                         Dim colors() As Color = {_lightBlue, _green, _orange, _purple, _red, _yellow}
-
+                        
                         While reader.Read()
                             Dim categoryCode = reader.GetString(1)
                             Dim categoryName = reader.GetString(2)
-                            Dim icon = GetCategoryIcon(categoryCode)
-                            Dim btnColor = colors(colorIndex Mod colors.Length)
+                            Dim categoryIcon = GetCategoryIcon(categoryCode)
+                            Dim btnColor = colors(num Mod colors.Length)
 
                             Dim btn As New Button With {
-                                .Text = $"{icon} {categoryName}",
+                                .Text = $"{categoryIcon} {categoryName}",
                                 .Size = New Size(190, 60),
                                 .BackColor = btnColor,
                                 .ForeColor = Color.White,
@@ -1261,7 +1289,7 @@ Public Class POSMainForm_REDESIGN
                                                        End Sub
 
                             pnlCategories.Controls.Add(btn)
-                            colorIndex += 1
+                            num += 1
                         End While
                     End Using
                 End Using
@@ -1284,6 +1312,12 @@ Public Class POSMainForm_REDESIGN
             Case "MANUFACTURED", "GOODS" : Return "🏭"
             Case "PACKAGING" : Return "📦"
             Case "RAW", "MATERIALS" : Return "🌾"
+            Case "CPC" : Return "🧁"
+            Case "DNT" : Return "🍩"
+            Case "CKE" : Return "🎂"
+            Case "PST" : Return "🥐"
+            Case "BEV" : Return "☕"
+            Case "GOODS" : Return "🏭"
             Case Else : Return "📦"
         End Select
     End Function
@@ -1510,28 +1544,29 @@ Public Class POSMainForm_REDESIGN
             Tuple.Create("", "🎂 User Defined", CType(Sub() StartUserDefinedOrder(), Action)),
             Tuple.Create("", "📦 Collect UD", CType(Sub() CollectUserDefinedOrder(), Action)),
             Tuple.Create("", "✏️ Edit Order", CType(Sub() EditCakeOrder(), Action)),
+            Tuple.Create("", "❌ Cancel Order", CType(Sub() CancelCakeOrder(), Action)),
             Tuple.Create("", "📦 Box Items", CType(Sub() CreateBoxItems(), Action)),
             Tuple.Create("", "⚙️ Set Priority", CType(Sub() SetItemPriority(), Action))
         }
 
-        Dim visibleCount = 17 ' 12 F-keys + 5 additional buttons
+        Dim visibleCount = 18 ' 12 F-keys + 6 additional buttons
         ' Use actual form width for button sizing - optimized for 1024x768
         Dim screenWidth = Me.ClientSize.Width
         Dim leftMargin = 5
         Dim rightMargin = 5
         Dim availableWidth = screenWidth - leftMargin - rightMargin
-        Dim spacing = 3 ' Reduced spacing for more room
+        Dim spacing = 2 ' Minimal spacing to fit all buttons
         Dim buttonWidth = ((availableWidth - (spacing * (visibleCount - 1))) \ visibleCount)
 
-        ' Ensure buttons fit on screen - adjust if too wide
-        If buttonWidth < 60 Then 
-            buttonWidth = 60
-        ElseIf buttonWidth > 80 Then
-            buttonWidth = 80
+        ' Ensure buttons fit on screen - adjust for 1024x768
+        If buttonWidth < 52 Then 
+            buttonWidth = 52
+        ElseIf buttonWidth > 56 Then
+            buttonWidth = 56
         End If
         
         ' Calculate font size based on button width
-        Dim fontSize As Single = If(buttonWidth < 65, 7, 8)
+        Dim fontSize As Single = If(buttonWidth < 54, 6.5, 7)
 
         For i = 0 To visibleCount - 1
             Dim shortcut = shortcuts(i)
@@ -1645,7 +1680,6 @@ Public Class POSMainForm_REDESIGN
             Case Keys.F11 : CreateOrder() : Return True
             Case Keys.F12 : OrderCollection() : Return True
             Case Keys.Shift Or Keys.F11 : EditCakeOrder() : Return True
-            Case Keys.Shift Or Keys.F12 : CancelCakeOrder() : Return True
         End Select
         Return MyBase.ProcessCmdKey(msg, keyData)
     End Function
@@ -2846,8 +2880,8 @@ Public Class POSMainForm_REDESIGN
         ' Reset idle timer when user interacts
         ResetIdleTimer()
 
-        ' Show categories when idle screen is dismissed
-        If _currentView = "categories" AndAlso flpProducts.Controls.Count = 0 Then
+        ' Show categories when idle screen is dismissed - ONLY if not already shown
+        If _currentView = "categories" AndAlso pnlCategories.Controls.Count = 0 Then
             ShowCategories()
         End If
 
@@ -5125,26 +5159,8 @@ Public Class POSMainForm_REDESIGN
         _currentCategoryName = ""
         lblBreadcrumb.Text = "Categories"
 
-        flpProducts.SuspendLayout()
-        flpProducts.Controls.Clear()
-
-        Try
-            Dim categories = _categoryService.LoadCategories()
-
-            For Each row As DataRow In categories.Rows
-                Dim categoryId = CInt(row("CategoryID"))
-                Dim categoryName = row("CategoryName").ToString()
-                Dim productCount = CInt(row("ProductCount"))
-
-                Dim btn = CreateCategoryTile(categoryId, categoryName, productCount)
-                flpProducts.Controls.Add(btn)
-            Next
-
-        Catch ex As Exception
-            MessageBox.Show($"Error loading categories: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        Finally
-            flpProducts.ResumeLayout()
-        End Try
+        ' Just call LoadCategories - don't duplicate the logic
+        LoadCategories()
     End Sub
 
     Private Sub ShowSubCategories(categoryId As Integer, categoryName As String)
@@ -7050,7 +7066,7 @@ Public Class POSMainForm_REDESIGN
                 End Using
             End Using
             
-            ' Create and start cancel workflow
+            ' Create and start cancel workflow (same as edit workflow)
             Dim cancelService As New CakeOrderCancelService(
                 _branchID, 
                 _tillPointID, 

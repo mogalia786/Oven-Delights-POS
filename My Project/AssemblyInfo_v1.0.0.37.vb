@@ -1,4 +1,4 @@
-﻿' Restored from version 1.0.0.37 - Complete codebase since version 1.0.0.24
+' Restored from version 1.0.0.37 - Complete codebase since version 1.0.0.24
 
 Imports System.Reflection
 Imports System.Runtime.InteropServices

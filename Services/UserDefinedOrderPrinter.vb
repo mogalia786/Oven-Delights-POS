@@ -191,23 +191,23 @@ Public Class UserDefinedOrderPrinter
                 ' Items header
                 e.Graphics.DrawString("ITEMS:", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
-                e.Graphics.DrawString("Item Description      Qty Required    Unit Price (R)    Total Price (R)", fontBold, Brushes.Black, leftMargin, yPos)
+                e.Graphics.DrawString("Item              Qty  Price  Total", fontBold, Brushes.Black, leftMargin, yPos)
                 yPos += 15
                 
-                ' Print each item on separate line with proper Y positioning
+                ' Line items
                 Dim subtotal As Decimal = 0
-                
                 For Each row As DataRow In cartItems.Rows
                     Dim itemName = row("Product").ToString()
+                    If itemName.Length > 17 Then itemName = itemName.Substring(0, 14) & "..."
+                    
                     Dim qty = CDec(row("Qty"))
                     Dim price = CDec(row("Price"))
                     Dim lineTotal = CDec(row("Total"))
                     subtotal += lineTotal
                     
-                    ' Format line with proper spacing
-                    Dim line = String.Format("{0,-30} {1,10:N2} {2,15:N2} {3,15:N2}", itemName, qty, price, lineTotal)
+                    Dim line = String.Format("{0,-17} {1,3} {2,5:N2} {3,6:N2}", itemName, qty, price, lineTotal)
                     e.Graphics.DrawString(line, fontBold, Brushes.Black, leftMargin, yPos)
-                    yPos += 16 ' Move to next line (increased from 14 to account for 8pt bold font)
+                    yPos += 14
                 Next
                 
                 ' Separator

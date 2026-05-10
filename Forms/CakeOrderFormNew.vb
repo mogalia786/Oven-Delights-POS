@@ -61,20 +61,7 @@ Public Class CakeOrderFormNew
     Private _editOrderID As Integer = 0
     Private _editOrderNumber As String = ""
     Private _originalDepositPaid As Decimal = 0
-    Private _originalTotalAmount As Decimal = 0
     Private _orderEditedDate As DateTime = DateTime.Now
-    
-    ' Cancel mode fields
-    Private _isCancelMode As Boolean = False
-    Private _cancellationFeeProductID As Integer = 0
-    Private _cancellationFeeAmount As Decimal = 0
-    
-    ' Accounting service
-    Private _accountingService As AccountingService
-    
-    ' Customer info for accounting
-    Private _customerID As Integer = 0
-    Private _customerAccountNumber As String = ""
     
     Public Class OrderItem
         Public Property ProductID As Integer
@@ -84,7 +71,7 @@ Public Class CakeOrderFormNew
         Public Property TotalPrice As Decimal
     End Class
     
-    Public Sub New(branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String, branchName As String, branchAddress As String, branchPhone As String, Optional cartItems As DataTable = Nothing, Optional editOrderID As Integer = 0, Optional isCancelMode As Boolean = False)
+    Public Sub New(branchID As Integer, tillPointID As Integer, cashierID As Integer, cashierName As String, branchName As String, branchAddress As String, branchPhone As String, Optional cartItems As DataTable = Nothing, Optional editOrderID As Integer = 0)
         _branchID = branchID
         _tillPointID = tillPointID
         _cashierID = cashierID
@@ -94,31 +81,18 @@ Public Class CakeOrderFormNew
         _branchPhone = branchPhone
         _connectionString = ConfigurationManager.ConnectionStrings("OvenDelightsERPConnectionString").ConnectionString
         
-        ' Initialize accounting service
-        _accountingService = New AccountingService()
-        
-        ' Check if this is edit or cancel mode
+        ' Check if this is edit mode
         If editOrderID > 0 Then
-            If isCancelMode Then
-                _isCancelMode = True
-                _editOrderID = editOrderID
-            Else
-                _isEditMode = True
-                _editOrderID = editOrderID
-            End If
+            _isEditMode = True
+            _editOrderID = editOrderID
         End If
         
         InitializeComponent()
         LoadProducts()
         
-        ' Load existing order for editing or cancelling
-        If _isEditMode OrElse _isCancelMode Then
+        ' Load existing order for editing
+        If _isEditMode Then
             LoadExistingOrder(_editOrderID)
-            
-            ' If cancel mode, load cancellation fees and setup UI
-            If _isCancelMode Then
-                SetupCancelMode()
-            End If
         ElseIf cartItems IsNot Nothing AndAlso cartItems.Rows.Count > 0 Then
             ' Pre-populate with cart items if provided
             LoadCartItems(cartItems)
@@ -169,13 +143,11 @@ Public Class CakeOrderFormNew
                         If reader.Read() Then
                             _editOrderNumber = reader("OrderNumber").ToString()
                             _originalDepositPaid = CDec(reader("DepositPaid"))
-                            _originalTotalAmount = CDec(reader("TotalAmount"))
-                            _customerAccountNumber = If(IsDBNull(reader("AccountNumber")), "", reader("AccountNumber").ToString())
                             
                             ' Populate form fields (will be done after InitializeComponent)
                             ' Store values temporarily
                             Dim orderData As New Dictionary(Of String, Object) From {
-                                {"AccountNumber", _customerAccountNumber},
+                                {"AccountNumber", If(IsDBNull(reader("AccountNumber")), "", reader("AccountNumber").ToString())},
                                 {"CustomerName", reader("CustomerName").ToString()},
                                 {"CustomerPhone", reader("CustomerPhone").ToString()},
                                 {"CakeColor", reader("CakeColor").ToString()},
@@ -1450,12 +1422,6 @@ Public Class CakeOrderFormNew
     
     Private Sub AcceptOrder(sender As Object, e As EventArgs)
         Try
-            ' CANCEL MODE: Process cancellation instead
-            If _isCancelMode Then
-                CancelOrder()
-                Return
-            End If
-            
             If Not ValidateOrder() Then Return
             
             If MessageBox.Show($"Accept this order?{vbCrLf}Total: R{_totalAmount:F2}{vbCrLf}Deposit: R{_depositAmount:F2}{vbCrLf}Balance: R{_balanceAmount:F2}",
@@ -1637,15 +1603,6 @@ Public Class CakeOrderFormNew
                             End Using
                         End If
                         
-                        ' EDIT MODE: Delete existing order items first to prevent duplicates
-                        If _isEditMode Then
-                            Dim sqlDeleteItems = "DELETE FROM POS_CustomOrderItems WHERE OrderID = @OrderID"
-                            Using cmd As New SqlCommand(sqlDeleteItems, conn, transaction)
-                                cmd.Parameters.AddWithValue("@OrderID", orderID)
-                                cmd.ExecuteNonQuery()
-                            End Using
-                        End If
-                        
                         ' Insert order items (for both new and edit modes)
                         Dim sqlItem = "
                             INSERT INTO POS_CustomOrderItems (
@@ -1670,28 +1627,6 @@ Public Class CakeOrderFormNew
                         SaveCustomerToDatabase()
                         
                         transaction.Commit()
-                        
-                        ' POST ACCOUNTING ENTRIES (outside transaction to avoid deadlocks)
-                        Try
-                            If _isEditMode Then
-                                ' Post order edit accounting - adjust customer receivable
-                                Dim customerName = txtCustomerName.Text.Trim()
-                                _accountingService.PostOrderEdit(orderNumber, orderID, 0, customerName, 
-                                                                _customerAccountNumber, _originalTotalAmount, 
-                                                                _totalAmount, _branchID, _cashierName)
-                            Else
-                                ' Post order deposit accounting - new order
-                                Dim customerName = txtCustomerName.Text.Trim()
-                                Dim accountNumber = If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), 
-                                                      txtCustomerPhone.Text.Trim(), txtAccountNumber.Text.Trim())
-                                _accountingService.PostOrderDeposit(orderNumber, orderID, 0, customerName,
-                                                                   accountNumber, _totalAmount, _depositAmount,
-                                                                   paymentMethod, _branchID, _cashierName)
-                            End If
-                        Catch accEx As Exception
-                            MessageBox.Show($"Order saved but accounting entry failed: {accEx.Message}", 
-                                          "Accounting Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                        End Try
                         
                         ' Print to both printers AFTER payment is tendered
                         Try
@@ -1805,326 +1740,4 @@ Public Class CakeOrderFormNew
         
         Return printData
     End Function
-    
-    Private Sub SetupCancelMode()
-        Try
-            ' Change form title and button text
-            Me.Text = "Cancel Cake Order"
-            btnAcceptOrder.Text = "Cancel Order"
-            btnAcceptOrder.BackColor = Color.FromArgb(192, 0, 0) ' Red
-            
-            ' Keep existing items visible so customer can see what they're canceling
-            ' They will add cancellation fee as a separate item
-            
-            ' ENABLE product dropdown to add cancellation fee
-            cboProductSearch.Enabled = True
-            btnAddItem.Enabled = True
-            btnRemoveItem.Enabled = True
-            
-            ' Change label to guide user
-            Dim lblProductLabel = Me.Controls.Find("Label1", True).FirstOrDefault()
-            If lblProductLabel IsNot Nothing Then
-                DirectCast(lblProductLabel, Label).Text = "Add Cancellation Fee:"
-                DirectCast(lblProductLabel, Label).ForeColor = Color.Red
-            End If
-            
-            ' Make customer details READ-ONLY
-            txtCustomerName.ReadOnly = True
-            txtCustomerPhone.ReadOnly = True
-            txtAccountNumber.ReadOnly = True
-            dtpCollectionDate.Enabled = False
-            dtpCollectionTime.Enabled = False
-            txtCakeColor.ReadOnly = True
-            txtCakePicture.ReadOnly = True
-            cboSpecialRequests.Enabled = False
-            btnAddRequest.Enabled = False
-            txtNotes.ReadOnly = True
-            
-            ' Make deposit READ-ONLY (not hidden)
-            txtDeposit.ReadOnly = True
-            txtDeposit.BackColor = Color.FromArgb(245, 245, 245) ' Light grey to show read-only
-            
-        Catch ex As Exception
-            MessageBox.Show($"Error setting up cancel mode: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
-    End Sub
-    
-    
-    Private Sub CancelOrder()
-        Try
-            ' Get ONLY the cancellation fee item from the grid (ignore original order items)
-            Dim cancellationFeeAmount As Decimal = 0
-            For Each item In _orderItems
-                If item.Description.ToUpper().Contains("CANCELLATION") OrElse item.Description.ToUpper().Contains("CANCEL") Then
-                    cancellationFeeAmount = item.TotalPrice
-                    Exit For
-                End If
-            Next
-            
-            If cancellationFeeAmount = 0 Then
-                MessageBox.Show("Please add a cancellation fee item.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Return
-            End If
-            
-            ' Calculate balance: Deposit - Cancellation Fee
-            ' Positive = we owe customer (refund)
-            ' Negative = customer owes us (payment)
-            Dim balanceAmount As Decimal = _depositAmount - cancellationFeeAmount
-            
-            Dim confirmMsg = $"Cancel this order?{vbCrLf}{vbCrLf}" &
-                           $"Order Number: {_editOrderNumber}{vbCrLf}" &
-                           $"Deposit Paid: R{_depositAmount:F2}{vbCrLf}" &
-                           $"Cancellation Fee: R{cancellationFeeAmount:F2}{vbCrLf}"
-            
-            If balanceAmount >= 0 Then
-                confirmMsg &= $"Refund to Customer: R{balanceAmount:F2}"
-            Else
-                confirmMsg &= $"Customer Pays: R{Math.Abs(balanceAmount):F2}"
-            End If
-            
-            If MessageBox.Show(confirmMsg, "Confirm Cancellation", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) <> DialogResult.Yes Then
-                Return
-            End If
-            
-            ' Open tender dialog based on balance
-            Dim paymentMethod As String = ""
-            Dim cardMaskedPan As String = ""
-            Dim cardType As String = ""
-            Dim cardApprovalCode As String = ""
-            
-            If balanceAmount < 0 Then
-                ' Customer pays us the difference
-                Using paymentForm As New PaymentTenderForm(Math.Abs(balanceAmount), _branchID, _tillPointID, _cashierID, _cashierName)
-                    If paymentForm.ShowDialog() <> DialogResult.OK Then
-                        MessageBox.Show("Payment cancelled. Order not cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                        Return
-                    End If
-                    paymentMethod = paymentForm.PaymentMethod
-                    cardMaskedPan = paymentForm.CardMaskedPan
-                    cardType = paymentForm.CardType
-                    cardApprovalCode = paymentForm.CardApprovalCode
-                End Using
-            ElseIf balanceAmount > 0 Then
-                ' We refund customer
-                Using refundForm As New RefundTenderDialog(balanceAmount, "CASH", False)
-                    If refundForm.ShowDialog() <> DialogResult.OK Then
-                        MessageBox.Show("Refund cancelled. Order not cancelled.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                        Return
-                    End If
-                    paymentMethod = refundForm.RefundMethod
-                End Using
-            Else
-                ' No payment/refund needed
-                paymentMethod = "NONE"
-            End If
-            
-            ' Process cancellation in database
-            ProcessCancellation(paymentMethod, cardMaskedPan, cardType, cardApprovalCode, cancellationFeeAmount, balanceAmount)
-            
-        Catch ex As Exception
-            MessageBox.Show($"Error cancelling order: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
-    End Sub
-    
-    Private Sub ProcessCancellation(paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, cancellationFeeAmount As Decimal, balanceAmount As Decimal)
-        Try
-            Using conn As New SqlConnection(_connectionString)
-                conn.Open()
-                Using transaction = conn.BeginTransaction()
-                    Try
-                        ' 1. Delete order items first (foreign key constraint)
-                        Dim sqlDeleteItems = "DELETE FROM POS_CustomOrderItems WHERE OrderID = @OrderID"
-                        Using cmd As New SqlCommand(sqlDeleteItems, conn, transaction)
-                            cmd.Parameters.AddWithValue("@OrderID", _editOrderID)
-                            cmd.ExecuteNonQuery()
-                        End Using
-                        
-                        ' 2. Delete the order completely (this auto-updates ERP cutting list)
-                        Dim sqlDeleteOrder = "DELETE FROM POS_CustomOrders WHERE OrderID = @OrderID"
-                        Using cmd As New SqlCommand(sqlDeleteOrder, conn, transaction)
-                            cmd.Parameters.AddWithValue("@OrderID", _editOrderID)
-                            cmd.ExecuteNonQuery()
-                        End Using
-                        
-                        ' 2. Record net cash flow (customer pays us or we refund them)
-                        ' Only record actual money movement, not the gross cancellation fee
-                        If balanceAmount <> 0 Then
-                            Dim invoice = GenerateInvoiceNumber()
-                            Dim saleType As String
-                            Dim amount As Decimal
-                            
-                            If balanceAmount < 0 Then
-                                ' Customer pays us (cancellation fee > deposit)
-                                saleType = "CancellationFee"
-                                amount = Math.Abs(balanceAmount)
-                            Else
-                                ' We refund customer (deposit > cancellation fee)
-                                saleType = "CancellationRefund"
-                                amount = -balanceAmount
-                            End If
-                            
-                            Dim sql = "INSERT INTO Demo_Sales 
-                                      (SaleNumber, InvoiceNumber, BranchID, TillPointID, CashierID, SaleDate,
-                                       Subtotal, TaxAmount, TotalAmount, PaymentMethod, CashAmount, CardAmount,
-                                       SaleType, ReferenceNumber)
-                                      VALUES 
-                                      (@saleNumber, @invoice, @branchId, @tillPointId, @cashierId, GETDATE(),
-                                       @subtotal, @taxAmount, @amount, @paymentMethod, @cashAmount, @cardAmount,
-                                       @saleType, @invoice)"
-                            Using cmd As New SqlCommand(sql, conn, transaction)
-                                cmd.Parameters.AddWithValue("@saleNumber", invoice)
-                                cmd.Parameters.AddWithValue("@invoice", invoice)
-                                cmd.Parameters.AddWithValue("@branchId", _branchID)
-                                cmd.Parameters.AddWithValue("@tillPointId", _tillPointID)
-                                cmd.Parameters.AddWithValue("@cashierId", _cashierID)
-                                cmd.Parameters.AddWithValue("@subtotal", amount / 1.15D)
-                                cmd.Parameters.AddWithValue("@taxAmount", amount - (amount / 1.15D))
-                                cmd.Parameters.AddWithValue("@amount", amount)
-                                cmd.Parameters.AddWithValue("@paymentMethod", paymentMethod)
-                                cmd.Parameters.AddWithValue("@cashAmount", If(paymentMethod = "Cash", Math.Abs(amount), 0))
-                                cmd.Parameters.AddWithValue("@cardAmount", If(paymentMethod = "Card", Math.Abs(amount), 0))
-                                cmd.Parameters.AddWithValue("@saleType", saleType)
-                                cmd.ExecuteNonQuery()
-                            End Using
-                        End If
-                        
-                        transaction.Commit()
-                        
-                        ' POST ACCOUNTING ENTRIES (outside transaction to avoid deadlocks)
-                        Try
-                            Dim customerName = txtCustomerName.Text.Trim()
-                            Dim accountNumber = If(String.IsNullOrWhiteSpace(txtAccountNumber.Text), 
-                                                  txtCustomerPhone.Text.Trim(), txtAccountNumber.Text.Trim())
-                            _accountingService.PostOrderCancellation(_editOrderNumber, _editOrderID, 0, 
-                                                                    customerName, accountNumber, 
-                                                                    _depositAmount, cancellationFeeAmount,
-                                                                    paymentMethod, _branchID, _cashierName)
-                        Catch accEx As Exception
-                            MessageBox.Show($"Order cancelled but accounting entry failed: {accEx.Message}", 
-                                          "Accounting Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                        End Try
-                        
-                        ' Print cancellation slip
-                        PrintCancellationSlip(paymentMethod, cardMaskedPan, cardType, cardApprovalCode, cancellationFeeAmount, balanceAmount)
-                        
-                        Dim successMsg = $"Order cancelled successfully!{vbCrLf}{vbCrLf}" &
-                                       $"Order Number: {_editOrderNumber}{vbCrLf}" &
-                                       $"Deposit: R{_depositAmount:F2}{vbCrLf}" &
-                                       $"Cancellation Fee: R{cancellationFeeAmount:F2}{vbCrLf}"
-                        
-                        If balanceAmount >= 0 Then
-                            successMsg &= $"Refunded: R{balanceAmount:F2}"
-                        Else
-                            successMsg &= $"Customer Paid: R{Math.Abs(balanceAmount):F2}"
-                        End If
-                        
-                        MessageBox.Show(successMsg, "Success", MessageBoxButtons.OK, MessageBoxIcon.Information)
-                        
-                        Me.DialogResult = DialogResult.OK
-                        Me.Close()
-                        
-                    Catch ex As Exception
-                        transaction.Rollback()
-                        Throw
-                    End Try
-                End Using
-            End Using
-            
-        Catch ex As Exception
-            Throw New Exception($"Error processing cancellation: {ex.Message}", ex)
-        End Try
-    End Sub
-    
-    Private Function GenerateInvoiceNumber() As String
-        Return $"INV{DateTime.Now:yyyyMMddHHmmss}"
-    End Function
-    
-    Private Sub PrintCancellationSlip(paymentMethod As String, cardMaskedPan As String, cardType As String, cardApprovalCode As String, cancellationFeeAmount As Decimal, balanceAmount As Decimal)
-        ' Print cancellation receipt showing deposit, fee, and balance
-        ' 1. Print to thermal printer - 2 copies: Customer and Merchant
-        Try
-            Dim printCount As Integer = 0
-            Dim printDoc As New PrintDocument()
-            
-            AddHandler printDoc.PrintPage, Sub(sender, e)
-                Dim g = e.Graphics
-                Dim fontBold As New Font("Courier New", 9, FontStyle.Bold)
-                Dim fontRegular As New Font("Courier New", 8, FontStyle.Regular)
-                Dim yPos = 10
-                Dim leftMargin = 5
-                
-                ' Header with copy type
-                Dim copyType As String = If(printCount = 0, "CUSTOMER COPY", "MERCHANT COPY")
-                g.DrawString(copyType, fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString("ORDER CANCELLED", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 20
-                g.DrawString($"Order #: {_editOrderNumber}", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString($"Customer: {txtCustomerName.Text.Trim()}", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString($"Phone: {txtCustomerPhone.Text.Trim()}", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 20
-                
-                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                
-                ' Financial details
-                g.DrawString($"Deposit Paid:        R{_depositAmount,10:F2}", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString($"Cancellation Fee:    R{cancellationFeeAmount,10:F2}", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                
-                g.DrawString("--------------------------------------", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                
-                If balanceAmount >= 0 Then
-                    g.DrawString($"Amount Refunded:     R{balanceAmount,10:F2}", fontBold, Brushes.Black, leftMargin, yPos)
-                    yPos += 15
-                    g.DrawString($"Refund Method: {paymentMethod}", fontRegular, Brushes.Black, leftMargin, yPos)
-                Else
-                    g.DrawString($"Amount Paid:         R{Math.Abs(balanceAmount),10:F2}", fontBold, Brushes.Black, leftMargin, yPos)
-                    yPos += 15
-                    g.DrawString($"Payment Method: {paymentMethod}", fontRegular, Brushes.Black, leftMargin, yPos)
-                End If
-                
-                yPos += 20
-                g.DrawString("======================================", fontBold, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                
-                g.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", fontRegular, Brushes.Black, leftMargin, yPos)
-                yPos += 15
-                g.DrawString($"Cashier: {_cashierName}", fontRegular, Brushes.Black, leftMargin, yPos)
-                
-                printCount += 1
-                e.HasMorePages = (printCount < 2)
-            End Sub
-            
-            printDoc.DefaultPageSettings.PaperSize = New PaperSize("Receipt", 315, 600)
-            printDoc.Print()
-            
-        Catch ex As Exception
-            ' Don't fail cancellation if thermal print fails
-            MessageBox.Show($"Thermal printer error: {ex.Message}", "Print Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-        End Try
-        
-        ' 2. Print to continuous printer with pre-formatted paper using database coordinates
-        Try
-            Dim configuredPrinter = GetConfiguredPrinter()
-            
-            ' Build cancellation print data with CANCELLED status
-            Dim cancellationData = BuildPrintData(_editOrderNumber, 0)
-            cancellationData.Notes = $"*** ORDER CANCELLED ON {DateTime.Now:dd/MM/yyyy HH:mm} ***{vbCrLf}" &
-                                    $"Cancellation Fee: R{cancellationFeeAmount:F2}{vbCrLf}" &
-                                    $"Refund Amount: R{balanceAmount:F2}{vbCrLf}" &
-                                    $"Refund Method: {paymentMethod}"
-            
-            Dim cakeOrderPrinter As New CakeOrderPrinter(cancellationData)
-            cakeOrderPrinter.Print(configuredPrinter)
-            
-        Catch ex As Exception
-            ' Don't fail cancellation if continuous printer fails
-            MessageBox.Show($"Continuous printer error: {ex.Message}", "Continuous Printer Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-        End Try
-    End Sub
 End Class

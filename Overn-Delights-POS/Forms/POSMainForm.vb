@@ -34,9 +34,6 @@ Public Class POSMainForm
     Private _currentMessageIndex As Integer = 0
     Private _lblRotatingMessage As Label
     Private Const IDLE_TIMEOUT_MS As Integer = 5000 ' 5 seconds for testing
-    
-    ' Price override tracking
-    Private _priceOverrides As New Dictionary(Of Integer, PriceOverride)
 
     ' Modern Color Palette
     Private _darkBlue As Color = ColorTranslator.FromHtml("#2C3E50")
@@ -61,10 +58,6 @@ Public Class POSMainForm
         SetupModernUI()
         InitializeCart()
         SetupIdleScreen()
-        
-        ' Add resize handler
-        AddHandler Me.Resize, AddressOf POSMainForm_Resize
-        AddHandler Me.Load, AddressOf POSMainForm_Load
     End Sub
 
     Private Sub SetupModernUI()
@@ -124,34 +117,6 @@ Public Class POSMainForm
         lblCashier.Location = New Point(Me.Width - lblCashier.Width - 150, 25)
         lblCashier.Anchor = AnchorStyles.Top Or AnchorStyles.Right
 
-        Dim btnRefresh As New Button With {
-            .Text = "🔄 Refresh",
-            .Font = New Font("Segoe UI", 10, FontStyle.Bold),
-            .Size = New Size(100, 40),
-            .BackColor = _green,
-            .ForeColor = Color.White,
-            .FlatStyle = FlatStyle.Flat,
-            .Cursor = Cursors.Hand
-        }
-        btnRefresh.Location = New Point(Me.Width - 360, 15)
-        btnRefresh.Anchor = AnchorStyles.Top Or AnchorStyles.Right
-        btnRefresh.FlatAppearance.BorderSize = 0
-        AddHandler btnRefresh.Click, AddressOf BtnRefresh_Click
-        
-        Dim btnDayEnd As New Button With {
-            .Text = "📊 Day End",
-            .Font = New Font("Segoe UI", 11, FontStyle.Bold),
-            .Size = New Size(120, 40),
-            .BackColor = _orange,
-            .ForeColor = Color.White,
-            .FlatStyle = FlatStyle.Flat,
-            .Cursor = Cursors.Hand
-        }
-        btnDayEnd.Location = New Point(Me.Width - 240, 15)
-        btnDayEnd.Anchor = AnchorStyles.Top Or AnchorStyles.Right
-        btnDayEnd.FlatAppearance.BorderSize = 0
-        AddHandler btnDayEnd.Click, AddressOf BtnDayEnd_Click
-        
         Dim btnLogout As New Button With {
             .Text = "🚪 Logout",
             .Font = New Font("Segoe UI", 11, FontStyle.Bold),
@@ -166,7 +131,7 @@ Public Class POSMainForm
         btnLogout.FlatAppearance.BorderSize = 0
         AddHandler btnLogout.Click, Sub() Me.Close()
 
-        pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnRefresh, btnDayEnd, btnLogout})
+        pnlTop.Controls.AddRange({lblTitle, txtBarcodeScanner, lblCashier, btnLogout})
 
         ' LEFT PANEL - Categories with FlowLayoutPanel
         Dim pnlCategoriesContainer As New Panel With {
@@ -343,163 +308,41 @@ Public Class POSMainForm
         _cartItems.Columns.Add("Qty", GetType(Decimal))
         _cartItems.Columns.Add("Price", GetType(Decimal))
         _cartItems.Columns.Add("Total", GetType(Decimal))
-        _cartItems.Columns.Add("PriceOverridden", GetType(Boolean))
 
-        dgvCart.AutoGenerateColumns = False
+        dgvCart.AutoGenerateColumns = True
         dgvCart.DataSource = _cartItems
 
-        ' Manually add columns with buttons
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "ProductID",
-            .DataPropertyName = "ProductID",
-            .Visible = False
-        })
-        
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "ItemCode",
-            .DataPropertyName = "ItemCode",
-            .HeaderText = "Code",
-            .Width = 60
-        })
-        
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "Product",
-            .DataPropertyName = "Product",
-            .HeaderText = "Item",
-            .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-        })
-        
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "Qty",
-            .DataPropertyName = "Qty",
-            .HeaderText = "Qty",
-            .Width = 45,
-            .ReadOnly = False
-        })
-        
-        ' Add multiply button column for quantity
-        Dim btnMultiplyCol As New DataGridViewButtonColumn With {
-            .Name = "MultiplyBtn",
-            .HeaderText = "×",
-            .Text = "×",
-            .UseColumnTextForButtonValue = True,
-            .Width = 30
-        }
-        dgvCart.Columns.Add(btnMultiplyCol)
-        
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "Price",
-            .DataPropertyName = "Price",
-            .HeaderText = "Price",
-            .Width = 75,
-            .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C4"}
-        })
-        
-        ' Add price override button column
-        Dim btnPriceCol As New DataGridViewButtonColumn With {
-            .Name = "PriceBtn",
-            .HeaderText = "R",
-            .Text = "R",
-            .UseColumnTextForButtonValue = True,
-            .Width = 30
-        }
-        btnPriceCol.DefaultCellStyle.BackColor = Color.FromArgb(255, 193, 7)
-        btnPriceCol.DefaultCellStyle.ForeColor = Color.Black
-        btnPriceCol.DefaultCellStyle.Font = New Font("Segoe UI", 10, FontStyle.Bold)
-        dgvCart.Columns.Add(btnPriceCol)
-        
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "Total",
-            .DataPropertyName = "Total",
-            .HeaderText = "Total",
-            .Width = 85,
-            .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C2"}
-        })
-        
-        dgvCart.Columns.Add(New DataGridViewTextBoxColumn With {
-            .Name = "PriceOverridden",
-            .DataPropertyName = "PriceOverridden",
-            .Visible = False
-        })
-
-        ' Handle button clicks and formatting
-        AddHandler dgvCart.CellContentClick, AddressOf dgvCart_CellContentClick
-        AddHandler dgvCart.CellFormatting, AddressOf dgvCart_CellFormatting
+        ' Configure columns after first row is added
+        AddHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
     End Sub
 
-    Private Sub dgvCart_CellContentClick(sender As Object, e As DataGridViewCellEventArgs)
-        If e.RowIndex < 0 Then Return
-        
-        Dim colName = dgvCart.Columns(e.ColumnIndex).Name
-        
-        Select Case colName
-            Case "MultiplyBtn"
-                ChangeQuantity()
-                
-            Case "PriceBtn"
-                OverridePrice(e.RowIndex)
-        End Select
-    End Sub
-    
-    Private Sub dgvCart_CellFormatting(sender As Object, e As DataGridViewCellFormattingEventArgs)
-        If e.RowIndex < 0 Then Return
-        
-        ' Check if price was overridden
-        If dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value IsNot Nothing AndAlso
-           CBool(dgvCart.Rows(e.RowIndex).Cells("PriceOverridden").Value) Then
-            
-            ' Apply gold background to price cells
-            If dgvCart.Columns(e.ColumnIndex).Name = "Price" OrElse
-               dgvCart.Columns(e.ColumnIndex).Name = "Total" Then
-                e.CellStyle.BackColor = Color.FromArgb(255, 248, 220)
-                e.CellStyle.Font = New Font(e.CellStyle.Font, FontStyle.Bold)
-            End If
+    Private Sub ConfigureCartColumns(sender As Object, e As DataGridViewBindingCompleteEventArgs)
+        ' Only configure once
+        RemoveHandler dgvCart.DataBindingComplete, AddressOf ConfigureCartColumns
+
+        If dgvCart.Columns.Count > 0 Then
+            For Each col As DataGridViewColumn In dgvCart.Columns
+                Select Case col.Name
+                    Case "ProductID"
+                        col.Visible = False
+                    Case "ItemCode"
+                        col.Width = 70
+                        col.HeaderText = "Code"
+                    Case "Product"
+                        col.HeaderText = "Item"
+                    Case "Qty"
+                        col.Width = 50
+                        col.ReadOnly = False
+                        col.HeaderText = "Qty"
+                    Case "Price"
+                        col.DefaultCellStyle.Format = "C2"
+                        col.Width = 80
+                    Case "Total"
+                        col.DefaultCellStyle.Format = "C2"
+                        col.Width = 90
+                End Select
+            Next
         End If
-    End Sub
-    
-    Private Sub OverridePrice(rowIndex As Integer)
-        Try
-            ' Get current row data
-            Dim row = dgvCart.Rows(rowIndex)
-            Dim productName = row.Cells("Product").Value.ToString()
-            Dim originalPrice = CDec(row.Cells("Price").Value)
-            Dim quantity = CDec(row.Cells("Qty").Value)
-            
-            ' Authenticate supervisor
-            Dim authDialog As New RetailManagerAuthDialog()
-            If authDialog.ShowDialog(Me) <> DialogResult.OK Then
-                Return
-            End If
-            
-            ' Show price override dialog
-            Dim priceDialog As New PriceOverrideDialog(productName, originalPrice)
-            If priceDialog.ShowDialog(Me) = DialogResult.OK Then
-                Dim newPrice = priceDialog.NewPrice
-                
-                ' Update the row
-                row.Cells("Price").Value = newPrice
-                row.Cells("Total").Value = newPrice * quantity
-                row.Cells("PriceOverridden").Value = True
-                
-                ' Store override info
-                _priceOverrides(rowIndex) = New PriceOverride With {
-                    .NewPrice = newPrice,
-                    .SupervisorUsername = authDialog.AuthenticatedUsername,
-                    .OverrideDate = DateTime.Now
-                }
-                
-                ' Recalculate totals
-                CalculateTotals()
-                
-                ' Refresh the row to show visual indicator
-                dgvCart.InvalidateRow(rowIndex)
-                
-                MessageBox.Show($"Price updated to R {newPrice:N4}", "Price Override", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            End If
-            
-        Catch ex As Exception
-            MessageBox.Show($"Error overriding price: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
     End Sub
 
     Protected Overrides Sub OnLoad(e As EventArgs)
@@ -654,26 +497,24 @@ Public Class POSMainForm
 
         Try
             Dim sql = "
-                SELECT 
-                    p.ProductID,
-                    p.SKU AS ItemCode,
-                    p.Name AS ProductName,
-                    ISNULL(p.Barcode, p.SKU) AS Barcode,
-                    ISNULL(
-                        (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
-                         WHERE ProductID = p.ProductID AND BranchID = @BranchID 
-                         ORDER BY EffectiveFrom DESC),
-                        (SELECT TOP 1 SellingPrice FROM Demo_Retail_Price 
-                         WHERE ProductID = p.ProductID AND BranchID IS NULL 
-                         ORDER BY EffectiveFrom DESC)
-                    ) AS SellingPrice,
-                    ISNULL(p.CurrentStock, 0) AS QtyOnHand
-                FROM Demo_Retail_Product p
-                WHERE p.IsActive = 1
-                  AND p.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
-                  AND (p.ProductType = 'External' OR p.ProductType = 'Internal')
-                  AND (p.SKU LIKE '%' + @Search + '%' OR p.Name LIKE '%' + @Search + '%' OR ISNULL(p.Barcode, '') LIKE '%' + @Search + '%')
-                ORDER BY p.Name"
+                SELECT DISTINCT
+                    drp.ProductID,
+                    drp.SKU AS ItemCode,
+                    drp.Name AS ProductName,
+                    ISNULL(price.SellingPrice, 0) AS SellingPrice,
+                    ISNULL(stock.QtyOnHand, 0) AS QtyOnHand,
+                    drp.Category AS CategoryName
+                FROM Demo_Retail_Product drp
+                LEFT JOIN Demo_Retail_Variant drv ON drp.ProductID = drv.ProductID
+                LEFT JOIN Demo_Retail_Stock stock ON drv.VariantID = stock.VariantID AND (stock.BranchID = @BranchID OR stock.BranchID IS NULL)
+                LEFT JOIN Demo_Retail_Price price ON drp.ProductID = price.ProductID AND (price.BranchID = @BranchID OR price.BranchID IS NULL)
+                WHERE drp.IsActive = 1
+                  AND ISNULL(stock.QtyOnHand, 0) > 0
+                  AND ISNULL(price.SellingPrice, 0) > 0
+                  AND (drp.ProductType = 'External' OR drp.ProductType = 'Internal')
+                  AND drp.Category NOT IN ('ingredients', 'sub recipe', 'packaging', 'consumables', 'equipment', 'miscellaneous', 'pest control')
+                  AND (drp.SKU LIKE @Search + '%' OR drp.Name LIKE '%' + @Search + '%')
+                ORDER BY drp.SKU"
 
             Using conn As New SqlConnection(_connectionString)
                 conn.Open()
@@ -846,19 +687,17 @@ Public Class POSMainForm
         AddHandler card.Click, Sub() AddProductToCart(productID, itemCode, productName, price)
         AddHandler card.MouseEnter, Sub() card.BackColor = _lightGray
         AddHandler card.MouseLeave, Sub() card.BackColor = Color.White
-        
+
         Return card
     End Function
 
     Private Sub AddProductToCart(productID As Integer, itemCode As String, productName As String, price As Decimal)
-        ' Check if product already exists in cart
         Dim existingRow = _cartItems.Select($"ProductID = {productID}")
-        
         If existingRow.Length > 0 Then
             existingRow(0)("Qty") = CDec(existingRow(0)("Qty")) + 1
             existingRow(0)("Total") = CDec(existingRow(0)("Qty")) * CDec(existingRow(0)("Price"))
         Else
-            _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price, False)
+            _cartItems.Rows.Add(productID, itemCode, productName, 1, price, price)
         End If
 
         CalculateTotals()
@@ -1027,7 +866,6 @@ Public Class POSMainForm
     ' Shortcut Functions
     Private Sub NewSale()
         _cartItems.Clear()
-        _priceOverrides.Clear()
         CalculateTotals()
         txtBarcodeScanner.Focus()
     End Sub
@@ -1111,23 +949,14 @@ Public Class POSMainForm
         orderData("DepositPaid") = total.ToString("N2")
         orderData("BalanceOwing") = "0.00"
         
-        ' Print receipt to continuous printer
-        Try
-            Dim printer As New POSReceiptPrinter()
-            Dim cartDataTable As New DataTable()
-            cartDataTable.Columns.Add("Product", GetType(String))
-            cartDataTable.Columns.Add("Qty", GetType(Decimal))
-            cartDataTable.Columns.Add("Price", GetType(Decimal))
-            cartDataTable.Columns.Add("Total", GetType(Decimal))
-            
-            For Each row As DataRow In _cartItems.Rows
-                cartDataTable.Rows.Add(row("Product"), row("Qty"), row("Price"), row("Total"))
-            Next
-            
-            printer.PrintSaleReceipt(_branchID, invoiceNumber, cartDataTable, total, "Cash", _cashierName)
-        Catch ex As Exception
-            MessageBox.Show($"Print error: {ex.Message}", "Print Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-        End Try
+        ' Show receipt preview
+        ' TODO: Fix ReceiptPreviewForm reference
+        'Try
+        '    Dim preview As New ReceiptPreviewForm(_branchID, orderData)
+        '    preview.ShowDialog()
+        'Catch ex As Exception
+        '    MessageBox.Show($"Receipt preview error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        'End Try
         
         ' Clear cart and show idle screen
         _cartItems.Clear()
@@ -1291,333 +1120,7 @@ Public Class POSMainForm
         MyBase.OnFormClosing(e)
     End Sub
 
-    Private Sub POSMainForm_Load(sender As Object, e As EventArgs)
-        ' Initial layout adjustment
-        AdjustLayout()
+    Private Sub POSMainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+
     End Sub
-    
-    Private Sub POSMainForm_Resize(sender As Object, e As EventArgs)
-        ' Adjust layout when window is resized
-        AdjustLayout()
-    End Sub
-    
-    Private Sub AdjustLayout()
-        If Me.WindowState = FormWindowState.Minimized Then Return
-        
-        Try
-            Me.SuspendLayout()
-            
-            ' Responsive font sizes based on screen width
-            Dim baseFontSize As Single = If(Me.Width > 1600, 12, If(Me.Width > 1200, 10, 9))
-            
-            ' Adjust category panel width (responsive)
-            If pnlCategories IsNot Nothing AndAlso pnlCategories.Parent IsNot Nothing Then
-                Dim categoryWidth = CInt(Me.Width * 0.15) ' 15% of screen width
-                pnlCategories.Parent.Width = Math.Max(180, Math.Min(250, categoryWidth))
-            End If
-            
-            ' Adjust cart panel width (responsive)
-            If pnlCart IsNot Nothing Then
-                Dim cartWidth = CInt(Me.Width * 0.25) ' 25% of screen width
-                pnlCart.Width = Math.Max(300, Math.Min(450, cartWidth))
-            End If
-            
-            ' Adjust product button sizes
-            If flpProducts IsNot Nothing Then
-                Dim buttonWidth = CInt((flpProducts.Width - 40) / 4) ' 4 columns with spacing
-                buttonWidth = Math.Max(120, Math.Min(200, buttonWidth))
-                
-                For Each ctrl As Control In flpProducts.Controls
-                    If TypeOf ctrl Is Button Then
-                        ctrl.Size = New Size(buttonWidth, CInt(buttonWidth * 0.8))
-                        ctrl.Font = New Font("Segoe UI", baseFontSize, FontStyle.Bold)
-                    End If
-                Next
-            End If
-            
-            ' Adjust category button sizes
-            If pnlCategories IsNot Nothing Then
-                For Each ctrl As Control In pnlCategories.Controls
-                    If TypeOf ctrl Is Button Then
-                        ctrl.Width = pnlCategories.Width - 20
-                        ctrl.Font = New Font("Segoe UI", baseFontSize, FontStyle.Bold)
-                    End If
-                Next
-            End If
-            
-            ' Adjust DataGridView font
-            If dgvCart IsNot Nothing Then
-                dgvCart.Font = New Font("Segoe UI", baseFontSize)
-                dgvCart.RowTemplate.Height = CInt(baseFontSize * 3)
-            End If
-            
-            ' Adjust total labels
-            If lblTotal IsNot Nothing Then
-                lblTotal.Font = New Font("Segoe UI", baseFontSize + 6, FontStyle.Bold)
-            End If
-            If lblSubtotal IsNot Nothing Then
-                lblSubtotal.Font = New Font("Segoe UI", baseFontSize + 2)
-            End If
-            If lblTax IsNot Nothing Then
-                lblTax.Font = New Font("Segoe UI", baseFontSize + 2)
-            End If
-            
-        Catch ex As Exception
-            ' Ignore layout errors during resize
-        Finally
-            Me.ResumeLayout()
-        End Try
-    End Sub
-    
-    Private Sub BtnRefresh_Click(sender As Object, e As EventArgs)
-        Try
-            Me.Cursor = Cursors.WaitCursor
-            
-            ' Show refreshing message
-            Dim originalText = DirectCast(sender, Button).Text
-            DirectCast(sender, Button).Text = "⏳ Refreshing..."
-            DirectCast(sender, Button).Enabled = False
-            Application.DoEvents()
-            
-            ' Reload cache from database
-            ProductCacheService.Instance.RefreshCache()
-            
-            ' Reload categories and products display
-            LoadCategories()
-            
-            ' Reset button
-            DirectCast(sender, Button).Text = originalText
-            DirectCast(sender, Button).Enabled = True
-            Me.Cursor = Cursors.Default
-            
-            MessageBox.Show($"Cache refreshed successfully!{vbCrLf}{ProductCacheService.Instance.ProductCount} products loaded.", "Refresh Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            
-        Catch ex As Exception
-            Me.Cursor = Cursors.Default
-            DirectCast(sender, Button).Text = "🔄 Refresh"
-            DirectCast(sender, Button).Enabled = True
-            MessageBox.Show($"Failed to refresh cache: {ex.Message}", "Refresh Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
-    End Sub
-    
-    Private Sub BtnDayEnd_Click(sender As Object, e As EventArgs)
-        Try
-            ' Confirm day-end action
-            Dim confirmMsg = "Are you sure you want to complete Day End?" & vbCrLf & vbCrLf &
-                           "This will:" & vbCrLf &
-                           "1. Print day-end report to slip printer" & vbCrLf &
-                           "2. Lock this till for today" & vbCrLf &
-                           "3. You will NOT be able to log in again today" & vbCrLf & vbCrLf &
-                           "Continue?"
-            
-            Dim result = MessageBox.Show(confirmMsg, "Day End Confirmation", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-            
-            If result <> DialogResult.Yes Then
-                Return
-            End If
-            
-            Me.Cursor = Cursors.WaitCursor
-            
-            ' Get today's sales totals from database
-            Dim totalSales As Decimal = 0
-            Dim totalCash As Decimal = 0
-            Dim totalCard As Decimal = 0
-            Dim totalAccount As Decimal = 0
-            Dim totalRefunds As Decimal = 0
-            
-            Using conn As New SqlClient.SqlConnection(_connectionString)
-                conn.Open()
-                
-                ' Get today's sales summary for this till
-                Dim sql = "
-                    SELECT 
-                        ISNULL(SUM(TotalAmount), 0) AS TotalSales,
-                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Cash' THEN TotalAmount ELSE 0 END), 0) AS TotalCash,
-                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Card' THEN TotalAmount ELSE 0 END), 0) AS TotalCard,
-                        ISNULL(SUM(CASE WHEN PaymentMethod = 'Account' THEN TotalAmount ELSE 0 END), 0) AS TotalAccount,
-                        ISNULL(SUM(CASE WHEN TotalAmount < 0 THEN ABS(TotalAmount) ELSE 0 END), 0) AS TotalRefunds
-                    FROM Sales
-                    WHERE CAST(SaleDate AS DATE) = @Today
-                    AND TillPointID = @TillPointID"
-                
-                Using cmd As New SqlClient.SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@Today", DateTime.Today)
-                    cmd.Parameters.AddWithValue("@TillPointID", GetTillPointID())
-                    
-                    Using reader = cmd.ExecuteReader()
-                        If reader.Read() Then
-                            totalSales = CDec(reader("TotalSales"))
-                            totalCash = CDec(reader("TotalCash"))
-                            totalCard = CDec(reader("TotalCard"))
-                            totalAccount = CDec(reader("TotalAccount"))
-                            totalRefunds = CDec(reader("TotalRefunds"))
-                        End If
-                    End Using
-                End Using
-            End Using
-            
-            ' Prompt for actual cash count
-            Dim actualCashInput = InputBox("Enter actual cash in drawer:", "Cash Count", totalCash.ToString("F2"))
-            
-            If String.IsNullOrWhiteSpace(actualCashInput) Then
-                Me.Cursor = Cursors.Default
-                MessageBox.Show("Day end cancelled - cash count required.", "Cancelled", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Return
-            End If
-            
-            Dim actualCash As Decimal
-            If Not Decimal.TryParse(actualCashInput, actualCash) Then
-                Me.Cursor = Cursors.Default
-                MessageBox.Show("Invalid cash amount entered.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                Return
-            End If
-            
-            Dim cashVariance = actualCash - totalCash
-            
-            ' Optional notes
-            Dim notes = InputBox("Enter any notes (optional):", "Day End Notes", "")
-            
-            ' Print day-end report to slip printer
-            PrintDayEndReport(totalSales, totalCash, totalCard, totalAccount, totalRefunds, totalCash, actualCash, cashVariance, notes)
-            
-            ' Complete day-end in database
-            Dim dayEndService As New DayEndService()
-            dayEndService.CompleteDayEnd(
-                GetTillPointID(),
-                _cashierID,
-                totalSales,
-                totalCash,
-                totalCard,
-                totalAccount,
-                totalRefunds,
-                totalCash,
-                actualCash,
-                notes
-            )
-            
-            Me.Cursor = Cursors.Default
-            
-            ' Show completion message
-            Dim completionMsg = "Day End Completed Successfully!" & vbCrLf & vbCrLf &
-                              $"Total Sales: R {totalSales:N2}" & vbCrLf &
-                              $"Cash Variance: R {cashVariance:N2}" & vbCrLf & vbCrLf &
-                              "Report printed to slip printer." & vbCrLf & vbCrLf &
-                              "You cannot log in again today." & vbCrLf &
-                              "Application will now close."
-            
-            MessageBox.Show(completionMsg, "Day End Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            
-            ' Close application
-            Application.Exit()
-            
-        Catch ex As Exception
-            Me.Cursor = Cursors.Default
-            MessageBox.Show($"Day end failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-        End Try
-    End Sub
-    
-    Private Sub PrintDayEndReport(totalSales As Decimal, totalCash As Decimal, totalCard As Decimal,
-                                  totalAccount As Decimal, totalRefunds As Decimal,
-                                  expectedCash As Decimal, actualCash As Decimal, cashVariance As Decimal,
-                                  notes As String)
-        Try
-            ' Create print document for 80mm slip printer
-            Dim printDoc As New Printing.PrintDocument()
-            
-            ' Use default printer
-            ' printDoc.PrinterSettings.PrinterName = "Default Printer Name" ' Leave default
-            
-            AddHandler printDoc.PrintPage, Sub(sender, e)
-                Dim font As New Font("Courier New", 9, FontStyle.Regular)
-                Dim fontBold As New Font("Courier New", 9, FontStyle.Bold)
-                Dim fontLarge As New Font("Courier New", 12, FontStyle.Bold)
-                Dim y As Single = 10
-                Dim lineHeight As Single = font.GetHeight(e.Graphics)
-                
-                ' Helper function to print centered text
-                Dim PrintCentered = Sub(text As String, fnt As Font)
-                    Dim textWidth = e.Graphics.MeasureString(text, fnt).Width
-                    Dim x = (e.PageBounds.Width - textWidth) / 2
-                    e.Graphics.DrawString(text, fnt, Brushes.Black, x, y)
-                    y += fnt.GetHeight(e.Graphics)
-                End Sub
-                
-                ' Helper function to print left-aligned text
-                Dim PrintLeft = Sub(text As String, fnt As Font)
-                    e.Graphics.DrawString(text, fnt, Brushes.Black, 10, y)
-                    y += fnt.GetHeight(e.Graphics)
-                End Sub
-                
-                ' Header
-                PrintCentered("================================", font)
-                PrintCentered("OVEN DELIGHTS", fontLarge)
-                PrintCentered("DAY END REPORT", fontBold)
-                PrintCentered("================================", font)
-                y += lineHeight
-                
-                ' Till info
-                PrintLeft($"Date: {DateTime.Today:dd/MM/yyyy}", font)
-                PrintLeft($"Till: Till {GetTillPointID()}", font)
-                PrintLeft($"Cashier: {_cashierName}", font)
-                PrintLeft($"Time: {DateTime.Now:HH:mm:ss}", font)
-                y += lineHeight
-                
-                ' Sales summary
-                PrintCentered("SALES SUMMARY", fontBold)
-                PrintLeft("--------------------------------", font)
-                PrintLeft($"Total Sales:      R {totalSales,10:N2}", font)
-                PrintLeft($"Cash Sales:       R {totalCash,10:N2}", font)
-                PrintLeft($"Card Sales:       R {totalCard,10:N2}", font)
-                PrintLeft($"Account Sales:    R {totalAccount,10:N2}", font)
-                PrintLeft($"Refunds:          R {totalRefunds,10:N2}", font)
-                y += lineHeight
-                
-                ' Cash drawer
-                PrintCentered("CASH DRAWER", fontBold)
-                PrintLeft("--------------------------------", font)
-                PrintLeft($"Expected Cash:    R {expectedCash,10:N2}", font)
-                PrintLeft($"Actual Cash:      R {actualCash,10:N2}", font)
-                PrintLeft($"Variance:         R {cashVariance,10:N2}", fontBold)
-                y += lineHeight
-                
-                ' Notes
-                If Not String.IsNullOrWhiteSpace(notes) Then
-                    PrintLeft("Notes:", fontBold)
-                    PrintLeft(notes, font)
-                    y += lineHeight
-                End If
-                
-                ' Footer
-                PrintCentered("================================", font)
-                PrintCentered("Day End Complete", font)
-                PrintCentered($"{DateTime.Now:dd/MM/yyyy HH:mm:ss}", font)
-                PrintCentered("================================", font)
-            End Sub
-            
-            ' Print
-            printDoc.Print()
-            
-        Catch ex As Exception
-            Throw New Exception("Failed to print day-end report: " & ex.Message, ex)
-        End Try
-    End Sub
-    
-    Private Function GetTillPointID() As Integer
-        Try
-            Using conn As New SqlClient.SqlConnection(_connectionString)
-                conn.Open()
-                Dim sql = "SELECT TillPointID FROM TillPoints WHERE MachineName = @MachineName AND IsActive = 1"
-                Using cmd As New SqlClient.SqlCommand(sql, conn)
-                    cmd.Parameters.AddWithValue("@MachineName", Environment.MachineName)
-                    Dim result = cmd.ExecuteScalar()
-                    If result IsNot Nothing AndAlso Not IsDBNull(result) Then
-                        Return CInt(result)
-                    End If
-                End Using
-            End Using
-        Catch ex As Exception
-            Debug.WriteLine($"Error getting TillPointID: {ex.Message}")
-        End Try
-        Return 0
-    End Function
 End Class

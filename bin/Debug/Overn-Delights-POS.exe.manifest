@@ -3,7 +3,7 @@
   <asmv1:assemblyIdentity name="Overn-Delights-POS.exe" version="1.0.0.95" publicKeyToken="0000000000000000" language="neutral" processorArchitecture="msil" type="win32" />
   <application />
   <entryPoint>
-    <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.20" language="neutral" processorArchitecture="msil" />
+    <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.37" language="neutral" processorArchitecture="msil" />
     <commandLine file="Overn-Delights-POS.exe" parameters="" />
   </entryPoint>
   <trustInfo>
@@ -42,14 +42,14 @@
     </dependentAssembly>
   </dependency>
   <dependency>
-    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Overn-Delights-POS.exe" size="688064">
-      <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.20" language="neutral" processorArchitecture="msil" />
+    <dependentAssembly dependencyType="install" allowDelayedBinding="true" codebase="Overn-Delights-POS.exe" size="682944">
+      <assemblyIdentity name="Overn-Delights-POS" version="1.0.0.37" language="neutral" processorArchitecture="msil" />
       <hash>
         <dsig:Transforms>
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>x6h1tsj45D8/2Vtli59VzoiHn++Wqk9iY4p7NypZcRU=</dsig:DigestValue>
+        <dsig:DigestValue>H2MCuh1vN2mylG03xsazoJ0n8/BX9iUHMj560Emm+/U=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>
@@ -71,13 +71,13 @@
       <dsig:DigestValue>FJORByFpg4cbp1YIvo//mINsVhfwGaSs8wlVJkAGWV0=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="Overn-Delights-POS.exe.config" size="2023">
+  <file name="Overn-Delights-POS.exe.config" size="1831">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>TNSCNdyzOw2FeuyuOIW2ihJyHDd/Mgj2ooQoDfUrV2g=</dsig:DigestValue>
+      <dsig:DigestValue>oeYh13bVILFtewjKC52lSP/BReSu2w7CudZbHLl6Ueg=</dsig:DigestValue>
     </hash>
   </file>
 </asmv1:assembly>

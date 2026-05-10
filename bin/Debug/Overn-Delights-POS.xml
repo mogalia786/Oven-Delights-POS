@@ -276,12 +276,6 @@ Overn-Delights-POS
  Requires Retail Manager authentication
  </summary>
 </member>
-<member name="M:Overn_Delights_POS.POSMainForm_REDESIGN.CancelCakeOrder">
- <summary>
- Opens the Cancel Cake Order workflow
- Requires Retail Manager authentication
- </summary>
-</member>
 <member name="M:Overn_Delights_POS.PaymentTenderForm.PrintEFTSlip">
  <summary>
  Print EFT payment slip to thermal printer
@@ -301,32 +295,6 @@ Overn-Delights-POS
 <member name="T:Overn_Delights_POS.UserDefinedOrderData">
  <summary>
  Data structure to hold User Defined Order header information
- </summary>
-</member>
-<member name="T:Overn_Delights_POS.AccountingService">
- <summary>
- Accounting Service for posting proper double-entry bookkeeping transactions
- Handles Cash on Hand vs Bank separation and Customer Ledger tracking
- </summary>
-</member>
-<member name="M:Overn_Delights_POS.AccountingService.PostOrderDeposit(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.String,System.Int32,System.String)">
- <summary>
- Post cake order deposit - creates customer receivable and records deposit as liability
- </summary>
-</member>
-<member name="M:Overn_Delights_POS.AccountingService.PostOrderEdit(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.Int32,System.String)">
- <summary>
- Post order edit - adjust customer receivable for price difference
- </summary>
-</member>
-<member name="M:Overn_Delights_POS.AccountingService.PostOrderCollection(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.Decimal,System.String,System.Int32,System.String)">
- <summary>
- Post order collection - recognize revenue and clear deposits
- </summary>
-</member>
-<member name="M:Overn_Delights_POS.AccountingService.PostOrderCancellation(System.String,System.Int32,System.Int32,System.String,System.String,System.Decimal,System.Decimal,System.String,System.Int32,System.String)">
- <summary>
- Post order cancellation - record cancellation fee revenue and process refund/payment
  </summary>
 </member>
 <member name="T:Overn_Delights_POS.ResponsiveHelper">
